@@ -35,12 +35,35 @@
         </DataTable>
       </TabPanel>
       <TabPanel value="1" :header="$t('orgs.members')">
+        <div class="flex justify-content-between align-items-center mb-3">
+          <h3 class="m-0">{{ $t('orgs.members') }}</h3>
+          <Button :label="$t('orgs.addMember')" icon="pi pi-user-plus" size="small" @click="showAddMemberDialog = true" />
+        </div>
         <DataTable :value="members" :loading="loadingMembers" stripedRows class="p-datatable-sm">
           <Column field="display_name" :header="$t('common.name')" />
           <Column field="email" :header="$t('common.email')" />
           <Column field="role" :header="$t('common.role')">
             <template #body="{ data }">
-              <Tag :value="data.role" />
+              <Select
+                :model-value="data.role"
+                :options="orgRoleOptions"
+                option-label="label"
+                option-value="value"
+                class="p-inputtext-sm"
+                @update:model-value="(role: string) => changeOrgMemberRole(data, role)"
+              />
+            </template>
+          </Column>
+          <Column style="width: 4rem">
+            <template #body="{ data }">
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                rounded
+                size="small"
+                @click="confirmRemoveOrgMember(data)"
+              />
             </template>
           </Column>
         </DataTable>
@@ -71,6 +94,22 @@
         <Button :label="$t('common.create')" icon="pi pi-check" :loading="creatingProject" @click="handleCreateProject" />
       </template>
     </Dialog>
+    <Dialog v-model:visible="showAddMemberDialog" :header="$t('orgs.addMember')" modal :style="{ width: '420px' }">
+      <div class="flex flex-column gap-3 pt-2">
+        <div class="flex flex-column gap-1">
+          <label>{{ $t('admin.memberEmail') }}</label>
+          <InputText v-model="newMemberEmail" :placeholder="$t('admin.memberEmail')" autofocus @keyup.enter="handleAddOrgMember" />
+        </div>
+        <div class="flex flex-column gap-1">
+          <label>{{ $t('common.role') }}</label>
+          <Select v-model="newMemberRole" :options="orgRoleOptions" option-label="label" option-value="value" />
+        </div>
+      </div>
+      <template #footer>
+        <Button :label="$t('common.cancel')" text @click="showAddMemberDialog = false" />
+        <Button :label="$t('common.add')" icon="pi pi-user-plus" :loading="addingMember" :disabled="!newMemberEmail.trim()" @click="handleAddOrgMember" />
+      </template>
+    </Dialog>
   </div>
   <div v-else>
     <i class="pi pi-spin pi-spinner" style="font-size: 2rem;" />
@@ -90,9 +129,13 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
-import { getOrganization, listOrgMembers, type Organization, type OrgMember } from '@/api/organizations'
+import { getOrganization, listOrgMembers, addOrgMember, updateOrgMemberRole, removeOrgMember, type Organization, type OrgMember } from '@/api/organizations'
 import { listProjects, createProject, type Project } from '@/api/projects'
+import { useToastService } from '@/composables/useToast'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
+const toast = useToastService()
 const route = useRoute()
 const orgId = route.params.orgId as string
 
@@ -104,6 +147,17 @@ const loadingMembers = ref(false)
 const showProjectDialog = ref(false)
 const creatingProject = ref(false)
 const newProject = ref({ name: '', key: '', description: '', visibility: 'private' })
+
+const showAddMemberDialog = ref(false)
+const newMemberEmail = ref('')
+const newMemberRole = ref('member')
+const addingMember = ref(false)
+
+const orgRoleOptions = [
+  { label: 'Owner', value: 'owner' },
+  { label: 'Admin', value: 'admin' },
+  { label: 'Member', value: 'member' },
+]
 
 onMounted(async () => {
   org.value = await getOrganization(orgId)
@@ -134,6 +188,44 @@ async function handleCreateProject() {
     projects.value = result.items
   } finally {
     creatingProject.value = false
+  }
+}
+
+async function handleAddOrgMember() {
+  if (!newMemberEmail.value.trim()) return
+  addingMember.value = true
+  try {
+    const added = await addOrgMember(orgId, { email: newMemberEmail.value.trim(), role: newMemberRole.value })
+    members.value.push(added)
+    newMemberEmail.value = ''
+    newMemberRole.value = 'member'
+    showAddMemberDialog.value = false
+    toast.showSuccess(t('common.success'), t('admin.memberAdded'))
+  } catch {
+    toast.showError(t('common.error'), t('orgs.addMemberFailed'))
+  } finally {
+    addingMember.value = false
+  }
+}
+
+async function changeOrgMemberRole(member: OrgMember, role: string) {
+  try {
+    await updateOrgMemberRole(orgId, member.user_id, role)
+    member.role = role
+    toast.showSuccess(t('common.success'), t('common.saved'))
+  } catch {
+    toast.showError(t('common.error'), t('common.saveFailed'))
+  }
+}
+
+async function confirmRemoveOrgMember(member: OrgMember) {
+  if (!confirm(t('orgs.confirmRemoveMember', { name: member.display_name || member.email }))) return
+  try {
+    await removeOrgMember(orgId, member.user_id)
+    members.value = members.value.filter(m => m.id !== member.id)
+    toast.showSuccess(t('common.success'), t('admin.memberRemoved'))
+  } catch {
+    toast.showError(t('common.error'), t('orgs.removeMemberFailed'))
   }
 }
 </script>

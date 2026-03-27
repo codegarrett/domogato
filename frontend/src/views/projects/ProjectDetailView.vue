@@ -37,16 +37,55 @@
       </div>
     </div>
 
-    <h3 class="mt-3">{{ $t('orgs.members') }}</h3>
+    <div class="flex justify-content-between align-items-center mt-3 mb-3">
+      <h3 class="m-0">{{ $t('orgs.members') }}</h3>
+      <Button :label="$t('orgs.addMember')" icon="pi pi-user-plus" size="small" @click="showAddMemberDialog = true" />
+    </div>
     <DataTable :value="members" :loading="loadingMembers" stripedRows class="p-datatable-sm">
       <Column field="display_name" :header="$t('common.name')" />
       <Column field="email" :header="$t('common.email')" />
       <Column field="role" :header="$t('common.role')">
         <template #body="{ data }">
-          <Tag :value="data.role" />
+          <Select
+            :model-value="data.role"
+            :options="projectRoleOptions"
+            option-label="label"
+            option-value="value"
+            class="p-inputtext-sm"
+            @update:model-value="(role: string) => changeProjectMemberRole(data, role)"
+          />
+        </template>
+      </Column>
+      <Column style="width: 4rem">
+        <template #body="{ data }">
+          <Button
+            icon="pi pi-trash"
+            severity="danger"
+            text
+            rounded
+            size="small"
+            @click="confirmRemoveProjectMember(data)"
+          />
         </template>
       </Column>
     </DataTable>
+
+    <Dialog v-model:visible="showAddMemberDialog" :header="$t('orgs.addMember')" modal :style="{ width: '420px' }">
+      <div class="flex flex-column gap-3 pt-2">
+        <div class="flex flex-column gap-1">
+          <label>{{ $t('admin.memberEmail') }}</label>
+          <InputText v-model="newMemberEmail" :placeholder="$t('admin.memberEmail')" autofocus @keyup.enter="handleAddProjectMember" />
+        </div>
+        <div class="flex flex-column gap-1">
+          <label>{{ $t('common.role') }}</label>
+          <Select v-model="newMemberRole" :options="projectRoleOptions" option-label="label" option-value="value" />
+        </div>
+      </div>
+      <template #footer>
+        <Button :label="$t('common.cancel')" text @click="showAddMemberDialog = false" />
+        <Button :label="$t('common.add')" icon="pi pi-user-plus" :loading="addingMember" :disabled="!newMemberEmail.trim()" @click="handleAddProjectMember" />
+      </template>
+    </Dialog>
   </div>
   <div v-else class="flex justify-content-center p-5">
     <i class="pi pi-spin pi-spinner" style="font-size: 2rem;" />
@@ -57,11 +96,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import Select from 'primevue/select'
-import { getProject, updateProject, listProjectMembers, type Project, type ProjectMember } from '@/api/projects'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import { getProject, updateProject, listProjectMembers, addProjectMember, updateProjectMemberRole, removeProjectMember, type Project, type ProjectMember } from '@/api/projects'
 import { listWorkflows, type Workflow } from '@/api/workflows'
 import { useToastService } from '@/composables/useToast'
 
@@ -74,6 +116,19 @@ const projectId = route.params.projectId as string
 const project = ref<Project | null>(null)
 const members = ref<ProjectMember[]>([])
 const loadingMembers = ref(false)
+
+const showAddMemberDialog = ref(false)
+const newMemberEmail = ref('')
+const newMemberRole = ref('developer')
+const addingMember = ref(false)
+
+const projectRoleOptions = [
+  { label: 'Owner', value: 'owner' },
+  { label: 'Maintainer', value: 'maintainer' },
+  { label: 'Developer', value: 'developer' },
+  { label: 'Reporter', value: 'reporter' },
+  { label: 'Guest', value: 'guest' },
+]
 
 const workflows = ref<Workflow[]>([])
 const loadingWorkflows = ref(false)
@@ -110,4 +165,42 @@ onMounted(async () => {
   loadingMembers.value = false
   loadingWorkflows.value = false
 })
+
+async function handleAddProjectMember() {
+  if (!newMemberEmail.value.trim()) return
+  addingMember.value = true
+  try {
+    const added = await addProjectMember(projectId, { email: newMemberEmail.value.trim(), role: newMemberRole.value })
+    members.value.push(added)
+    newMemberEmail.value = ''
+    newMemberRole.value = 'developer'
+    showAddMemberDialog.value = false
+    toast.showSuccess(t('common.success'), t('admin.memberAdded'))
+  } catch {
+    toast.showError(t('common.error'), t('orgs.addMemberFailed'))
+  } finally {
+    addingMember.value = false
+  }
+}
+
+async function changeProjectMemberRole(member: ProjectMember, role: string) {
+  try {
+    await updateProjectMemberRole(projectId, member.user_id, role)
+    member.role = role
+    toast.showSuccess(t('common.success'), t('common.saved'))
+  } catch {
+    toast.showError(t('common.error'), t('common.saveFailed'))
+  }
+}
+
+async function confirmRemoveProjectMember(member: ProjectMember) {
+  if (!confirm(t('orgs.confirmRemoveMember', { name: member.display_name || member.email }))) return
+  try {
+    await removeProjectMember(projectId, member.user_id)
+    members.value = members.value.filter(m => m.id !== member.id)
+    toast.showSuccess(t('common.success'), t('admin.memberRemoved'))
+  } catch {
+    toast.showError(t('common.error'), t('orgs.removeMemberFailed'))
+  }
+}
 </script>

@@ -60,7 +60,7 @@ export async function listProjectMembers(projectId: string, offset = 0, limit = 
   return data
 }
 
-export async function addProjectMember(projectId: string, payload: { user_id: string; role?: string }) {
+export async function addProjectMember(projectId: string, payload: { user_id?: string; email?: string; role?: string }) {
   const { data } = await apiClient.post<ProjectMember>(`/projects/${projectId}/members`, payload)
   return data
 }

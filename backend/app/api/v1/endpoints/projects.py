@@ -274,13 +274,27 @@ async def add_project_member(
     """Add a member to the project. Requires project owner role."""
     await _require_project_role(db, project_id, user, ProjectRole.OWNER)
 
-    target = await user_service.get_user_by_id(db, body.user_id)
+    target_user_id = body.user_id
+    if target_user_id is None and body.email:
+        from sqlalchemy import select
+        result = await db.execute(
+            select(User).where(User.email == body.email)
+        )
+        target_user = result.scalar_one_or_none()
+        if target_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        target_user_id = target_user.id
+
+    if target_user_id is None:
+        raise HTTPException(status_code=422, detail="Provide user_id or email")
+
+    target = await user_service.get_user_by_id(db, target_user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
 
     try:
         membership = await project_service.add_member(
-            db, project_id, body.user_id, body.role,
+            db, project_id, target_user_id, body.role,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -289,7 +303,7 @@ async def add_project_member(
 
     return ProjectMemberRead(
         id=membership.id,
-        user_id=body.user_id,
+        user_id=target_user_id,
         email=target.email,
         display_name=target.display_name,
         avatar_url=target.avatar_url,

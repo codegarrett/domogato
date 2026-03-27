@@ -29,6 +29,7 @@
     "current": "current",
     "back": "Back",
     "saved": "Saved",
+    "saveFailed": "Save failed",
     "error": "Error"
   },
   "nav": {
@@ -69,7 +70,11 @@
     "projects": "Projects",
     "members": "Members",
     "newProject": "New Project",
-    "selectOrg": "Select Organization"
+    "selectOrg": "Select Organization",
+    "addMember": "Add Member",
+    "addMemberFailed": "Failed to add member. Make sure the email belongs to an existing user.",
+    "confirmRemoveMember": "Remove {name} from this organization?",
+    "removeMemberFailed": "Failed to remove member."
   },
   "projects": {
     "title": "All Projects",

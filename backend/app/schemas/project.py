@@ -45,7 +45,8 @@ class ProjectRead(BaseModel):
 
 
 class ProjectMemberCreate(BaseModel):
-    user_id: UUID
+    user_id: UUID | None = None
+    email: str | None = None
     role: str = Field("developer", pattern=r"^(owner|maintainer|developer|reporter|guest)$")
 
 

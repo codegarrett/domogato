@@ -29,6 +29,7 @@
     "current": "actual",
     "back": "Atrás",
     "saved": "Guardado",
+    "saveFailed": "Error al guardar",
     "error": "Error"
   },
   "nav": {
@@ -69,7 +70,11 @@
     "projects": "Proyectos",
     "members": "Miembros",
     "newProject": "Nuevo proyecto",
-    "selectOrg": "Seleccionar organización"
+    "selectOrg": "Seleccionar organización",
+    "addMember": "Agregar miembro",
+    "addMemberFailed": "No se pudo agregar el miembro. Asegúrese de que el correo pertenezca a un usuario existente.",
+    "confirmRemoveMember": "¿Eliminar a {name} de esta organización?",
+    "removeMemberFailed": "No se pudo eliminar el miembro."
   },
   "projects": {
     "title": "Todos los proyectos",
