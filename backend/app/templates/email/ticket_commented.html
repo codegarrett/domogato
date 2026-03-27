@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}New Comment{% endblock %}
+{% block content %}
+<h2>New Comment on {{ ticket_key }}</h2>
+<p><strong>{{ actor_name }}</strong> commented on <strong>{{ title }}</strong>:</p>
+<blockquote style="border-left: 3px solid #c7d2fe; padding: 8px 16px; margin: 16px 0; color: #4b5563; background: #f9fafb; border-radius: 4px;">
+  {{ comment_body[:300] }}{% if comment_body|length > 300 %}…{% endif %}
+</blockquote>
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/tickets/{{ ticket_id }}">View Ticket</a></p>
+{% endblock %}

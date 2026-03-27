@@ -1,0 +1,84 @@
+from fastapi import APIRouter
+
+from app.api.v1.endpoints import (
+    activity,
+    ai,
+    attachments,
+    auth,
+    boards,
+    comments,
+    custom_fields,
+    dashboard,
+    dependencies,
+    epics,
+    health,
+    import_tickets,
+    kb_attachments,
+    kb_comments,
+    kb_pages,
+    kb_page_meta,
+    kb_search,
+    kb_spaces,
+    kb_story_workflows,
+    kb_templates,
+    kb_versions,
+    labels,
+    notification_preferences,
+    notifications,
+    organizations,
+    reports,
+    saved_views,
+    search,
+    setup,
+    system_settings,
+    timeline,
+    watchers,
+    webhooks,
+    projects,
+    sprints,
+    tickets,
+    time_tracking,
+    users,
+    workflows,
+)
+
+api_v1_router = APIRouter()
+api_v1_router.include_router(health.router, tags=["health"])
+api_v1_router.include_router(auth.router)
+api_v1_router.include_router(users.router)
+api_v1_router.include_router(organizations.router)
+api_v1_router.include_router(projects.router)
+api_v1_router.include_router(workflows.router)
+api_v1_router.include_router(epics.router)
+api_v1_router.include_router(tickets.router)
+api_v1_router.include_router(comments.router)
+api_v1_router.include_router(labels.router)
+api_v1_router.include_router(activity.router)
+api_v1_router.include_router(custom_fields.router)
+api_v1_router.include_router(sprints.router)
+api_v1_router.include_router(boards.router)
+api_v1_router.include_router(time_tracking.router)
+api_v1_router.include_router(notifications.router)
+api_v1_router.include_router(webhooks.router)
+api_v1_router.include_router(reports.router)
+api_v1_router.include_router(timeline.router)
+api_v1_router.include_router(attachments.router)
+api_v1_router.include_router(dependencies.router)
+api_v1_router.include_router(kb_spaces.router)
+api_v1_router.include_router(kb_pages.router)
+api_v1_router.include_router(kb_versions.router)
+api_v1_router.include_router(kb_comments.router)
+api_v1_router.include_router(kb_attachments.router)
+api_v1_router.include_router(kb_templates.router)
+api_v1_router.include_router(kb_search.router)
+api_v1_router.include_router(kb_story_workflows.router)
+api_v1_router.include_router(kb_page_meta.router)
+api_v1_router.include_router(import_tickets.router)
+api_v1_router.include_router(setup.router)
+api_v1_router.include_router(system_settings.router)
+api_v1_router.include_router(watchers.router)
+api_v1_router.include_router(notification_preferences.router)
+api_v1_router.include_router(saved_views.router)
+api_v1_router.include_router(search.router)
+api_v1_router.include_router(dashboard.router)
+api_v1_router.include_router(ai.router)

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Notification Digest{% endblock %}
+{% block content %}
+<h2>Your Notification Digest</h2>
+<p>Here's what happened since your last digest:</p>
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+  {% for notif in notifications %}
+  <tr style="border-bottom: 1px solid #f3f4f6;">
+    <td style="padding: 10px 4px; vertical-align: top; width: 20px;">
+      {% if notif.event_type == 'ticket_assigned' %}&#128221;
+      {% elif notif.event_type == 'ticket_commented' %}&#128172;
+      {% elif notif.event_type == 'ticket_status_changed' %}&#9654;
+      {% elif notif.event_type == 'mentioned' %}&#64;
+      {% else %}&#128276;
+      {% endif %}
+    </td>
+    <td style="padding: 10px 4px;">
+      <strong style="font-size: 14px;">{{ notif.title }}</strong>
+      {% if notif.body %}
+      <br><span style="font-size: 13px; color: #6b7280;">{{ notif.body[:120] }}{% if notif.body|length > 120 %}…{% endif %}</span>
+      {% endif %}
+      <br><span style="font-size: 12px; color: #9ca3af;">{{ notif.created_at_display }}</span>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<p><a class="btn" href="{{ app_base_url }}">Open {{ app_name }}</a></p>
+{% endblock %}

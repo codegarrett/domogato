@@ -1,0 +1,113 @@
+:root {
+  --app-sidebar-width: 250px;
+  --app-header-height: 52px;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --shadow-color: rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 1px 3px var(--shadow-color);
+  --shadow-lg: 0 4px 12px var(--shadow-color);
+  --overlay-bg: rgba(0, 0, 0, 0.4);
+  --diff-add-bg: #dcfce7;
+  --diff-add-color: #166534;
+  --diff-remove-bg: #fce7f3;
+  --diff-remove-color: #9f1239;
+  --code-bg: var(--p-surface-100);
+  --app-hover-bg: var(--p-surface-50);
+  --app-card-alt-bg: var(--p-surface-50);
+  --app-border-color: var(--p-surface-100);
+}
+
+.dark-mode {
+  --shadow-color: rgba(0, 0, 0, 0.35);
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+  --diff-add-bg: rgba(34, 197, 94, 0.15);
+  --diff-add-color: #86efac;
+  --diff-remove-bg: rgba(244, 63, 94, 0.15);
+  --diff-remove-color: #fda4af;
+  --code-bg: rgba(255, 255, 255, 0.06);
+  --app-hover-bg: rgba(255, 255, 255, 0.06);
+  --app-card-alt-bg: rgba(255, 255, 255, 0.04);
+  --app-border-color: rgba(255, 255, 255, 0.1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: var(--font-family);
+  color: var(--p-text-color);
+  background: var(--p-surface-ground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--p-primary-color);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: var(--p-primary-color);
+  opacity: 0.85;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  color: var(--p-text-color);
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: 1.75rem; }
+h2 { font-size: 1.375rem; }
+h3 { font-size: 1.125rem; }
+
+.p-datatable .p-datatable-thead > tr > th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--p-text-muted-color);
+}
+
+.p-tag {
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.p-button {
+  font-weight: 500;
+  font-family: var(--font-family);
+}
+
+.p-dialog .p-dialog-header {
+  font-weight: 600;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h2 {
+  margin: 0;
+}
+
+.page-header .page-subtitle {
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+  margin-top: 0.125rem;
+}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Status Changed{% endblock %}
+{% block content %}
+<h2>Status Changed: {{ ticket_key }}</h2>
+<p><strong>{{ actor_name }}</strong> changed the status of <strong>{{ title }}</strong>.</p>
+<p style="margin: 16px 0;">
+  <span style="color: #6b7280; text-decoration: line-through;">{{ from_status }}</span>
+  &rarr;
+  <span style="font-weight: 600; color: #059669;">{{ to_status }}</span>
+</p>
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/tickets/{{ ticket_id }}">View Ticket</a></p>
+{% endblock %}

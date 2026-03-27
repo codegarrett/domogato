@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Sprint Started{% endblock %}
+{% block content %}
+<h2>Sprint Started</h2>
+<p><strong>{{ actor_name }}</strong> started sprint <strong>{{ title }}</strong> in {{ project_name }}.</p>
+{% if end_date %}
+<p class="meta">Ends: {{ end_date }}</p>
+{% endif %}
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/projects/{{ project_id }}/sprints">View Sprints</a></p>
+{% endblock %}

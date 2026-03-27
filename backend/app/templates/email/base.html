@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}{{ app_name }}{% endblock %}</title>
+<style>
+  body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f4f5f7; color: #1a1a2e; line-height: 1.6; }
+  .wrapper { max-width: 600px; margin: 0 auto; padding: 24px 16px; }
+  .card { background: #ffffff; border-radius: 8px; padding: 24px 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .header { text-align: center; padding-bottom: 16px; border-bottom: 1px solid #e8e8e8; margin-bottom: 20px; }
+  .header h1 { margin: 0; font-size: 20px; font-weight: 700; color: #6366f1; letter-spacing: -0.02em; }
+  .content { font-size: 15px; }
+  .content h2 { font-size: 18px; margin: 0 0 12px; color: #1a1a2e; }
+  .content p { margin: 0 0 12px; }
+  .meta { font-size: 13px; color: #6b7280; margin-top: 16px; }
+  .btn { display: inline-block; padding: 10px 20px; background: #6366f1; color: #fff !important; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; }
+  .footer { text-align: center; font-size: 12px; color: #9ca3af; padding-top: 20px; margin-top: 20px; border-top: 1px solid #e8e8e8; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+  .badge-priority-highest, .badge-priority-high { background: #fee2e2; color: #dc2626; }
+  .badge-priority-medium { background: #fef3c7; color: #d97706; }
+  .badge-priority-low, .badge-priority-lowest { background: #dbeafe; color: #2563eb; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="card">
+    <div class="header">
+      <h1>{{ app_name }}</h1>
+    </div>
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+    <div class="footer">
+      You received this because of your notification preferences in {{ app_name }}.
+      <br><a href="{{ app_base_url }}/profile" style="color:#6366f1;">Manage preferences</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Sprint Completed{% endblock %}
+{% block content %}
+<h2>Sprint Completed</h2>
+<p><strong>{{ actor_name }}</strong> completed sprint <strong>{{ title }}</strong> in {{ project_name }}.</p>
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/projects/{{ project_id }}/sprints">View Sprints</a></p>
+{% endblock %}

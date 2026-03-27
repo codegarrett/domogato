@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Ticket Assigned{% endblock %}
+{% block content %}
+<h2>Ticket Assigned to You</h2>
+<p><strong>{{ actor_name }}</strong> assigned <strong>{{ ticket_key }}</strong> to you.</p>
+<p style="font-size: 17px; font-weight: 600; margin: 16px 0;">{{ title }}</p>
+{% if priority %}
+<p><span class="badge badge-priority-{{ priority }}">{{ priority | upper }}</span></p>
+{% endif %}
+{% if description %}
+<p class="meta">{{ description[:200] }}{% if description|length > 200 %}…{% endif %}</p>
+{% endif %}
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/tickets/{{ ticket_id }}">View Ticket</a></p>
+{% endblock %}

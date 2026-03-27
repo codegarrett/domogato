@@ -1,0 +1,8 @@
+[submodule "frontend"]
+	path = frontend
+	url = ssh://git@gitlab.codegarrett.com:2222/kgarrett/project-hub-frontend.git
+	branch = main
+[submodule "backend"]
+	path = backend
+	url = ssh://git@gitlab.codegarrett.com:2222/kgarrett/project-hub-backend.git
+	branch = main
