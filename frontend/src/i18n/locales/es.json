@@ -90,7 +90,10 @@
     "public": "público",
     "defaultWorkflow": "Flujo de trabajo predeterminado",
     "selectWorkflow": "Seleccionar un flujo de trabajo…",
-    "workflowUpdated": "Flujo de trabajo predeterminado actualizado"
+    "workflowUpdated": "Flujo de trabajo predeterminado actualizado",
+    "searchOrgMembers": "Buscar miembros de la organización…",
+    "allOrgMembersAdded": "Todos los miembros de la organización ya están en este proyecto.",
+    "projectRole": "Rol en el proyecto"
   },
   "tickets": {
     "createTicket": "Crear ticket",

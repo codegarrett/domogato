@@ -39,7 +39,7 @@
 
     <div class="flex justify-content-between align-items-center mt-3 mb-3">
       <h3 class="m-0">{{ $t('orgs.members') }}</h3>
-      <Button :label="$t('orgs.addMember')" icon="pi pi-user-plus" size="small" @click="showAddMemberDialog = true" />
+      <Button :label="$t('orgs.addMember')" icon="pi pi-user-plus" size="small" @click="openAddMemberDialog" />
     </div>
     <DataTable :value="members" :loading="loadingMembers" stripedRows class="p-datatable-sm">
       <Column field="display_name" :header="$t('common.name')" />
@@ -70,20 +70,47 @@
       </Column>
     </DataTable>
 
-    <Dialog v-model:visible="showAddMemberDialog" :header="$t('orgs.addMember')" modal :style="{ width: '420px' }">
+    <Dialog v-model:visible="showAddMemberDialog" :header="$t('orgs.addMember')" modal :style="{ width: '480px' }">
       <div class="flex flex-column gap-3 pt-2">
-        <div class="flex flex-column gap-1">
-          <label>{{ $t('admin.memberEmail') }}</label>
-          <InputText v-model="newMemberEmail" :placeholder="$t('admin.memberEmail')" autofocus @keyup.enter="handleAddProjectMember" />
+        <InputText
+          v-model="memberSearch"
+          :placeholder="$t('projects.searchOrgMembers')"
+          class="w-full"
+          autofocus
+        />
+
+        <div v-if="loadingOrgMembers" class="flex justify-content-center py-3">
+          <i class="pi pi-spin pi-spinner" />
         </div>
-        <div class="flex flex-column gap-1">
-          <label>{{ $t('common.role') }}</label>
-          <Select v-model="newMemberRole" :options="projectRoleOptions" option-label="label" option-value="value" />
+
+        <div v-else-if="filteredOrgMembers.length === 0" class="text-color-secondary text-sm py-3 text-center">
+          {{ memberSearch.trim() ? $t('search.noResults') : $t('projects.allOrgMembersAdded') }}
+        </div>
+
+        <div v-else class="member-picker-list">
+          <div
+            v-for="om in filteredOrgMembers"
+            :key="om.user_id"
+            class="member-picker-item"
+            :class="{ selected: selectedOrgMember?.user_id === om.user_id }"
+            @click="selectedOrgMember = om"
+          >
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-semibold">{{ om.display_name }}</div>
+              <div class="text-xs text-color-secondary">{{ om.email }}</div>
+            </div>
+            <Tag :value="om.role" severity="secondary" class="text-xs" />
+          </div>
+        </div>
+
+        <div v-if="selectedOrgMember" class="flex flex-column gap-1">
+          <label class="text-sm font-semibold">{{ $t('projects.projectRole') }}</label>
+          <Select v-model="newMemberRole" :options="projectRoleOptions" option-label="label" option-value="value" class="w-full" />
         </div>
       </div>
       <template #footer>
-        <Button :label="$t('common.cancel')" text @click="showAddMemberDialog = false" />
-        <Button :label="$t('common.add')" icon="pi pi-user-plus" :loading="addingMember" :disabled="!newMemberEmail.trim()" @click="handleAddProjectMember" />
+        <Button :label="$t('common.cancel')" text @click="closeAddMemberDialog" />
+        <Button :label="$t('common.add')" icon="pi pi-user-plus" :loading="addingMember" :disabled="!selectedOrgMember" @click="handleAddProjectMember" />
       </template>
     </Dialog>
   </div>
@@ -104,6 +131,7 @@ import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import { getProject, updateProject, listProjectMembers, addProjectMember, updateProjectMemberRole, removeProjectMember, type Project, type ProjectMember } from '@/api/projects'
+import { listOrgMembers, type OrgMember } from '@/api/organizations'
 import { listWorkflows, type Workflow } from '@/api/workflows'
 import { useToastService } from '@/composables/useToast'
 
@@ -118,9 +146,12 @@ const members = ref<ProjectMember[]>([])
 const loadingMembers = ref(false)
 
 const showAddMemberDialog = ref(false)
-const newMemberEmail = ref('')
 const newMemberRole = ref('developer')
 const addingMember = ref(false)
+const memberSearch = ref('')
+const orgMembers = ref<OrgMember[]>([])
+const loadingOrgMembers = ref(false)
+const selectedOrgMember = ref<OrgMember | null>(null)
 
 const projectRoleOptions = [
   { label: 'Owner', value: 'owner' },
@@ -129,6 +160,16 @@ const projectRoleOptions = [
   { label: 'Reporter', value: 'reporter' },
   { label: 'Guest', value: 'guest' },
 ]
+
+const filteredOrgMembers = computed(() => {
+  const existingIds = new Set(members.value.map(m => m.user_id))
+  const available = orgMembers.value.filter(om => !existingIds.has(om.user_id))
+  const q = memberSearch.value.trim().toLowerCase()
+  if (!q) return available
+  return available.filter(om =>
+    om.display_name.toLowerCase().includes(q) || om.email.toLowerCase().includes(q)
+  )
+})
 
 const workflows = ref<Workflow[]>([])
 const loadingWorkflows = ref(false)
@@ -166,14 +207,38 @@ onMounted(async () => {
   loadingWorkflows.value = false
 })
 
+async function openAddMemberDialog() {
+  showAddMemberDialog.value = true
+  memberSearch.value = ''
+  selectedOrgMember.value = null
+  newMemberRole.value = 'developer'
+  if (project.value && orgMembers.value.length === 0) {
+    loadingOrgMembers.value = true
+    try {
+      const res = await listOrgMembers(project.value.organization_id, 0, 200)
+      orgMembers.value = res.items
+    } catch {
+      orgMembers.value = []
+    } finally {
+      loadingOrgMembers.value = false
+    }
+  }
+}
+
+function closeAddMemberDialog() {
+  showAddMemberDialog.value = false
+  selectedOrgMember.value = null
+  memberSearch.value = ''
+}
+
 async function handleAddProjectMember() {
-  if (!newMemberEmail.value.trim()) return
+  if (!selectedOrgMember.value) return
   addingMember.value = true
   try {
-    const added = await addProjectMember(projectId, { email: newMemberEmail.value.trim(), role: newMemberRole.value })
+    const added = await addProjectMember(projectId, { user_id: selectedOrgMember.value.user_id, role: newMemberRole.value })
     members.value.push(added)
-    newMemberEmail.value = ''
-    newMemberRole.value = 'developer'
+    selectedOrgMember.value = null
+    memberSearch.value = ''
     showAddMemberDialog.value = false
     toast.showSuccess(t('common.success'), t('admin.memberAdded'))
   } catch {
@@ -204,3 +269,36 @@ async function confirmRemoveProjectMember(member: ProjectMember) {
   }
 }
 </script>
+
+<style scoped>
+.member-picker-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 6px;
+}
+
+.member-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--p-surface-50);
+}
+
+.member-picker-item:last-child {
+  border-bottom: none;
+}
+
+.member-picker-item:hover {
+  background: var(--app-hover-bg);
+}
+
+.member-picker-item.selected {
+  background: color-mix(in srgb, var(--p-primary-color) 10%, var(--p-content-background));
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: -2px;
+}
+</style>
