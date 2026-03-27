@@ -87,7 +87,7 @@
 
         <div class="surface-card p-0 border-round shadow-1 overflow-hidden">
           <TabView>
-            <TabPanel :header="$t('tickets.comments')">
+            <TabPanel value="0" :header="$t('tickets.comments')">
               <div class="p-4 pt-3">
                 <div v-if="comments.length === 0" class="text-color-secondary text-sm mb-4">{{ $t('tickets.noComments') }}</div>
                 <div v-else class="flex flex-column gap-4 mb-4">
@@ -133,7 +133,7 @@
                 </div>
               </div>
             </TabPanel>
-            <TabPanel :header="$t('tickets.activity')">
+            <TabPanel value="1" :header="$t('tickets.activity')">
               <div class="p-4 pt-3">
                 <div v-if="activityLoading" class="flex justify-content-center p-3">
                   <i class="pi pi-spin pi-spinner text-xl text-color-secondary" />
@@ -163,7 +163,7 @@
                 </div>
               </div>
             </TabPanel>
-            <TabPanel :header="$t('timeTracking.timeLog')">
+            <TabPanel value="2" :header="$t('timeTracking.timeLog')">
               <div class="p-4 pt-3">
                 <div class="flex align-items-center justify-content-between mb-3">
                   <span class="text-sm text-color-secondary">
@@ -199,7 +199,7 @@
                 </div>
               </div>
             </TabPanel>
-            <TabPanel :header="$t('attachments.title')">
+            <TabPanel value="3" :header="$t('attachments.title')">
               <div class="p-4 pt-3">
                 <div class="flex align-items-center justify-content-between mb-3">
                   <span class="text-sm text-color-secondary">
@@ -927,7 +927,7 @@ function formatRelativeTime(iso: string): string {
 function activityInitials(entry: ActivityEntry): string {
   const n = entry.user_name || '?'
   const parts = n.split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
   return n.slice(0, 2).toUpperCase()
 }
 
@@ -964,7 +964,7 @@ function describeActivity(entry: ActivityEntry): string {
 function authorInitials(c: Comment): string {
   const n = c.author_name || c.author_email || '?'
   const parts = n.split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
   return n.slice(0, 2).toUpperCase()
 }
 

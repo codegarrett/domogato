@@ -10,7 +10,7 @@ export function usePermissions() {
     return authStore.hasOrgRole(orgId, minRole)
   }
 
-  function can(action: string): boolean {
+  function can(_action: string): boolean {
     if (authStore.isSystemAdmin) return true
     return false
   }

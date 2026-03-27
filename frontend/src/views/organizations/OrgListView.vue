@@ -53,7 +53,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -64,7 +63,6 @@ import { useOrganizationStore } from '@/stores/organization'
 import { useAuthStore } from '@/stores/auth'
 import { createOrganization } from '@/api/organizations'
 
-const { t } = useI18n()
 const orgStore = useOrganizationStore()
 const authStore = useAuthStore()
 

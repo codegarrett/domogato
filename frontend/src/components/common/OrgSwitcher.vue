@@ -12,11 +12,9 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import Select from 'primevue/select'
 import { useOrganizationStore } from '@/stores/organization'
 
-const { t } = useI18n()
 const orgStore = useOrganizationStore()
 const selectedOrgId = ref<string | null>(orgStore.currentOrgId)
 

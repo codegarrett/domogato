@@ -61,7 +61,7 @@ async function getUserManager(authority: string, clientId: string) {
 
 function parseJwtExp(token: string): number | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const payload = JSON.parse(atob(token.split('.')[1]!))
     return typeof payload.exp === 'number' ? payload.exp : null
   } catch {
     return null

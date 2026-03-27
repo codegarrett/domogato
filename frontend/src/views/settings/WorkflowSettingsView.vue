@@ -62,7 +62,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -74,7 +73,6 @@ import Select from 'primevue/select'
 import { useOrganizationStore } from '@/stores/organization'
 import { listWorkflows, createWorkflow, seedDefaultWorkflows, type Workflow } from '@/api/workflows'
 
-const { t } = useI18n()
 const orgStore = useOrganizationStore()
 const workflows = ref<Workflow[]>([])
 const loading = ref(false)

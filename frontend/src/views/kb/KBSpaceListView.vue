@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import {
   listSpaces,
   createSpace,
@@ -19,7 +18,6 @@ import ProgressSpinner from 'primevue/progressspinner'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
 
 const projectId = computed(() => route.params.projectId as string)
 const spaces = ref<KBSpace[]>([])

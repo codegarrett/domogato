@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import Card from 'primevue/card'
-import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
 import ProgressSpinner from 'primevue/progressspinner'
-import { getDashboard, type DashboardData, type DashboardTicket } from '@/api/dashboard'
+import { getDashboard, type DashboardData } from '@/api/dashboard'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
-const { t } = useI18n()
 const authStore = useAuthStore()
 
 const loading = ref(true)

@@ -32,7 +32,7 @@ const viewingVersionFull = ref<KBPageVersion | null>(null)
 const diffResult = ref<DiffResponse | null>(null)
 
 const latestVersion = computed(() =>
-  versions.value.length ? versions.value[0].version_number : 0,
+  versions.value.length ? versions.value[0]!.version_number : 0,
 )
 
 async function load() {
@@ -67,8 +67,8 @@ async function showDiff() {
   if (selectedVersions.value.length !== 2) return
   diffResult.value = await diffVersions(
     props.pageId,
-    selectedVersions.value[0],
-    selectedVersions.value[1],
+    selectedVersions.value[0]!,
+    selectedVersions.value[1]!,
   )
   showDiffDialog.value = true
 }

@@ -52,7 +52,7 @@ import axios from 'axios'
 import { requestAvatarUpload, confirmAvatarUpload, deleteAvatar } from '@/api/users'
 import { useToastService } from '@/composables/useToast'
 
-const props = defineProps<{
+defineProps<{
   currentUrl: string | null
   initials: string
 }>()

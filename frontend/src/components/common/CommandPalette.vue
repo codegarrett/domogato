@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import { globalSearch, type SearchResult as ApiSearchResult } from '@/api/search'
+import { globalSearch } from '@/api/search'
 
 interface SearchResult {
   type: string
@@ -16,14 +15,12 @@ interface SearchResult {
 }
 
 const router = useRouter()
-const { t } = useI18n()
 
 const visible = ref(false)
 const query = ref('')
 const results = ref<SearchResult[]>([])
 const loading = ref(false)
 const selectedIndex = ref(0)
-const inputRef = ref<HTMLInputElement | null>()
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 function open() {
@@ -79,8 +76,9 @@ function onKeydown(e: KeyboardEvent) {
     selectedIndex.value = Math.max(selectedIndex.value - 1, 0)
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    if (results.value[selectedIndex.value]) {
-      navigate(results.value[selectedIndex.value])
+    const selected = results.value[selectedIndex.value]
+    if (selected) {
+      navigate(selected)
     }
   } else if (e.key === 'Escape') {
     close()

@@ -11,9 +11,7 @@
         :placeholder="t('admin.searchUsers')"
         class="search-input"
         @input="debouncedSearch"
-      >
-        <template #prefix><i class="pi pi-search" /></template>
-      </InputText>
+      />
     </div>
 
     <div v-if="loading" class="flex justify-content-center py-6">

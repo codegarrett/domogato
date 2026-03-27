@@ -631,7 +631,7 @@ async function loadKbSpaces(projectId: string) {
   }
 }
 
-async function toggleSpace(projectId: string, space: KBSpace) {
+async function toggleSpace(_projectId: string, space: KBSpace) {
   if (expandedSpaces.has(space.id)) {
     expandedSpaces.delete(space.id)
     return

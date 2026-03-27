@@ -8,7 +8,6 @@ import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
-import InputSwitch from 'primevue/inputswitch'
 import { useToastService } from '@/composables/useToast'
 import {
   listWebhooks,

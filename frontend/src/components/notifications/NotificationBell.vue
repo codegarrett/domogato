@@ -66,7 +66,7 @@ async function onMarkAllRead() {
   notifications.value = notifications.value.map(n => ({ ...n, is_read: true }))
 }
 
-function onWsNotification(data: Record<string, unknown>) {
+function onWsNotification(_data: Record<string, unknown>) {
   unreadCount.value++
 }
 

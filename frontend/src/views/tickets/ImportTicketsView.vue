@@ -298,7 +298,6 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
-import Textarea from 'primevue/textarea'
 import Checkbox from 'primevue/checkbox'
 
 const route = useRoute()
@@ -460,10 +459,12 @@ const previewRows = computed(() => {
       let val = raw[src]
       if (val == null) continue
       if (tgt in valMaps) {
+        const fieldMap = valMaps[tgt]
+        if (!fieldMap) continue
         if (Array.isArray(val)) {
-          val = val.map((v: string) => valMaps[tgt][v] ?? v)
+          val = val.map((v: string) => fieldMap[v] ?? v)
         } else {
-          val = valMaps[tgt][String(val)] ?? val
+          val = fieldMap[String(val)] ?? val
         }
       }
       mapped[tgt] = val
@@ -481,14 +482,16 @@ function formatPreviewValue(val: unknown): string {
 
 async function handleFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
-  if (!input.files?.length) return
-  await readFile(input.files[0])
+  const file = input.files?.[0]
+  if (!file) return
+  await readFile(file)
 }
 
 function handleDrop(e: DragEvent) {
   dragOver.value = false
-  if (!e.dataTransfer?.files?.length) return
-  readFile(e.dataTransfer.files[0])
+  const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  readFile(file)
 }
 
 async function readFile(file: File) {

@@ -3,7 +3,6 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
-import Tag from 'primevue/tag'
 import DatePicker from 'primevue/datepicker'
 import BarChart from '@/components/charts/BarChart.vue'
 import PieChart from '@/components/charts/PieChart.vue'
@@ -101,7 +100,7 @@ const velocityChartData = computed(() => {
         fill: false,
       },
     ],
-  }
+  } as any
 })
 
 const cfdChartData = computed(() => {

@@ -88,7 +88,6 @@ async function onStart(sprintId: string) {
 function openCompleteDialog(sprintId: string) {
   completingSprintId.value = sprintId
   moveIncompleteTo.value = 'backlog'
-  const nextPlanning = planningSprints.value[0]
   showCompleteDialog.value = true
 }
 
@@ -113,12 +112,6 @@ async function onDelete(sprintId: string) {
   } catch {
     // global interceptor
   }
-}
-
-function statusSeverity(status: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' {
-  if (status === 'active') return 'success'
-  if (status === 'completed') return 'secondary'
-  return 'info'
 }
 
 function progressPercent(sid: string): number {

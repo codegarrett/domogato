@@ -292,15 +292,15 @@ turndown.addRule('tiptapTable', {
 
     const pad = (s: string, w: number) => s + ' '.repeat(Math.max(0, w - s.length))
     const formatRow = (cells: string[]) =>
-      '| ' + Array.from({ length: colCount }, (_, i) => pad(cells[i] ?? '', colWidths[i])).join(' | ') + ' |'
+      '| ' + Array.from({ length: colCount }, (_, i) => pad(cells[i] ?? '', colWidths[i] ?? 0)).join(' | ') + ' |'
 
     const headerRow = rows[0]?.querySelector('th') ? 0 : -1
     const lines: string[] = []
 
     if (headerRow === 0) {
-      lines.push(formatRow(matrix[0]))
+      lines.push(formatRow(matrix[0] ?? []))
       lines.push('| ' + colWidths.map((w) => '-'.repeat(w)).join(' | ') + ' |')
-      for (let i = 1; i < matrix.length; i++) lines.push(formatRow(matrix[i]))
+      for (let i = 1; i < matrix.length; i++) lines.push(formatRow(matrix[i] ?? []))
     } else {
       const emptyHeader = Array.from({ length: colCount }, () => '')
       lines.push(formatRow(emptyHeader))
@@ -539,13 +539,13 @@ onMounted(loadSpace)
       </div>
 
       <TabView class="page-tabs">
-        <TabPanel v-if="activePage.meta?.page_type === 'user_story'" :header="$t('kb.linkedTickets')">
+        <TabPanel v-if="activePage.meta?.page_type === 'user_story'" value="0" :header="$t('kb.linkedTickets')">
           <StoryTicketLinks :page-id="activePage.id" :project-id="projectId" />
         </TabPanel>
-        <TabPanel :header="$t('kb.versions')">
+        <TabPanel value="1" :header="$t('kb.versions')">
           <KBVersionHistory :page-id="activePage.id" @restored="onVersionRestored" />
         </TabPanel>
-        <TabPanel :header="$t('kb.comments')">
+        <TabPanel value="2" :header="$t('kb.comments')">
           <KBComments :page-id="activePage.id" />
         </TabPanel>
       </TabView>

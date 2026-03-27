@@ -53,9 +53,23 @@ const sprintRowOptions = computed(() => [
 interface InlineEdit {
   id: string
   field: string
-  value: unknown
+  value: string | number | null
 }
 const editingCell = ref<InlineEdit | null>(null)
+
+const storyPointsEditModel = computed({
+  get(): number | null {
+    const c = editingCell.value
+    if (!c || c.field !== 'story_points') return null
+    const v = c.value
+    if (v == null) return null
+    return typeof v === 'number' ? v : Number(v)
+  },
+  set(next: number | null) {
+    const c = editingCell.value
+    if (c?.field === 'story_points') c.value = next
+  },
+})
 
 function formatLabel(s: string): string {
   if (!s) return ''
@@ -89,7 +103,7 @@ async function loadBacklog() {
   }
 }
 
-function startEdit(row: Ticket, field: string, currentValue: unknown) {
+function startEdit(row: Ticket, field: string, currentValue: string | number | null) {
   editingCell.value = { id: row.id, field, value: currentValue }
 }
 
@@ -173,10 +187,6 @@ async function onMove() {
   } finally {
     moving.value = false
   }
-}
-
-function goToTicket(ticketId: string) {
-  router.push(`/tickets/${ticketId}`)
 }
 
 function goToSprints() {
@@ -288,7 +298,7 @@ onMounted(loadBacklog)
         <template #body="{ data }">
           <div v-if="isEditing(data.id, 'story_points')" @click.stop>
             <InputNumber
-              v-model="editingCell!.value"
+              v-model="storyPointsEditModel"
               :min="0"
               :max="999"
               class="w-full p-inputtext-sm"
@@ -301,7 +311,7 @@ onMounted(loadBacklog)
           <span
             v-else
             class="inline-editable text-sm"
-            @click.stop="startEdit(data, 'story_points', data.story_points)"
+            @click.stop="startEdit(data, 'story_points', data.story_points ?? null)"
           >
             {{ data.story_points != null ? data.story_points : '—' }}
           </span>

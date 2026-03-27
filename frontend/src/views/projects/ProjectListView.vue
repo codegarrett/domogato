@@ -28,14 +28,11 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import { useProjectStore } from '@/stores/project'
 import { useOrganizationStore } from '@/stores/organization'
-
-const { t } = useI18n()
 
 const projectStore = useProjectStore()
 const orgStore = useOrganizationStore()

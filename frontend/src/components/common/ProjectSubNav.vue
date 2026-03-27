@@ -2,7 +2,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getProject, type Project } from '@/api/projects'
+import { getProject } from '@/api/projects'
 
 const route = useRoute()
 const { t } = useI18n()

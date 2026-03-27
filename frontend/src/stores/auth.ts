@@ -23,6 +23,8 @@ export interface UserProfile {
   preferences: Record<string, unknown>
   org_memberships: OrgMembership[]
   project_memberships: ProjectMembership[]
+  created_at?: string
+  last_login_at?: string
 }
 
 export interface OrgMembership {
@@ -58,7 +60,6 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     handleCallback,
     logout,
-    silentRenew,
   } = useAuth()
 
   const currentUser = ref<UserProfile | null>(null)

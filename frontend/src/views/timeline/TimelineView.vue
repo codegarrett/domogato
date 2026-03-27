@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
-import Tag from 'primevue/tag'
-import { getTimeline, type TimelineData, type TimelineTicket } from '@/api/timeline'
+import { getTimeline, type TimelineData } from '@/api/timeline'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
 const projectId = route.params.projectId as string
 
 const data = ref<TimelineData | null>(null)

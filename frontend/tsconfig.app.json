@@ -10,11 +10,13 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "jsx": "preserve",
+    "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"]
     },
     "baseUrl": ".",
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "env.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "env.d.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]
 }

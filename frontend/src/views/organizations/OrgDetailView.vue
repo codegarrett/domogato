@@ -8,7 +8,7 @@
     </div>
 
     <TabView>
-      <TabPanel :header="$t('orgs.projects')">
+      <TabPanel value="0" :header="$t('orgs.projects')">
         <div class="flex justify-content-between align-items-center mb-3">
           <h3>{{ $t('orgs.projects') }}</h3>
           <Button :label="$t('orgs.newProject')" icon="pi pi-plus" size="small" @click="showProjectDialog = true" />
@@ -34,7 +34,7 @@
           </Column>
         </DataTable>
       </TabPanel>
-      <TabPanel :header="$t('orgs.members')">
+      <TabPanel value="1" :header="$t('orgs.members')">
         <DataTable :value="members" :loading="loadingMembers" stripedRows class="p-datatable-sm">
           <Column field="display_name" :header="$t('common.name')" />
           <Column field="email" :header="$t('common.email')" />
@@ -80,7 +80,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -94,7 +93,6 @@ import Select from 'primevue/select'
 import { getOrganization, listOrgMembers, type Organization, type OrgMember } from '@/api/organizations'
 import { listProjects, createProject, type Project } from '@/api/projects'
 
-const { t } = useI18n()
 const route = useRoute()
 const orgId = route.params.orgId as string
 

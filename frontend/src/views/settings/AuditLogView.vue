@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
-import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
 import { getProjectAuditLog, type AuditEntry } from '@/api/audit'
 
 const route = useRoute()
-const { t } = useI18n()
 const projectId = route.params.projectId as string
 
 const entries = ref<AuditEntry[]>([])

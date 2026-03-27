@@ -423,7 +423,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -453,7 +453,6 @@ import { useWebSocket } from '@/composables/useWebSocket'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const projectId = computed(() => route.params.projectId as string)
 
@@ -546,7 +545,7 @@ async function doSaveView() {
 interface InlineEdit {
   id: string
   field: string
-  value: unknown
+  value: string | null
 }
 const editingCell = ref<InlineEdit | null>(null)
 const inlineTitleRef = ref<InstanceType<typeof InputText> | null>(null)
@@ -640,7 +639,7 @@ function formatDate(iso: string) {
   }
 }
 
-function startInlineEdit(row: Ticket, field: string, currentValue: unknown) {
+function startInlineEdit(row: Ticket, field: string, currentValue: string | null) {
   editingCell.value = { id: row.id, field, value: currentValue }
   if (field === 'title') {
     void nextTick(() => {

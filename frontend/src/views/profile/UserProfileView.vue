@@ -39,7 +39,7 @@
           </div>
           <div class="info-row">
             <label>{{ t('profile.memberSince') }}</label>
-            <div class="info-value">{{ formatDate(user.created_at) }}</div>
+            <div class="info-value">{{ user.created_at ? formatDate(user.created_at) : '—' }}</div>
           </div>
           <div class="info-row">
             <label>{{ t('profile.lastLogin') }}</label>

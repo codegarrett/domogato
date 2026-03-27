@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
 import {
   listTicketLinks,
   createTicketLink,
@@ -26,7 +25,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const router = useRouter()
 
 const links = ref<PageTicketLink[]>([])
 const loading = ref(false)
