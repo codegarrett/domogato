@@ -162,6 +162,33 @@ async def delete_avatar(
     await user_service.update_user_profile(db, user, avatar_url=None)
 
 
+class UserSearchResult(BaseModel):
+    id: str
+    email: str
+    display_name: str
+    avatar_url: str | None = None
+
+
+@router.get("/search", response_model=list[UserSearchResult])
+async def search_users(
+    q: str = Query(..., min_length=2, description="Search by name or email"),
+    limit: int = Query(20, ge=1, le=50),
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Search users by name or email. Available to any authenticated user."""
+    users, _ = await user_service.list_users(
+        db, offset=0, limit=limit, search=q, include_inactive=False,
+    )
+    return [
+        UserSearchResult(
+            id=str(u.id), email=u.email,
+            display_name=u.display_name, avatar_url=u.avatar_url,
+        )
+        for u in users
+    ]
+
+
 @router.get("", response_model=PaginatedResponse[UserRead])
 async def list_users(
     offset: int = Query(0, ge=0),

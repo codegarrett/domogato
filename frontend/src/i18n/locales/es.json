@@ -74,7 +74,8 @@
     "addMember": "Agregar miembro",
     "addMemberFailed": "No se pudo agregar el miembro. Asegúrese de que el correo pertenezca a un usuario existente.",
     "confirmRemoveMember": "¿Eliminar a {name} de esta organización?",
-    "removeMemberFailed": "No se pudo eliminar el miembro."
+    "removeMemberFailed": "No se pudo eliminar el miembro.",
+    "typeToSearch": "Escriba al menos 2 caracteres para buscar usuarios…"
   },
   "projects": {
     "title": "Todos los proyectos",

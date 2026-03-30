@@ -59,6 +59,20 @@ export async function getAccountUrls() {
   return data
 }
 
+export interface UserSearchResult {
+  id: string
+  email: string
+  display_name: string
+  avatar_url: string | null
+}
+
+export async function searchUsers(q: string, limit = 20) {
+  const { data } = await apiClient.get<UserSearchResult[]>('/users/search', {
+    params: { q, limit },
+  })
+  return data
+}
+
 export async function listUsers(offset = 0, limit = 50, q?: string) {
   const { data } = await apiClient.get<PaginatedResponse<UserRead>>('/users', {
     params: { offset, limit, q },

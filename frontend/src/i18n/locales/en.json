@@ -74,7 +74,8 @@
     "addMember": "Add Member",
     "addMemberFailed": "Failed to add member. Make sure the email belongs to an existing user.",
     "confirmRemoveMember": "Remove {name} from this organization?",
-    "removeMemberFailed": "Failed to remove member."
+    "removeMemberFailed": "Failed to remove member.",
+    "typeToSearch": "Type at least 2 characters to search users…"
   },
   "projects": {
     "title": "All Projects",

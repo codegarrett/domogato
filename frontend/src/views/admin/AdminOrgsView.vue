@@ -86,10 +86,8 @@
         <ProgressSpinner />
       </div>
       <template v-else>
-        <div class="mb-3 flex gap-2">
-          <InputText v-model="newMemberEmail" :placeholder="t('admin.memberEmail')" class="flex-1" size="small" />
-          <Select v-model="newMemberRole" :options="roleOptions" option-label="label" option-value="value" size="small" class="w-8rem" />
-          <Button icon="pi pi-plus" size="small" @click="onAddMember" :loading="addingMember" />
+        <div class="flex justify-content-end mb-3">
+          <Button :label="t('orgs.addMember')" icon="pi pi-user-plus" size="small" @click="showAddMemberPicker = true" />
         </div>
         <DataTable :value="members" size="small" class="text-sm">
           <Column :header="t('common.name')" field="display_name" />
@@ -114,11 +112,22 @@
         </DataTable>
       </template>
     </Dialog>
+
+    <MemberPickerDialog
+      v-model:visible="showAddMemberPicker"
+      :header="t('orgs.addMember')"
+      :role-options="roleOptions"
+      default-role="member"
+      :exclude-user-ids="memberUserIds"
+      :search-fn="searchUsersForOrg"
+      ref="adminPickerRef"
+      @add="onAddMember"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
@@ -131,6 +140,8 @@ import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import ProgressSpinner from 'primevue/progressspinner'
 import AdminSubNav from '@/components/common/AdminSubNav.vue'
+import MemberPickerDialog from '@/components/common/MemberPickerDialog.vue'
+import type { PickerUser } from '@/components/common/MemberPickerDialog.vue'
 import {
   listOrganizations,
   createOrganization,
@@ -141,6 +152,7 @@ import {
   type Organization,
   type OrgMember,
 } from '@/api/organizations'
+import { searchUsers } from '@/api/users'
 import { useToastService } from '@/composables/useToast'
 
 const { t } = useI18n()
@@ -161,9 +173,10 @@ const showMembersDialog = ref(false)
 const selectedOrg = ref<Organization | null>(null)
 const members = ref<OrgMember[]>([])
 const membersLoading = ref(false)
-const newMemberEmail = ref('')
-const newMemberRole = ref('member')
-const addingMember = ref(false)
+const showAddMemberPicker = ref(false)
+const adminPickerRef = ref<InstanceType<typeof MemberPickerDialog> | null>(null)
+
+const memberUserIds = computed(() => members.value.map(m => m.user_id))
 
 const roleOptions = [
   { label: 'Member', value: 'member' },
@@ -228,16 +241,27 @@ async function openMembersDialog(org: Organization) {
   }
 }
 
-async function onAddMember() {
-  if (!newMemberEmail.value.trim() || !selectedOrg.value) return
-  addingMember.value = true
+async function searchUsersForOrg(q: string): Promise<PickerUser[]> {
+  const results = await searchUsers(q)
+  return results.map(u => ({
+    id: u.id,
+    display_name: u.display_name,
+    email: u.email,
+    avatar_url: u.avatar_url,
+  }))
+}
+
+async function onAddMember(payload: { userId: string; email: string; role: string }) {
+  if (!selectedOrg.value) return
   try {
-    const added = await addOrgMember(selectedOrg.value.id, { email: newMemberEmail.value.trim(), role: newMemberRole.value })
+    const added = await addOrgMember(selectedOrg.value.id, { user_id: payload.userId, role: payload.role })
     members.value.push(added)
-    newMemberEmail.value = ''
+    showAddMemberPicker.value = false
     toast.showSuccess(t('common.success'), t('admin.memberAdded'))
+  } catch {
+    toast.showError(t('common.error'), t('orgs.addMemberFailed'))
   } finally {
-    addingMember.value = false
+    adminPickerRef.value?.resetAdding()
   }
 }
 

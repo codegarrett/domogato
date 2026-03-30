@@ -94,22 +94,16 @@
         <Button :label="$t('common.create')" icon="pi pi-check" :loading="creatingProject" @click="handleCreateProject" />
       </template>
     </Dialog>
-    <Dialog v-model:visible="showAddMemberDialog" :header="$t('orgs.addMember')" modal :style="{ width: '420px' }">
-      <div class="flex flex-column gap-3 pt-2">
-        <div class="flex flex-column gap-1">
-          <label>{{ $t('admin.memberEmail') }}</label>
-          <InputText v-model="newMemberEmail" :placeholder="$t('admin.memberEmail')" autofocus @keyup.enter="handleAddOrgMember" />
-        </div>
-        <div class="flex flex-column gap-1">
-          <label>{{ $t('common.role') }}</label>
-          <Select v-model="newMemberRole" :options="orgRoleOptions" option-label="label" option-value="value" />
-        </div>
-      </div>
-      <template #footer>
-        <Button :label="$t('common.cancel')" text @click="showAddMemberDialog = false" />
-        <Button :label="$t('common.add')" icon="pi pi-user-plus" :loading="addingMember" :disabled="!newMemberEmail.trim()" @click="handleAddOrgMember" />
-      </template>
-    </Dialog>
+    <MemberPickerDialog
+      v-model:visible="showAddMemberDialog"
+      :header="$t('orgs.addMember')"
+      :role-options="orgRoleOptions"
+      default-role="member"
+      :exclude-user-ids="memberUserIds"
+      :search-fn="searchUsersForOrg"
+      ref="memberPickerRef"
+      @add="handleAddOrgMember"
+    />
   </div>
   <div v-else>
     <i class="pi pi-spin pi-spinner" style="font-size: 2rem;" />
@@ -117,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
@@ -129,8 +123,11 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
+import MemberPickerDialog from '@/components/common/MemberPickerDialog.vue'
+import type { PickerUser } from '@/components/common/MemberPickerDialog.vue'
 import { getOrganization, listOrgMembers, addOrgMember, updateOrgMemberRole, removeOrgMember, type Organization, type OrgMember } from '@/api/organizations'
 import { listProjects, createProject, type Project } from '@/api/projects'
+import { searchUsers } from '@/api/users'
 import { useToastService } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 
@@ -149,9 +146,9 @@ const creatingProject = ref(false)
 const newProject = ref({ name: '', key: '', description: '', visibility: 'private' })
 
 const showAddMemberDialog = ref(false)
-const newMemberEmail = ref('')
-const newMemberRole = ref('member')
-const addingMember = ref(false)
+const memberPickerRef = ref<InstanceType<typeof MemberPickerDialog> | null>(null)
+
+const memberUserIds = computed(() => members.value.map(m => m.user_id))
 
 const orgRoleOptions = [
   { label: 'Owner', value: 'owner' },
@@ -191,20 +188,26 @@ async function handleCreateProject() {
   }
 }
 
-async function handleAddOrgMember() {
-  if (!newMemberEmail.value.trim()) return
-  addingMember.value = true
+async function searchUsersForOrg(q: string): Promise<PickerUser[]> {
+  const results = await searchUsers(q)
+  return results.map(u => ({
+    id: u.id,
+    display_name: u.display_name,
+    email: u.email,
+    avatar_url: u.avatar_url,
+  }))
+}
+
+async function handleAddOrgMember(payload: { userId: string; email: string; role: string }) {
   try {
-    const added = await addOrgMember(orgId, { email: newMemberEmail.value.trim(), role: newMemberRole.value })
+    const added = await addOrgMember(orgId, { user_id: payload.userId, role: payload.role })
     members.value.push(added)
-    newMemberEmail.value = ''
-    newMemberRole.value = 'member'
     showAddMemberDialog.value = false
     toast.showSuccess(t('common.success'), t('admin.memberAdded'))
   } catch {
     toast.showError(t('common.error'), t('orgs.addMemberFailed'))
   } finally {
-    addingMember.value = false
+    memberPickerRef.value?.resetAdding()
   }
 }
 

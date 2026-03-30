@@ -339,23 +339,16 @@ onMounted(loadSettings)
 
 <style scoped>
 .admin-page {
-  max-width: 900px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 1.5rem;
 }
 .admin-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-  gap: 1rem;
+  margin-bottom: 1.25rem;
 }
 .page-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--p-text-color);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
 }
 .auth-settings-content {
   display: flex;
