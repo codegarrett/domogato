@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    BigInteger,
+    Column,
     ForeignKey,
     Index,
     Integer,
     String,
+    Table,
     Text,
     TIMESTAMP,
     UniqueConstraint,
@@ -17,6 +20,16 @@ from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.models.label import Label
+
+issue_report_labels = Table(
+    "issue_report_labels",
+    Base.metadata,
+    Column("issue_report_id", UUID(as_uuid=True), ForeignKey("issue_reports.id", ondelete="CASCADE"), primary_key=True),
+    Column("label_id", UUID(as_uuid=True), ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class IssueReport(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -35,6 +48,7 @@ class IssueReport(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default="open",
     )
@@ -59,6 +73,12 @@ class IssueReport(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     ticket_links: Mapped[list[IssueReportTicketLink]] = relationship(
         back_populates="issue_report", cascade="all, delete-orphan",
+    )
+    attachments: Mapped[list[IssueReportAttachment]] = relationship(
+        back_populates="issue_report", cascade="all, delete-orphan",
+    )
+    labels: Mapped[list[Label]] = relationship(
+        secondary=issue_report_labels, lazy="selectin",
     )
 
 
@@ -115,3 +135,28 @@ class IssueReportTicketLink(UUIDPrimaryKeyMixin, Base):
     )
 
     issue_report: Mapped[IssueReport] = relationship(back_populates="ticket_links")
+
+
+class IssueReportAttachment(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "issue_report_attachments"
+
+    issue_report_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("issue_reports.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    uploaded_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(127), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    s3_key: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default="now()", nullable=False,
+    )
+
+    issue_report: Mapped[IssueReport] = relationship(back_populates="attachments")

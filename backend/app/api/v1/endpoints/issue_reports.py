@@ -16,7 +16,12 @@ from app.models.user import User
 from app.schemas.common import PaginatedResponse
 from app.schemas.issue_report import (
     CreateTicketFromReports,
+    IssueReportAttachmentCreate,
+    IssueReportAttachmentDownloadResponse,
+    IssueReportAttachmentPresignResponse,
+    IssueReportAttachmentRead,
     IssueReportCreate,
+    IssueReportLabelRead,
     IssueReportRead,
     IssueReportReporterCreate,
     IssueReportReporterRead,
@@ -24,7 +29,7 @@ from app.schemas.issue_report import (
     SimilarReportRead,
 )
 from app.schemas.ticket import TicketRead
-from app.services import issue_report_service, project_service
+from app.services import issue_report_service, project_service, storage_service
 
 router = APIRouter(tags=["issue-reports"])
 
@@ -91,11 +96,22 @@ async def _enrich_report(db: AsyncSession, report) -> IssueReportRead:
                 "created_at": link.created_at,
             })
 
+    attachments = []
+    if hasattr(report, "attachments") and report.attachments:
+        for att in report.attachments:
+            attachments.append(IssueReportAttachmentRead.model_validate(att))
+
+    labels = []
+    if hasattr(report, "labels") and report.labels:
+        for lbl in report.labels:
+            labels.append(IssueReportLabelRead(id=lbl.id, name=lbl.name, color=lbl.color))
+
     return IssueReportRead(
         id=report.id,
         project_id=report.project_id,
         title=report.title,
         description=report.description,
+        source_url=report.source_url,
         status=report.status,
         priority=report.priority,
         created_by=report.created_by,
@@ -105,6 +121,8 @@ async def _enrich_report(db: AsyncSession, report) -> IssueReportRead:
         updated_at=report.updated_at,
         reporters=reporters,
         linked_tickets=linked_tickets,
+        attachments=attachments,
+        labels=labels,
     )
 
 
@@ -127,7 +145,9 @@ async def create_issue_report(
         title=body.title,
         description=body.description,
         priority=body.priority,
+        source_url=body.source_url,
         created_by=user.id,
+        label_ids=body.label_ids,
     )
 
     report_full = await issue_report_service.get_issue_report(db, report.id)
@@ -190,17 +210,22 @@ async def list_issue_reports(
 
     items = []
     for r in reports:
+        lbl_list = []
+        if hasattr(r, "labels") and r.labels:
+            lbl_list = [IssueReportLabelRead(id=l.id, name=l.name, color=l.color) for l in r.labels]
         items.append(IssueReportRead(
             id=r.id,
             project_id=r.project_id,
             title=r.title,
             description=r.description,
+            source_url=r.source_url,
             status=r.status,
             priority=r.priority,
             created_by=r.created_by,
             reporter_count=r.reporter_count,
             created_at=r.created_at,
             updated_at=r.updated_at,
+            labels=lbl_list,
         ))
 
     return PaginatedResponse(items=items, total=total, offset=offset, limit=limit)
@@ -397,3 +422,136 @@ async def get_ticket_issue_reports(
 ):
     """Get issue reports linked to a specific ticket."""
     return await issue_report_service.get_ticket_issue_report_links(db, ticket_id)
+
+
+# ---- Attachment endpoints ----
+
+
+@router.post(
+    "/projects/{project_id}/issue-reports/{report_id}/attachments",
+    response_model=IssueReportAttachmentPresignResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_attachment(
+    project_id: UUID,
+    report_id: UUID,
+    body: IssueReportAttachmentCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_project_role(db, project_id, user, ProjectRole.GUEST)
+
+    report = await issue_report_service.get_issue_report(db, report_id)
+    if report is None or report.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Issue report not found")
+
+    if body.content_type not in storage_service.ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="File type not allowed")
+
+    attachment, upload_url = await issue_report_service.create_issue_report_attachment(
+        db,
+        issue_report_id=report_id,
+        project_id=project_id,
+        uploaded_by_id=user.id,
+        filename=body.filename,
+        content_type=body.content_type,
+        size_bytes=body.size_bytes,
+    )
+
+    return IssueReportAttachmentPresignResponse(
+        attachment=IssueReportAttachmentRead.model_validate(attachment),
+        upload_url=upload_url,
+    )
+
+
+@router.get(
+    "/projects/{project_id}/issue-reports/{report_id}/attachments",
+    response_model=list[IssueReportAttachmentRead],
+)
+async def list_attachments(
+    project_id: UUID,
+    report_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_project_role(db, project_id, user, ProjectRole.GUEST)
+    return await issue_report_service.list_issue_report_attachments(db, report_id)
+
+
+@router.get(
+    "/issue-report-attachments/{attachment_id}/download",
+    response_model=IssueReportAttachmentDownloadResponse,
+)
+async def download_attachment(
+    attachment_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    attachment = await issue_report_service.get_issue_report_attachment(db, attachment_id)
+    if attachment is None:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    url = await storage_service.generate_download_presign(attachment.s3_key, filename=attachment.filename)
+    return IssueReportAttachmentDownloadResponse(download_url=url)
+
+
+@router.delete(
+    "/issue-report-attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_attachment(
+    attachment_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    deleted = await issue_report_service.delete_issue_report_attachment(db, attachment_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+
+# ---- Label endpoints ----
+
+
+@router.get(
+    "/projects/{project_id}/issue-reports/{report_id}/labels",
+    response_model=list[IssueReportLabelRead],
+)
+async def get_report_labels(
+    project_id: UUID,
+    report_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_project_role(db, project_id, user, ProjectRole.GUEST)
+    labels = await issue_report_service.get_issue_report_labels(db, report_id)
+    return [IssueReportLabelRead(id=l.id, name=l.name, color=l.color) for l in labels]
+
+
+@router.post(
+    "/projects/{project_id}/issue-reports/{report_id}/labels/{label_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def add_label(
+    project_id: UUID,
+    report_id: UUID,
+    label_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_project_role(db, project_id, user, ProjectRole.DEVELOPER)
+    await issue_report_service.add_label_to_issue_report(db, report_id, label_id)
+
+
+@router.delete(
+    "/projects/{project_id}/issue-reports/{report_id}/labels/{label_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_label(
+    project_id: UUID,
+    report_id: UUID,
+    label_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_project_role(db, project_id, user, ProjectRole.DEVELOPER)
+    await issue_report_service.remove_label_from_issue_report(db, report_id, label_id)

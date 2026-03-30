@@ -19,6 +19,10 @@
           <div v-else class="flex flex-column gap-2">
             <InputText v-model="editForm.title" class="w-full font-semibold" />
             <Textarea v-model="editForm.description" class="w-full" :rows="6" />
+            <div>
+              <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.sourceUrl') }}</label>
+              <InputText v-model="editForm.source_url" class="w-full" :placeholder="$t('issueReports.sourceUrlPlaceholder')" />
+            </div>
             <div class="flex gap-3">
               <div class="flex-1">
                 <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.priority') }}</label>
@@ -48,6 +52,71 @@
           </div>
         </div>
 
+        <!-- Source URL -->
+        <div v-if="report.source_url && !editing" class="surface-card p-4 border-round shadow-1 mb-4">
+          <h2 class="text-lg font-semibold mb-2">{{ $t('issueReports.sourceUrl') }}</h2>
+          <a :href="report.source_url" target="_blank" rel="noopener" class="text-primary no-underline hover:underline text-sm break-all">
+            <i class="pi pi-external-link mr-1" />{{ report.source_url }}
+          </a>
+        </div>
+
+        <!-- Attachments -->
+        <div class="surface-card p-4 border-round shadow-1 mb-4">
+          <div class="flex align-items-center justify-content-between mb-3">
+            <h2 class="text-lg font-semibold m-0">{{ $t('issueReports.attachments') }}</h2>
+            <Button
+              :label="$t('issueReports.uploadScreenshots')"
+              icon="pi pi-cloud-upload"
+              size="small"
+              severity="secondary"
+              @click="attachFileInput?.click()"
+            />
+            <input
+              ref="attachFileInput"
+              type="file"
+              multiple
+              accept="image/*"
+              class="hidden"
+              @change="onUploadFiles"
+            />
+          </div>
+          <div v-if="uploading" class="flex align-items-center gap-2 text-color-secondary text-sm mb-2">
+            <i class="pi pi-spin pi-spinner" /> {{ $t('issueReports.uploadingFiles') }}
+          </div>
+          <div v-if="report.attachments.length === 0 && !uploading" class="text-sm text-color-secondary">
+            {{ $t('issueReports.noAttachments') }}
+          </div>
+          <div v-else class="flex flex-column gap-2">
+            <div
+              v-for="att in report.attachments"
+              :key="att.id"
+              class="flex align-items-center gap-2 surface-ground p-2 border-round text-sm"
+            >
+              <i :class="att.content_type.startsWith('image/') ? 'pi pi-image' : 'pi pi-file'" class="text-color-secondary" />
+              <span class="flex-1 text-overflow-ellipsis overflow-hidden white-space-nowrap">{{ att.filename }}</span>
+              <span class="text-color-secondary text-xs">{{ formatSize(att.size_bytes) }}</span>
+              <Button
+                icon="pi pi-download"
+                text
+                rounded
+                size="small"
+                :aria-label="$t('issueReports.download')"
+                @click="downloadAttachment(att.id)"
+              />
+              <Button
+                icon="pi pi-trash"
+                text
+                rounded
+                severity="danger"
+                size="small"
+                :aria-label="$t('issueReports.deleteAttachment')"
+                @click="removeAttachment(att.id)"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Reporters -->
         <div class="surface-card p-4 border-round shadow-1 mb-4">
           <h2 class="text-lg font-semibold mb-3">{{ $t('issueReports.reporters') }} ({{ report.reporter_count }})</h2>
           <div
@@ -86,6 +155,20 @@
             <div class="flex justify-content-between">
               <span class="text-color-secondary">{{ $t('issueReports.created') }}</span>
               <span>{{ formatDateTime(report.created_at) }}</span>
+            </div>
+          </div>
+
+          <!-- Labels -->
+          <div v-if="report.labels.length > 0" class="mt-3">
+            <div class="text-sm text-color-secondary mb-1">{{ $t('issueReports.labels') }}</div>
+            <div class="flex flex-wrap gap-1">
+              <Tag
+                v-for="lbl in report.labels"
+                :key="lbl.id"
+                :value="lbl.name"
+                :style="{ background: lbl.color + '22', color: lbl.color, border: `1px solid ${lbl.color}44` }"
+                class="text-xs"
+              />
             </div>
           </div>
 
@@ -166,6 +249,11 @@ import {
   getIssueReport,
   updateIssueReport,
   deleteIssueReport,
+  createIssueReportAttachment,
+  uploadToPresignedUrl,
+  getIssueReportAttachmentDownloadUrl,
+  deleteIssueReportAttachment,
+  formatFileSize,
   type IssueReport,
 } from '@/api/issue-reports'
 import { useToastService } from '@/composables/useToast'
@@ -183,13 +271,16 @@ const report = ref<IssueReport | null>(null)
 const loading = ref(true)
 const editing = ref(false)
 const saving = ref(false)
+const uploading = ref(false)
 const showCreateTicketDialog = ref(false)
+const attachFileInput = ref<HTMLInputElement | null>(null)
 
 const editForm = ref({
   title: '',
   description: '',
   priority: 'medium',
   status: 'open',
+  source_url: '',
 })
 
 const statusOptions = [
@@ -238,12 +329,12 @@ function priorityLabel(p: string): string {
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
+}
+
+function formatSize(bytes: number) {
+  return formatFileSize(bytes)
 }
 
 async function loadReport() {
@@ -264,6 +355,7 @@ function startEdit() {
     description: report.value.description || '',
     priority: report.value.priority,
     status: report.value.status,
+    source_url: report.value.source_url || '',
   }
   editing.value = true
 }
@@ -276,6 +368,7 @@ async function saveEdit() {
       description: editForm.value.description || undefined,
       priority: editForm.value.priority,
       status: editForm.value.status,
+      source_url: editForm.value.source_url || undefined,
     })
     editing.value = false
     await loadReport()
@@ -284,6 +377,47 @@ async function saveEdit() {
     toast.showError(t('common.saveFailed'), '')
   } finally {
     saving.value = false
+  }
+}
+
+async function onUploadFiles(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (!input.files || !report.value) return
+  uploading.value = true
+  try {
+    for (const file of Array.from(input.files)) {
+      const { upload_url } = await createIssueReportAttachment(
+        projectId.value,
+        report.value.id,
+        { filename: file.name, content_type: file.type || 'application/octet-stream', size_bytes: file.size },
+      )
+      await uploadToPresignedUrl(upload_url, file)
+    }
+    toast.showSuccess(t('issueReports.uploadSuccess'), '')
+    await loadReport()
+  } catch {
+    toast.showError(t('issueReports.uploadFailed'), '')
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+async function downloadAttachment(attachmentId: string) {
+  try {
+    const url = await getIssueReportAttachmentDownloadUrl(attachmentId)
+    window.open(url, '_blank')
+  } catch {
+    toast.showError(t('common.error'), '')
+  }
+}
+
+async function removeAttachment(attachmentId: string) {
+  try {
+    await deleteIssueReportAttachment(attachmentId)
+    await loadReport()
+  } catch {
+    toast.showError(t('common.error'), '')
   }
 }
 

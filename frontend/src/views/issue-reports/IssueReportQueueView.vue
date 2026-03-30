@@ -96,6 +96,19 @@
             <Tag :severity="prioritySeverity(row.priority)" :value="priorityLabel(row.priority)" />
           </template>
         </Column>
+        <Column field="labels" :header="$t('issueReports.labels')" style="min-width: 8rem" :sortable="false">
+          <template #body="{ data: row }">
+            <div v-if="row.labels?.length" class="flex flex-wrap gap-1">
+              <Tag
+                v-for="lbl in row.labels"
+                :key="lbl.id"
+                :value="lbl.name"
+                :style="{ background: lbl.color + '22', color: lbl.color, border: `1px solid ${lbl.color}44` }"
+                class="text-xs"
+              />
+            </div>
+          </template>
+        </Column>
         <Column field="reporter_count" :header="$t('issueReports.reporterCount')" style="width: 7rem" :sortable="false">
           <template #body="{ data: row }">
             <span class="flex align-items-center gap-1">

@@ -9,12 +9,16 @@ from sqlalchemy.orm import selectinload
 
 from app.models.issue_report import (
     IssueReport,
+    IssueReportAttachment,
     IssueReportReporter,
     IssueReportTicketLink,
+    issue_report_labels,
 )
+from app.models.label import Label
 from app.models.ticket import Ticket
 from app.models.project import Project
 from app.services.ticket_service import create_ticket
+from app.services import storage_service
 
 
 async def create_issue_report(
@@ -24,13 +28,16 @@ async def create_issue_report(
     title: str,
     description: str | None = None,
     priority: str = "medium",
+    source_url: str | None = None,
     created_by: UUID,
     original_description: str | None = None,
+    label_ids: list[UUID] | None = None,
 ) -> IssueReport:
     report = IssueReport(
         project_id=project_id,
         title=title,
         description=description,
+        source_url=source_url,
         priority=priority,
         created_by=created_by,
         reporter_count=1,
@@ -44,6 +51,16 @@ async def create_issue_report(
         original_description=original_description or description,
     )
     db.add(reporter)
+
+    if label_ids:
+        labels = (await db.execute(
+            select(Label).where(
+                Label.id.in_(label_ids),
+                Label.project_id == project_id,
+            )
+        )).scalars().all()
+        report.labels = list(labels)
+
     await db.flush()
     await db.refresh(report)
     return report
@@ -57,6 +74,8 @@ async def get_issue_report(
         .options(
             selectinload(IssueReport.reporters),
             selectinload(IssueReport.ticket_links),
+            selectinload(IssueReport.attachments),
+            selectinload(IssueReport.labels),
         )
         .where(IssueReport.id == report_id)
     )
@@ -75,25 +94,25 @@ async def list_issue_reports(
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[IssueReport], int]:
-    query = select(IssueReport).where(IssueReport.project_id == project_id)
+    base = select(IssueReport).where(IssueReport.project_id == project_id)
 
     if status:
-        query = query.where(IssueReport.status == status)
+        base = base.where(IssueReport.status == status)
     if priority:
-        query = query.where(IssueReport.priority == priority)
+        base = base.where(IssueReport.priority == priority)
     if search:
         ts_query = func.plainto_tsquery("english", search)
-        query = query.where(IssueReport.search_vector.op("@@")(ts_query))
+        base = base.where(IssueReport.search_vector.op("@@")(ts_query))
 
-    count_query = select(func.count()).select_from(query.subquery())
+    count_query = select(func.count()).select_from(base.subquery())
     total = (await db.execute(count_query)).scalar_one()
 
     sort_column = getattr(IssueReport, sort_by, IssueReport.created_at)
     order = sort_column.desc() if sort_dir == "desc" else sort_column.asc()
-    query = query.order_by(order).offset(offset).limit(limit)
+    query = base.options(selectinload(IssueReport.labels)).order_by(order).offset(offset).limit(limit)
 
     result = await db.execute(query)
-    reports = list(result.scalars().all())
+    reports = list(result.scalars().unique().all())
     return reports, total
 
 
@@ -273,6 +292,99 @@ async def create_ticket_from_reports(
     await db.refresh(ticket)
 
     return ticket, len(reports)
+
+
+async def create_issue_report_attachment(
+    db: AsyncSession,
+    *,
+    issue_report_id: UUID,
+    project_id: UUID,
+    uploaded_by_id: UUID | None,
+    filename: str,
+    content_type: str,
+    size_bytes: int,
+) -> tuple[IssueReportAttachment, str]:
+    s3_key = storage_service.generate_s3_key(str(project_id), filename)
+    attachment = IssueReportAttachment(
+        issue_report_id=issue_report_id,
+        uploaded_by_id=uploaded_by_id,
+        filename=filename,
+        content_type=content_type,
+        size_bytes=size_bytes,
+        s3_key=s3_key,
+    )
+    db.add(attachment)
+    await db.flush()
+    await db.refresh(attachment)
+    upload_url = await storage_service.generate_upload_presign(s3_key, content_type)
+    return attachment, upload_url
+
+
+async def list_issue_report_attachments(
+    db: AsyncSession, issue_report_id: UUID,
+) -> list[IssueReportAttachment]:
+    result = await db.execute(
+        select(IssueReportAttachment)
+        .where(IssueReportAttachment.issue_report_id == issue_report_id)
+        .order_by(IssueReportAttachment.created_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_issue_report_attachment(
+    db: AsyncSession, attachment_id: UUID,
+) -> IssueReportAttachment | None:
+    result = await db.execute(
+        select(IssueReportAttachment).where(IssueReportAttachment.id == attachment_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def delete_issue_report_attachment(
+    db: AsyncSession, attachment_id: UUID,
+) -> bool:
+    attachment = await get_issue_report_attachment(db, attachment_id)
+    if attachment is None:
+        return False
+    await storage_service.delete_object(attachment.s3_key)
+    await db.delete(attachment)
+    await db.flush()
+    return True
+
+
+async def add_label_to_issue_report(
+    db: AsyncSession, issue_report_id: UUID, label_id: UUID,
+) -> None:
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    stmt = pg_insert(issue_report_labels).values(
+        issue_report_id=issue_report_id, label_id=label_id,
+    ).on_conflict_do_nothing()
+    await db.execute(stmt)
+    await db.flush()
+
+
+async def remove_label_from_issue_report(
+    db: AsyncSession, issue_report_id: UUID, label_id: UUID,
+) -> None:
+    await db.execute(
+        issue_report_labels.delete().where(
+            issue_report_labels.c.issue_report_id == issue_report_id,
+            issue_report_labels.c.label_id == label_id,
+        )
+    )
+    await db.flush()
+
+
+async def get_issue_report_labels(
+    db: AsyncSession, issue_report_id: UUID,
+) -> list[Label]:
+    result = await db.execute(
+        select(Label)
+        .join(issue_report_labels, issue_report_labels.c.label_id == Label.id)
+        .where(issue_report_labels.c.issue_report_id == issue_report_id)
+        .order_by(Label.name)
+    )
+    return list(result.scalars().all())
 
 
 async def get_ticket_issue_report_links(

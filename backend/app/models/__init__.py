@@ -31,7 +31,13 @@ from app.models.saved_view import SavedView
 from app.models.ai_conversation import AIConversation
 from app.models.ai_message import AIMessage
 from app.models.ai_embedding import AIEmbedding
-from app.models.issue_report import IssueReport, IssueReportReporter, IssueReportTicketLink
+from app.models.issue_report import (
+    IssueReport,
+    IssueReportAttachment,
+    IssueReportReporter,
+    IssueReportTicketLink,
+    issue_report_labels,
+)
 
 __all__ = [
     "Base",
@@ -78,6 +84,8 @@ __all__ = [
     "AIMessage",
     "AIEmbedding",
     "IssueReport",
+    "IssueReportAttachment",
     "IssueReportReporter",
     "IssueReportTicketLink",
+    "issue_report_labels",
 ]
