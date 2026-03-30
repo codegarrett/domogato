@@ -80,6 +80,16 @@ const router = createRouter({
           component: () => import('@/views/sprints/BacklogView.vue'),
         },
         {
+          path: 'projects/:projectId/issue-reports',
+          name: 'issue-report-queue',
+          component: () => import('@/views/issue-reports/IssueReportQueueView.vue'),
+        },
+        {
+          path: 'projects/:projectId/issue-reports/:reportId',
+          name: 'issue-report-detail',
+          component: () => import('@/views/issue-reports/IssueReportDetailView.vue'),
+        },
+        {
           path: 'projects/:projectId/tickets',
           name: 'ticket-list',
           component: () => import('@/views/tickets/TicketListView.vue'),

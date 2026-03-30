@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     epics,
     health,
     import_tickets,
+    issue_reports,
     kb_attachments,
     kb_comments,
     kb_pages,
@@ -81,4 +82,5 @@ api_v1_router.include_router(notification_preferences.router)
 api_v1_router.include_router(saved_views.router)
 api_v1_router.include_router(search.router)
 api_v1_router.include_router(dashboard.router)
+api_v1_router.include_router(issue_reports.router)
 api_v1_router.include_router(ai.router)

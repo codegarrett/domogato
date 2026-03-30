@@ -28,6 +28,12 @@ def _register_builtin_skills() -> None:
         PresentChoicesSkill,
         RequestApprovalSkill,
     )
+    from app.services.agent.issue_report_skills import (
+        SearchIssueReportsSkill,
+        CreateIssueReportSkill,
+        AddReporterToIssueReportSkill,
+        CreateTicketFromIssueReportsSkill,
+    )
     registry.register(ListMyProjectsSkill())
     registry.register(SearchTicketsSkill())
     registry.register(GetTicketDetailsSkill())
@@ -39,6 +45,10 @@ def _register_builtin_skills() -> None:
     registry.register(TransitionTicketStatusSkill())
     registry.register(PresentChoicesSkill())
     registry.register(RequestApprovalSkill())
+    registry.register(SearchIssueReportsSkill())
+    registry.register(CreateIssueReportSkill())
+    registry.register(AddReporterToIssueReportSkill())
+    registry.register(CreateTicketFromIssueReportsSkill())
 
 
 _register_builtin_skills()

@@ -476,6 +476,7 @@ function getProjectCategories(projectId: string): SidebarCategory[] {
       type: 'group',
       children: [
         { key: 'overview',      label: t('nav.overview'),    to: `/projects/${projectId}`,               icon: 'pi pi-home' },
+        { key: 'issue-reports', label: t('nav.issueReports'), to: `/projects/${projectId}/issue-reports`, icon: 'pi pi-exclamation-triangle' },
         { key: 'tickets',       label: t('nav.ticketsList'), to: `/projects/${projectId}/tickets`,       icon: 'pi pi-list' },
         { key: 'board',         label: t('nav.board'),       to: `/projects/${projectId}/board`,         icon: 'pi pi-th-large' },
         { key: 'backlog',       label: t('nav.backlog'),     to: `/projects/${projectId}/backlog`,       icon: 'pi pi-inbox' },
@@ -724,7 +725,7 @@ function autoExpandCategoryForRoute(projectId: string) {
   const path = route.path
   if (path.includes('/kb')) return // handled separately by autoExpandKbIfNeeded
 
-  const pmPaths = ['/tickets', '/board', '/backlog', '/sprints', '/timeline', '/reports', '/custom-fields', '/audit-log']
+  const pmPaths = ['/issue-reports', '/tickets', '/board', '/backlog', '/sprints', '/timeline', '/reports', '/custom-fields', '/audit-log']
   if (pmPaths.some((p) => path.includes(p)) || path === `/projects/${projectId}`) {
     expandedCategories.add(categoryKey(projectId, 'pm'))
   }

@@ -472,6 +472,25 @@
             </div>
           </div>
 
+          <div v-if="sourceIssueReports.length > 0" class="surface-card p-4 border-round shadow-1">
+            <div class="text-sm font-semibold text-color-secondary mb-2">{{ $t('issueReports.sourceReports') }}</div>
+            <div class="flex flex-column gap-2">
+              <router-link
+                v-for="ir in sourceIssueReports"
+                :key="ir.id"
+                :to="`/projects/${ticket.project_id}/issue-reports/${ir.id}`"
+                class="surface-50 p-2 border-round flex align-items-center gap-2 no-underline text-color hover:surface-100"
+              >
+                <i class="pi pi-exclamation-triangle text-orange-500 text-sm" />
+                <span class="text-sm flex-1 min-w-0 overflow-hidden text-overflow-ellipsis white-space-nowrap">{{ ir.title }}</span>
+                <span class="flex align-items-center gap-1 text-xs text-color-secondary flex-shrink-0">
+                  <i class="pi pi-users" style="font-size: 0.7rem" />
+                  {{ ir.reporter_count }}
+                </span>
+              </router-link>
+            </div>
+          </div>
+
           <div class="surface-card p-4 border-round shadow-1">
             <div class="flex align-items-center justify-content-between mb-2">
               <span class="text-sm font-semibold text-color-secondary">{{ $t('timeTracking.title') }}</span>
@@ -733,6 +752,7 @@ import {
 import { listTickets } from '@/api/tickets'
 import { getUserStoriesForTicket, type UserStoryForTicket } from '@/api/kb'
 import { listWatchers, addWatcher, removeWatcher, type Watcher } from '@/api/watchers'
+import { getTicketIssueReports } from '@/api/issue-reports'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useAuthStore } from '@/stores/auth'
 
@@ -754,6 +774,8 @@ const epic = ref<Epic | null>(null)
 const workflow = ref<Workflow | null>(null)
 const userStories = ref<UserStoryForTicket[]>([])
 const watchers = ref<Watcher[]>([])
+const sourceIssueReports = ref<Array<{ id: string; title: string; status: string; priority: string; reporter_count: number; linked_at: string }>>([])
+
 
 const projectSprints = ref<Sprint[]>([])
 
@@ -1243,6 +1265,7 @@ async function loadTicketPage() {
     void loadSprints()
     void loadUserStories(tk.id)
     void loadWatchers(tk.id)
+    void loadSourceIssueReports(tk.id)
   } catch (e) {
     console.error(e)
     loadError.value = t('tickets.loadFailed')
@@ -1421,6 +1444,12 @@ async function loadUserStories(ticketId: string) {
 async function loadWatchers(tid: string) {
   try {
     watchers.value = await listWatchers(tid)
+  } catch { /* ignore */ }
+}
+
+async function loadSourceIssueReports(tid: string) {
+  try {
+    sourceIssueReports.value = await getTicketIssueReports(tid)
   } catch { /* ignore */ }
 }
 
