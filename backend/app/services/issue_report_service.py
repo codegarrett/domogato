@@ -52,16 +52,23 @@ async def create_issue_report(
     )
     db.add(reporter)
 
+    await db.flush()
+
     if label_ids:
-        labels = (await db.execute(
-            select(Label).where(
+        valid_label_ids = (await db.execute(
+            select(Label.id).where(
                 Label.id.in_(label_ids),
                 Label.project_id == project_id,
             )
         )).scalars().all()
-        report.labels = list(labels)
+        for lid in valid_label_ids:
+            await db.execute(
+                issue_report_labels.insert().values(
+                    issue_report_id=report.id, label_id=lid,
+                )
+            )
+        await db.flush()
 
-    await db.flush()
     await db.refresh(report)
     return report
 

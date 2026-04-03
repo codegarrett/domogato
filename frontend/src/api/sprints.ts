@@ -85,3 +85,12 @@ export async function moveToSprint(projectId: string, ticketIds: string[], sprin
   const { data } = await apiClient.post<{ moved: number }>(`/projects/${projectId}/backlog/move-to-sprint`, { ticket_ids: ticketIds, sprint_id: sprintId })
   return data
 }
+
+export async function getSprintTickets(sprintId: string, params?: { offset?: number; limit?: number }): Promise<PaginatedResponse<Ticket>> {
+  const { data } = await apiClient.get<PaginatedResponse<Ticket>>(`/sprints/${sprintId}/tickets`, { params })
+  return data
+}
+
+export async function reorderSprintTickets(sprintId: string, ticketIds: string[]): Promise<void> {
+  await apiClient.post(`/sprints/${sprintId}/reorder`, { ticket_ids: ticketIds })
+}

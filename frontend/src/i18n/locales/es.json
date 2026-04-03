@@ -48,7 +48,7 @@
     "ticketsList": "Tickets",
     "issueReports": "Reportes de Problemas",
     "board": "Tablero",
-    "backlog": "Backlog",
+    "backlog": "Planificación",
     "sprints": "Sprints",
     "customFields": "Campos personalizados",
     "projectManagement": "Gestión de Proyecto",
@@ -236,13 +236,14 @@
   "sprints": {
     "title": "Sprints",
     "backlog": "Backlog",
+    "planning": "Planificación",
     "create": "Nuevo Sprint",
     "created": "Sprint creado",
     "started": "Sprint iniciado",
     "completed": "Sprint completado",
     "deleted": "Sprint eliminado",
     "empty": "Aún no hay sprints. Crea uno para comenzar a planificar.",
-    "emptyBacklog": "El backlog está vacío. Crea tickets para agregarlos aquí.",
+    "emptyBacklog": "No hay tickets sin asignar. Crea tickets o arrástralos aquí desde un sprint.",
     "sprintName": "Nombre del Sprint",
     "namePlaceholder": "ej. Sprint 14",
     "goal": "Objetivo",
@@ -261,7 +262,14 @@
     "selectSprint": "Seleccionar un sprint…",
     "tickets": "Tickets",
     "storyPoints": "Puntos de Historia",
-    "items": "elementos"
+    "items": "elementos",
+    "dragHint": "Arrastra tickets para reordenar o mover entre sprints",
+    "sprintTickets": "{count} tickets",
+    "sprintPoints": "{points} pts",
+    "removeFromSprint": "Quitar del sprint",
+    "noSprintTickets": "No hay tickets en este sprint. Arrastra tickets aquí para agregarlos.",
+    "activeSprint": "Activo",
+    "planningSprint": "Planificación"
   },
   "customFields": {
     "title": "Campos personalizados",
@@ -335,7 +343,9 @@
     "user": "Usuario",
     "action": "Acción",
     "field": "Campo",
-    "change": "Cambio"
+    "change": "Cambio",
+    "noEntries": "Aún no hay eventos de auditoría",
+    "noEntriesHint": "La actividad aparecerá aquí a medida que se realicen cambios en los tickets de este proyecto."
   },
   "webhooks": {
     "title": "Webhooks",

@@ -105,6 +105,13 @@ onMounted(load)
         :rows-per-page-options="[25, 50, 100]"
         @page="onPage"
       >
+        <template #empty>
+          <div class="flex flex-column align-items-center justify-content-center py-6 text-color-secondary">
+            <i class="pi pi-list text-4xl mb-3" />
+            <p class="text-lg font-semibold mb-1">{{ $t('audit.noEntries') }}</p>
+            <p class="text-sm">{{ $t('audit.noEntriesHint') }}</p>
+          </div>
+        </template>
         <Column field="created_at" :header="$t('common.created')" style="width: 12rem">
           <template #body="{ data }">
             <span class="text-sm">{{ formatDate(data.created_at) }}</span>

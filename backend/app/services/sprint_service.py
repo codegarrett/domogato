@@ -321,6 +321,47 @@ async def move_tickets_to_sprint(
     return result.rowcount
 
 
+async def reorder_sprint_tickets(
+    db: AsyncSession, sprint_id: UUID, ticket_ids: list[UUID],
+) -> None:
+    ranks: list[str] = []
+    prev = _RANK_CHARS[0]
+    for _ in ticket_ids:
+        nxt = _midpoint(prev, "z" * 3)
+        ranks.append(nxt)
+        prev = nxt
+
+    for tid, rank in zip(ticket_ids, ranks):
+        await db.execute(
+            update(Ticket)
+            .where(Ticket.id == tid, Ticket.sprint_id == sprint_id)
+            .values(backlog_rank=rank)
+        )
+    await db.flush()
+
+
+async def get_sprint_tickets(
+    db: AsyncSession,
+    sprint_id: UUID,
+    *,
+    offset: int = 0,
+    limit: int = 200,
+) -> tuple[list[Ticket], int]:
+    base = (
+        select(Ticket)
+        .where(
+            Ticket.sprint_id == sprint_id,
+            Ticket.is_deleted == False,  # noqa: E712
+        )
+    )
+    count_q = select(func.count()).select_from(base.subquery())
+    total = (await db.execute(count_q)).scalar_one()
+
+    query = base.order_by(Ticket.backlog_rank.asc()).offset(offset).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all()), total
+
+
 async def remove_tickets_from_sprint(
     db: AsyncSession,
     ticket_ids: list[UUID],

@@ -174,6 +174,47 @@ async def complete_sprint(
     return SprintRead.model_validate(sprint)
 
 
+@router.get(
+    "/sprints/{sprint_id}/tickets",
+    response_model=dict,
+)
+async def get_sprint_tickets(
+    sprint_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    sprint = await sprint_service.get_sprint(db, sprint_id)
+    if sprint is None:
+        raise HTTPException(status_code=404, detail="Sprint not found")
+    tickets, total = await sprint_service.get_sprint_tickets(
+        db, sprint_id, offset=offset, limit=limit,
+    )
+    return {
+        "items": [TicketRead.model_validate(t) for t in tickets],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.post(
+    "/sprints/{sprint_id}/reorder",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def reorder_sprint_tickets(
+    sprint_id: UUID,
+    body: BacklogReorderRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    sprint = await sprint_service.get_sprint(db, sprint_id)
+    if sprint is None:
+        raise HTTPException(status_code=404, detail="Sprint not found")
+    await sprint_service.reorder_sprint_tickets(db, sprint_id, body.ticket_ids)
+
+
 # ---------- Backlog ----------
 
 

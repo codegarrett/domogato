@@ -48,7 +48,7 @@
     "ticketsList": "Tickets",
     "issueReports": "Issue Reports",
     "board": "Board",
-    "backlog": "Backlog",
+    "backlog": "Planning",
     "sprints": "Sprints",
     "customFields": "Custom Fields",
     "projectManagement": "Project Management",
@@ -236,13 +236,14 @@
   "sprints": {
     "title": "Sprints",
     "backlog": "Backlog",
+    "planning": "Planning",
     "create": "New Sprint",
     "created": "Sprint created",
     "started": "Sprint started",
     "completed": "Sprint completed",
     "deleted": "Sprint deleted",
     "empty": "No sprints yet. Create one to start planning.",
-    "emptyBacklog": "Backlog is empty. Create tickets to add them here.",
+    "emptyBacklog": "No unassigned tickets. Create tickets or drag them here from a sprint.",
     "sprintName": "Sprint Name",
     "namePlaceholder": "e.g. Sprint 14",
     "goal": "Goal",
@@ -261,7 +262,14 @@
     "selectSprint": "Select a sprint…",
     "tickets": "Tickets",
     "storyPoints": "Story Points",
-    "items": "items"
+    "items": "items",
+    "dragHint": "Drag tickets to reorder or move between sprints",
+    "sprintTickets": "{count} tickets",
+    "sprintPoints": "{points} pts",
+    "removeFromSprint": "Remove from sprint",
+    "noSprintTickets": "No tickets in this sprint. Drag tickets here to add them.",
+    "activeSprint": "Active",
+    "planningSprint": "Planning"
   },
   "customFields": {
     "title": "Custom Fields",
@@ -335,7 +343,9 @@
     "user": "User",
     "action": "Action",
     "field": "Field",
-    "change": "Change"
+    "change": "Change",
+    "noEntries": "No audit events yet",
+    "noEntriesHint": "Activity will appear here as changes are made to tickets in this project."
   },
   "webhooks": {
     "title": "Webhooks",

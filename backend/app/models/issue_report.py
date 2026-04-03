@@ -78,7 +78,7 @@ class IssueReport(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="issue_report", cascade="all, delete-orphan",
     )
     labels: Mapped[list[Label]] = relationship(
-        secondary=issue_report_labels, lazy="selectin",
+        secondary=issue_report_labels,
     )
 
 

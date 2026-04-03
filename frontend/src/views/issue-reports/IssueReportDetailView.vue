@@ -208,19 +208,15 @@
           <div v-if="report.linked_tickets.length === 0" class="text-sm text-color-secondary">
             {{ $t('issueReports.noLinkedTickets') }}
           </div>
-          <div
+          <router-link
             v-for="link in report.linked_tickets"
             :key="link.ticket_id"
-            class="p-2 border-round surface-hover mb-1"
+            :to="`/tickets/${link.ticket_id}`"
+            class="linked-ticket-item block p-2 border-round mb-1 no-underline"
           >
-            <router-link
-              :to="`/tickets/${link.ticket_id}`"
-              class="font-semibold text-sm text-primary no-underline hover:underline"
-            >
-              {{ link.ticket_key || link.ticket_id }}
-            </router-link>
+            <div class="font-semibold text-sm text-primary">{{ link.ticket_key || link.ticket_id }}</div>
             <div v-if="link.ticket_title" class="text-xs text-color-secondary mt-1">{{ link.ticket_title }}</div>
-          </div>
+          </router-link>
         </div>
       </div>
     </div>
@@ -438,3 +434,12 @@ function onTicketCreated() {
 
 onMounted(() => loadReport())
 </script>
+
+<style scoped>
+.linked-ticket-item {
+  transition: background 0.15s;
+}
+.linked-ticket-item:hover {
+  background: var(--p-content-hover-background, var(--p-surface-100));
+}
+</style>

@@ -65,72 +65,93 @@
           />
         </div>
 
-        <div class="flex gap-3">
-          <div class="flex-1">
-            <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.priority') }}</label>
-            <Select
-              v-model="form.priority"
-              :options="priorityOptions"
-              option-label="label"
-              option-value="value"
-              class="w-full"
-            />
-          </div>
-          <div class="flex-1">
-            <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.labels') }}</label>
-            <MultiSelect
-              v-model="form.label_ids"
-              :options="projectLabels"
-              option-label="name"
-              option-value="id"
-              :placeholder="$t('issueReports.selectLabels')"
-              class="w-full"
-              display="chip"
-            >
-              <template #option="{ option }">
-                <div class="flex align-items-center gap-2">
-                  <span
-                    class="inline-block border-circle"
-                    :style="{ background: option.color, width: '0.75rem', height: '0.75rem' }"
-                  />
-                  <span>{{ option.name }}</span>
-                </div>
-              </template>
-            </MultiSelect>
-            <div v-if="!creatingNewLabel" class="mt-1">
-              <Button
-                :label="$t('issueReports.createNewLabel')"
-                icon="pi pi-plus"
-                size="small"
-                text
-                @click="creatingNewLabel = true"
-              />
-            </div>
-            <div v-else class="mt-2 p-3 surface-ground border-round flex flex-column gap-2">
-              <div>
-                <label class="block text-xs text-color-secondary mb-1">{{ $t('issueReports.labelName') }}</label>
-                <InputText v-model="newLabelName" class="w-full" :placeholder="$t('issueReports.labelNamePlaceholder')" />
-              </div>
-              <div>
-                <label class="block text-xs text-color-secondary mb-1">{{ $t('issueReports.labelColor') }}</label>
-                <div class="flex align-items-center gap-2">
-                  <input v-model="newLabelColor" type="color" class="border-round" style="width: 2rem; height: 2rem; padding: 2px; cursor: pointer; border: 1px solid var(--p-content-border-color);" />
-                  <Tag :value="newLabelName || $t('issueReports.labelPreview')" :style="{ background: newLabelColor, color: '#fff', borderColor: newLabelColor }" class="text-xs" />
-                </div>
-              </div>
-              <div class="flex gap-2">
-                <Button
-                  :label="$t('common.save')"
-                  icon="pi pi-check"
-                  size="small"
-                  :loading="savingNewLabel"
-                  :disabled="!newLabelName.trim()"
-                  @click="createAndAddLabel"
+        <div>
+          <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.priority') }}</label>
+          <Select
+            v-model="form.priority"
+            :options="priorityOptions"
+            option-label="label"
+            option-value="value"
+            class="w-full"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.labels') }}</label>
+          <MultiSelect
+            v-model="form.label_ids"
+            :options="projectLabels"
+            option-label="name"
+            option-value="id"
+            :placeholder="$t('issueReports.selectLabels')"
+            class="w-full"
+            display="chip"
+            :showToggleAll="false"
+          >
+            <template #option="{ option }">
+              <div class="flex align-items-center gap-2">
+                <span
+                  class="inline-block border-circle"
+                  :style="{ background: option.color, width: '0.75rem', height: '0.75rem' }"
                 />
-                <Button :label="$t('common.cancel')" size="small" severity="secondary" text @click="creatingNewLabel = false" />
+                <span>{{ option.name }}</span>
               </div>
-            </div>
-          </div>
+            </template>
+            <template #footer>
+              <div class="p-2 border-top-1 surface-border">
+                <div v-if="!creatingNewLabel">
+                  <Button
+                    :label="$t('issueReports.createNewLabel')"
+                    icon="pi pi-plus"
+                    size="small"
+                    text
+                    class="w-full"
+                    @click.stop="creatingNewLabel = true"
+                  />
+                </div>
+                <div v-else class="flex flex-column gap-2 p-1" @click.stop>
+                  <InputText
+                    v-model="newLabelName"
+                    class="w-full"
+                    :placeholder="$t('issueReports.labelNamePlaceholder')"
+                    @click.stop
+                    @keydown.stop
+                  />
+                  <div class="flex align-items-center gap-2">
+                    <input
+                      v-model="newLabelColor"
+                      type="color"
+                      class="border-round"
+                      style="width: 2rem; height: 2rem; padding: 2px; cursor: pointer; border: 1px solid var(--p-content-border-color);"
+                      @click.stop
+                    />
+                    <Tag
+                      :value="newLabelName || $t('issueReports.labelPreview')"
+                      :style="{ background: newLabelColor, color: '#fff', borderColor: newLabelColor }"
+                      class="text-xs"
+                    />
+                  </div>
+                  <div class="flex gap-2">
+                    <Button
+                      :label="$t('common.save')"
+                      icon="pi pi-check"
+                      size="small"
+                      :loading="savingNewLabel"
+                      :disabled="!newLabelName.trim()"
+                      @click.stop="createAndAddLabel"
+                    />
+                    <Button
+                      :label="$t('common.cancel')"
+                      size="small"
+                      severity="secondary"
+                      text
+                      @click.stop="creatingNewLabel = false"
+                    />
+                  </div>
+                </div>
+              </div>
+            </template>
+          </MultiSelect>
         </div>
 
         <div>
