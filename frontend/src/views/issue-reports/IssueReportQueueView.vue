@@ -146,7 +146,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
+import DataTable, { type DataTableSortEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
@@ -268,8 +268,8 @@ function onPage(event: { first: number; rows: number }) {
   loadReports()
 }
 
-function onSort(event: { sortField: string; sortOrder: number }) {
-  sortField.value = event.sortField || 'created_at'
+function onSort(event: DataTableSortEvent) {
+  sortField.value = (event.sortField as string) || 'created_at'
   sortOrder.value = event.sortOrder === 1 ? 'asc' : 'desc'
   loadReports()
 }

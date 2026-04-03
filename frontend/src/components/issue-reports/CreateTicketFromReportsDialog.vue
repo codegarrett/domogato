@@ -118,7 +118,7 @@ const form = ref({
 })
 
 const defaultTitle = computed(() =>
-  props.selectedReports.length > 0 ? props.selectedReports[0].title : '',
+  props.selectedReports.length > 0 ? props.selectedReports[0]?.title ?? '' : '',
 )
 
 const typeOptions = [

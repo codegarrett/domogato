@@ -140,8 +140,9 @@ function findTicketList(ticketId: string): { list: Ticket[]; key: string } | nul
     return { list: backlogTickets.value, key: 'backlog' }
   }
   for (const sid of Object.keys(sprintTickets.value)) {
-    if (sprintTickets.value[sid].find(tk => tk.id === ticketId)) {
-      return { list: sprintTickets.value[sid], key: sid }
+    const tickets = sprintTickets.value[sid]
+    if (tickets?.find(tk => tk.id === ticketId)) {
+      return { list: tickets, key: sid }
     }
   }
   return null
