@@ -68,6 +68,29 @@
           </Column>
         </DataTable>
       </TabPanel>
+      <TabPanel value="2" :header="$t('orgs.settings')">
+        <h3 class="mt-0">{{ $t('orgs.settings') }}</h3>
+        <div class="settings-list">
+          <div class="settings-card">
+            <div class="settings-row">
+              <div>
+                <div class="font-semibold">{{ $t('orgs.autoJoinNewUsers') }}</div>
+                <p class="text-sm text-color-secondary mt-1 mb-0">{{ $t('orgs.autoJoinNewUsersDesc') }}</p>
+              </div>
+              <ToggleSwitch v-model="orgSettings.auto_join_new_users" @change="saveOrgSettings" />
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div>
+                <div class="font-semibold">{{ $t('orgs.defaultOrg') }}</div>
+                <p class="text-sm text-color-secondary mt-1 mb-0">{{ $t('orgs.defaultOrgDesc') }}</p>
+              </div>
+              <ToggleSwitch v-model="orgSettings.default_org" @change="onDefaultOrgToggle" />
+            </div>
+          </div>
+        </div>
+      </TabPanel>
     </TabView>
 
     <Dialog v-model:visible="showProjectDialog" :header="$t('projects.createProject')" modal :style="{ width: '450px' }">
@@ -123,9 +146,10 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
+import ToggleSwitch from 'primevue/toggleswitch'
 import MemberPickerDialog from '@/components/common/MemberPickerDialog.vue'
 import type { PickerUser } from '@/components/common/MemberPickerDialog.vue'
-import { getOrganization, listOrgMembers, addOrgMember, updateOrgMemberRole, removeOrgMember, type Organization, type OrgMember } from '@/api/organizations'
+import { getOrganization, listOrgMembers, addOrgMember, updateOrgMemberRole, removeOrgMember, getOrgSettings, updateOrgSettings, type Organization, type OrgMember, type OrgSettings } from '@/api/organizations'
 import { listProjects, createProject, type Project } from '@/api/projects'
 import { searchUsers } from '@/api/users'
 import { useToastService } from '@/composables/useToast'
@@ -145,6 +169,8 @@ const showProjectDialog = ref(false)
 const creatingProject = ref(false)
 const newProject = ref({ name: '', key: '', description: '', visibility: 'private' })
 
+const orgSettings = ref<OrgSettings>({ auto_join_new_users: false, default_org: false })
+
 const showAddMemberDialog = ref(false)
 const memberPickerRef = ref<InstanceType<typeof MemberPickerDialog> | null>(null)
 
@@ -160,12 +186,14 @@ onMounted(async () => {
   org.value = await getOrganization(orgId)
   loadingProjects.value = true
   loadingMembers.value = true
-  const [projResult, memberResult] = await Promise.all([
+  const [projResult, memberResult, settingsResult] = await Promise.all([
     listProjects(orgId),
     listOrgMembers(orgId),
+    getOrgSettings(orgId),
   ])
   projects.value = projResult.items
   members.value = memberResult.items
+  orgSettings.value = settingsResult
   loadingProjects.value = false
   loadingMembers.value = false
 })
@@ -231,4 +259,44 @@ async function confirmRemoveOrgMember(member: OrgMember) {
     toast.showError(t('common.error'), t('orgs.removeMemberFailed'))
   }
 }
+
+async function saveOrgSettings() {
+  try {
+    orgSettings.value = await updateOrgSettings(orgId, orgSettings.value)
+    toast.showSuccess(t('common.success'), t('orgs.settingsSaved'))
+  } catch {
+    toast.showError(t('common.error'), t('orgs.settingsSaveFailed'))
+  }
+}
+
+async function onDefaultOrgToggle() {
+  if (orgSettings.value.default_org) {
+    if (!confirm(t('orgs.confirmDefaultOrg'))) {
+      orgSettings.value.default_org = false
+      return
+    }
+  }
+  await saveOrgSettings()
+}
 </script>
+
+<style scoped>
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 640px;
+}
+.settings-card {
+  background: var(--p-content-background);
+  border: 1px solid var(--app-border-color, var(--p-surface-200));
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+}
+</style>

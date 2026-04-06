@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import uuid as uuid_mod
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.core.password import hash_password, validate_password_strength
 from app.core.permissions import require_system_admin
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
@@ -205,6 +208,51 @@ async def list_users(
         offset=offset,
         limit=limit,
     )
+
+
+class AdminCreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    display_name: str = Field(..., min_length=1, max_length=255)
+    is_system_admin: bool = False
+
+
+@router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+async def admin_create_user(
+    body: AdminCreateUserRequest,
+    _admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new local user. System admin only."""
+    pw_error = validate_password_strength(body.password)
+    if pw_error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=pw_error)
+
+    existing = await db.execute(select(User).where(User.email == body.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists",
+        )
+
+    user_id = uuid_mod.uuid4()
+    user = User(
+        id=user_id,
+        oidc_subject=f"local:{user_id}",
+        email=body.email,
+        display_name=body.display_name.strip(),
+        password_hash=hash_password(body.password),
+        is_system_admin=body.is_system_admin,
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+
+    from app.services.auto_membership_service import apply_auto_join_for_new_user
+    await apply_auto_join_for_new_user(db, user.id)
+
+    await db.commit()
+    return UserRead.model_validate(user)
 
 
 @router.get("/{user_id}", response_model=UserRead)

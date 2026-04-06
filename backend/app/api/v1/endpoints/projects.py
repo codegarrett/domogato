@@ -21,9 +21,11 @@ from app.schemas.project import (
     ProjectMemberRead,
     ProjectMemberUpdate,
     ProjectRead,
+    ProjectSettingsRead,
+    ProjectSettingsUpdate,
     ProjectUpdate,
 )
-from app.services import organization_service, project_service, user_service, workflow_service
+from app.services import auto_membership_service, organization_service, project_service, user_service, workflow_service
 from app.services import cache_service
 
 router = APIRouter(tags=["projects"])
@@ -231,6 +233,108 @@ async def unarchive_project(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     await cache_service.invalidate(f"project:{project_id}")
+
+
+# ---------- Project settings endpoints ----------
+
+
+@router.get("/projects/{project_id}/settings", response_model=ProjectSettingsRead)
+async def get_project_settings(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get project settings. Requires maintainer+ access."""
+    await _require_project_role(db, project_id, user, ProjectRole.MAINTAINER)
+    project = await project_service.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectSettingsRead(
+        auto_add_org_members=bool(project.settings.get("auto_add_org_members", False)),
+        api_key=project.settings.get("api_key"),
+    )
+
+
+@router.patch("/projects/{project_id}/settings", response_model=ProjectSettingsRead)
+async def update_project_settings(
+    project_id: UUID,
+    body: ProjectSettingsUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update project settings. Requires project maintainer+ role."""
+    await _require_project_role(db, project_id, user, ProjectRole.MAINTAINER)
+
+    project = await project_service.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    new_settings = dict(project.settings)
+    changes = body.model_dump(exclude_unset=True)
+    new_settings.update(changes)
+
+    await project_service.update_project(db, project_id, settings=new_settings)
+    await cache_service.invalidate(f"project:{project_id}")
+
+    if changes.get("auto_add_org_members") is True:
+        await auto_membership_service.apply_auto_add_project_bulk(
+            db, project_id, project.organization_id
+        )
+
+    await db.commit()
+
+    return ProjectSettingsRead(
+        auto_add_org_members=bool(new_settings.get("auto_add_org_members", False)),
+        api_key=new_settings.get("api_key"),
+    )
+
+
+@router.post("/projects/{project_id}/settings/api-key", response_model=ProjectSettingsRead)
+async def generate_api_key(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate (or regenerate) a project API key. Requires maintainer+ role."""
+    import secrets as _secrets
+    await _require_project_role(db, project_id, user, ProjectRole.MAINTAINER)
+
+    project = await project_service.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    new_settings = dict(project.settings)
+    new_settings["api_key"] = f"dmg_{_secrets.token_urlsafe(32)}"
+
+    await project_service.update_project(db, project_id, settings=new_settings)
+    await cache_service.invalidate(f"project:{project_id}")
+    await db.commit()
+
+    return ProjectSettingsRead(
+        auto_add_org_members=bool(new_settings.get("auto_add_org_members", False)),
+        api_key=new_settings["api_key"],
+    )
+
+
+@router.delete("/projects/{project_id}/settings/api-key", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_api_key(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke the project API key. Requires maintainer+ role."""
+    await _require_project_role(db, project_id, user, ProjectRole.MAINTAINER)
+
+    project = await project_service.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    new_settings = dict(project.settings)
+    new_settings.pop("api_key", None)
+
+    await project_service.update_project(db, project_id, settings=new_settings)
+    await cache_service.invalidate(f"project:{project_id}")
+    await db.commit()
 
 
 # ---------- Project member endpoints ----------

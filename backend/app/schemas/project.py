@@ -44,6 +44,15 @@ class ProjectRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProjectSettingsUpdate(BaseModel):
+    auto_add_org_members: bool | None = None
+
+
+class ProjectSettingsRead(BaseModel):
+    auto_add_org_members: bool = False
+    api_key: str | None = None
+
+
 class ProjectMemberCreate(BaseModel):
     user_id: UUID | None = None
     email: str | None = None

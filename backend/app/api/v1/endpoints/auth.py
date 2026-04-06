@@ -185,6 +185,10 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
     db.add(user)
     await db.flush()
+
+    from app.services.auto_membership_service import apply_auto_join_for_new_user
+    await apply_auto_join_for_new_user(db, user.id)
+
     await db.commit()
 
     token = create_access_token(

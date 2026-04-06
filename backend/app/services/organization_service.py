@@ -143,6 +143,10 @@ async def add_member(
     )
     db.add(membership)
     await db.flush()
+
+    from app.services.auto_membership_service import apply_auto_projects_for_new_org_member
+    await apply_auto_projects_for_new_org_member(db, user_id, org_id)
+
     return membership
 
 

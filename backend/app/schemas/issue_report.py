@@ -98,6 +98,8 @@ class IssueReportRead(BaseModel):
     priority: str
     created_by: UUID | None = None
     created_by_name: str | None = None
+    reporter_name: str | None = None
+    reporter_email: str | None = None
     reporter_count: int
     created_at: datetime
     updated_at: datetime
@@ -107,6 +109,15 @@ class IssueReportRead(BaseModel):
     labels: list[IssueReportLabelRead] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+class PublicIssueReportCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    description: str | None = None
+    priority: str = Field("medium", pattern=r"^(low|medium|high|critical)$")
+    source_url: str | None = Field(None, max_length=2000)
+    reporter_name: str | None = Field(None, max_length=255)
+    reporter_email: str | None = Field(None, max_length=255)
 
 
 class SimilarReportRead(BaseModel):

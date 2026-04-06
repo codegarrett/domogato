@@ -43,6 +43,7 @@ const sections = computed(() => {
     { key: 'audit-log',    label: t('audit.title'),          to: `/projects/${pid}/audit-log`,     icon: 'pi pi-history' },
     { key: 'webhooks',      label: t('webhooks.title'),     to: `/projects/${pid}/webhooks`,      icon: 'pi pi-link' },
     { key: 'kb',             label: t('kb.title'),           to: `/projects/${pid}/kb`,            icon: 'pi pi-book' },
+    { key: 'settings',       label: t('nav.projectSettings'), to: `/projects/${pid}/settings`,    icon: 'pi pi-cog' },
   ]
 })
 

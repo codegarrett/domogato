@@ -65,3 +65,18 @@ export async function updateOrgMemberRole(orgId: string, userId: string, role: s
 export async function removeOrgMember(orgId: string, userId: string) {
   await apiClient.delete(`/organizations/${orgId}/members/${userId}`)
 }
+
+export interface OrgSettings {
+  auto_join_new_users: boolean
+  default_org: boolean
+}
+
+export async function getOrgSettings(orgId: string) {
+  const { data } = await apiClient.get<OrgSettings>(`/organizations/${orgId}/settings`)
+  return data
+}
+
+export async function updateOrgSettings(orgId: string, settings: Partial<OrgSettings>) {
+  const { data } = await apiClient.patch<OrgSettings>(`/organizations/${orgId}/settings`, settings)
+  return data
+}

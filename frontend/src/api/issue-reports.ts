@@ -41,6 +41,8 @@ export interface IssueReport {
   priority: string
   created_by: string | null
   created_by_name: string | null
+  reporter_name: string | null
+  reporter_email: string | null
   reporter_count: number
   created_at: string
   updated_at: string

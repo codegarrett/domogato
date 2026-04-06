@@ -27,6 +27,7 @@ from app.api.v1.endpoints import (
     notification_preferences,
     notifications,
     organizations,
+    public_issue_reports,
     reports,
     saved_views,
     search,
@@ -83,4 +84,5 @@ api_v1_router.include_router(saved_views.router)
 api_v1_router.include_router(search.router)
 api_v1_router.include_router(dashboard.router)
 api_v1_router.include_router(issue_reports.router)
+api_v1_router.include_router(public_issue_reports.router)
 api_v1_router.include_router(ai.router)

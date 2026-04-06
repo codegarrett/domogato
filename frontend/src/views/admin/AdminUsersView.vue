@@ -12,6 +12,13 @@
         class="search-input"
         @input="debouncedSearch"
       />
+      <Button
+        v-if="authStore.isLocalMode"
+        :label="t('admin.createUser')"
+        icon="pi pi-plus"
+        size="small"
+        @click="showCreateDialog = true"
+      />
     </div>
 
     <div v-if="loading" class="flex justify-content-center py-6">
@@ -117,11 +124,43 @@
         <Button :label="t('common.save')" :severity="confirmSeverity" @click="executeConfirm" :loading="confirmLoading" />
       </template>
     </Dialog>
+
+    <Dialog v-model:visible="showCreateDialog" :header="t('admin.createUser')" modal :style="{ width: '28rem' }">
+      <p class="text-sm text-color-secondary mb-3">{{ t('admin.createUserMessage') }}</p>
+      <div class="flex flex-column gap-3">
+        <div class="flex flex-column gap-1">
+          <label class="text-sm font-medium">{{ t('admin.userDisplayName') }}</label>
+          <InputText v-model="newUser.display_name" class="w-full" />
+        </div>
+        <div class="flex flex-column gap-1">
+          <label class="text-sm font-medium">{{ t('admin.userEmail') }}</label>
+          <InputText v-model="newUser.email" type="email" class="w-full" />
+        </div>
+        <div class="flex flex-column gap-1">
+          <label class="text-sm font-medium">{{ t('admin.userPassword') }}</label>
+          <InputText v-model="newUser.password" type="password" class="w-full" />
+        </div>
+        <div class="flex align-items-center justify-content-between">
+          <label class="text-sm font-medium">{{ t('admin.makeAdmin') }}</label>
+          <ToggleSwitch v-model="newUser.is_system_admin" />
+        </div>
+      </div>
+      <template #footer>
+        <Button :label="t('common.cancel')" text @click="showCreateDialog = false" />
+        <Button
+          :label="t('common.create')"
+          icon="pi pi-check"
+          :loading="creating"
+          :disabled="!canCreate"
+          @click="handleCreateUser"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -130,13 +169,16 @@ import Button from 'primevue/button'
 import Avatar from 'primevue/avatar'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
+import ToggleSwitch from 'primevue/toggleswitch'
 import ProgressSpinner from 'primevue/progressspinner'
 import AdminSubNav from '@/components/common/AdminSubNav.vue'
-import { listUsers, adminUpdateUser, type UserRead } from '@/api/users'
+import { listUsers, adminUpdateUser, adminCreateUser, type UserRead } from '@/api/users'
+import { useAuthStore } from '@/stores/auth'
 import { useToastService } from '@/composables/useToast'
 
 const { t } = useI18n()
 const toast = useToastService()
+const authStore = useAuthStore()
 
 const users = ref<UserRead[]>([])
 const total = ref(0)
@@ -225,6 +267,38 @@ async function executeConfirm() {
     confirmLoading.value = false
   }
 }
+
+const showCreateDialog = ref(false)
+const creating = ref(false)
+const newUser = ref({ display_name: '', email: '', password: '', is_system_admin: false })
+
+const canCreate = computed(() =>
+  newUser.value.display_name.trim().length > 0 &&
+  newUser.value.email.trim().length > 0 &&
+  newUser.value.password.length >= 8
+)
+
+async function handleCreateUser() {
+  if (!canCreate.value) return
+  creating.value = true
+  try {
+    await adminCreateUser({
+      email: newUser.value.email,
+      password: newUser.value.password,
+      display_name: newUser.value.display_name.trim(),
+      is_system_admin: newUser.value.is_system_admin,
+    })
+    showCreateDialog.value = false
+    newUser.value = { display_name: '', email: '', password: '', is_system_admin: false }
+    toast.showSuccess(t('common.success'), t('admin.userCreated'))
+    await loadUsers()
+  } catch (e: any) {
+    const detail = e.response?.data?.detail
+    toast.showError(t('common.error'), detail || t('admin.userCreateFailed'))
+  } finally {
+    creating.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -241,6 +315,9 @@ async function executeConfirm() {
   margin: 0 0 0.75rem;
 }
 .admin-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   margin-bottom: 1rem;
 }
 .search-input {

@@ -29,7 +29,9 @@ async def create_issue_report(
     description: str | None = None,
     priority: str = "medium",
     source_url: str | None = None,
-    created_by: UUID,
+    created_by: UUID | None = None,
+    reporter_name: str | None = None,
+    reporter_email: str | None = None,
     original_description: str | None = None,
     label_ids: list[UUID] | None = None,
 ) -> IssueReport:
@@ -40,17 +42,20 @@ async def create_issue_report(
         source_url=source_url,
         priority=priority,
         created_by=created_by,
+        reporter_name=reporter_name,
+        reporter_email=reporter_email,
         reporter_count=1,
     )
     db.add(report)
     await db.flush()
 
-    reporter = IssueReportReporter(
-        issue_report_id=report.id,
-        user_id=created_by,
-        original_description=original_description or description,
-    )
-    db.add(reporter)
+    if created_by:
+        reporter = IssueReportReporter(
+            issue_report_id=report.id,
+            user_id=created_by,
+            original_description=original_description or description,
+        )
+        db.add(reporter)
 
     await db.flush()
 

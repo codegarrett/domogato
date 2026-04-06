@@ -66,7 +66,7 @@ async def get_or_create_user(db: AsyncSession, token_claims: dict[str, Any]) -> 
         db.add(user)
         await db.flush()
 
-        # Auto-assign to default org
+        # Auto-assign to default org (OIDC system setting)
         default_org_id = auth_settings["oidc_default_org_id"].value
         if default_org_id:
             from app.models.membership import OrgMembership as OM
@@ -77,6 +77,10 @@ async def get_or_create_user(db: AsyncSession, token_claims: dict[str, Any]) -> 
             )
             db.add(membership)
             await db.flush()
+
+        # Auto-join orgs/projects with org-level auto_join / default_org settings
+        from app.services.auto_membership_service import apply_auto_join_for_new_user
+        await apply_auto_join_for_new_user(db, user.id)
     else:
         if email_val := token_claims.get("email"):
             user.email = email_val

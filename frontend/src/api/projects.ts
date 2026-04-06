@@ -73,3 +73,27 @@ export async function updateProjectMemberRole(projectId: string, userId: string,
 export async function removeProjectMember(projectId: string, userId: string) {
   await apiClient.delete(`/projects/${projectId}/members/${userId}`)
 }
+
+export interface ProjectSettings {
+  auto_add_org_members: boolean
+  api_key: string | null
+}
+
+export async function getProjectSettings(projectId: string) {
+  const { data } = await apiClient.get<ProjectSettings>(`/projects/${projectId}/settings`)
+  return data
+}
+
+export async function updateProjectSettings(projectId: string, settings: Partial<ProjectSettings>) {
+  const { data } = await apiClient.patch<ProjectSettings>(`/projects/${projectId}/settings`, settings)
+  return data
+}
+
+export async function generateProjectApiKey(projectId: string) {
+  const { data } = await apiClient.post<ProjectSettings>(`/projects/${projectId}/settings/api-key`)
+  return data
+}
+
+export async function revokeProjectApiKey(projectId: string) {
+  await apiClient.delete(`/projects/${projectId}/settings/api-key`)
+}

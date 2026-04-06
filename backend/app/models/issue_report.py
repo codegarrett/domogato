@@ -61,6 +61,8 @@ class IssueReport(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    reporter_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reporter_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reporter_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="1",
     )

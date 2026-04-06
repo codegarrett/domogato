@@ -89,3 +89,13 @@ export async function adminUpdateUser(userId: string, payload: { is_active?: boo
   const { data } = await apiClient.patch<UserRead>(`/users/${userId}`, payload)
   return data
 }
+
+export async function adminCreateUser(payload: {
+  email: string
+  password: string
+  display_name: string
+  is_system_admin?: boolean
+}) {
+  const { data } = await apiClient.post<UserRead>('/users', payload)
+  return data
+}

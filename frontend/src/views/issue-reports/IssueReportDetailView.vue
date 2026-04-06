@@ -150,7 +150,12 @@
             </div>
             <div class="flex justify-content-between">
               <span class="text-color-secondary">{{ $t('issueReports.createdBy') }}</span>
-              <span>{{ report.created_by_name || '—' }}</span>
+              <span v-if="report.created_by_name">{{ report.created_by_name }}</span>
+              <span v-else-if="report.reporter_name || report.reporter_email" class="text-right">
+                <span>{{ report.reporter_name || $t('issueReports.anonymous') }}</span>
+                <div v-if="report.reporter_email" class="text-xs text-color-secondary">{{ report.reporter_email }}</div>
+              </span>
+              <Tag v-else value="API" severity="secondary" class="text-xs" />
             </div>
             <div class="flex justify-content-between">
               <span class="text-color-secondary">{{ $t('issueReports.created') }}</span>

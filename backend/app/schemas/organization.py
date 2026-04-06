@@ -38,6 +38,16 @@ class OrganizationRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class OrgSettingsUpdate(BaseModel):
+    auto_join_new_users: bool | None = None
+    default_org: bool | None = None
+
+
+class OrgSettingsRead(BaseModel):
+    auto_join_new_users: bool = False
+    default_org: bool = False
+
+
 class OrgMemberCreate(BaseModel):
     user_id: UUID | None = None
     email: str | None = None

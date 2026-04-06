@@ -14,11 +14,13 @@ from app.schemas.organization import (
     OrgMemberCreate,
     OrgMemberRead,
     OrgMemberUpdate,
+    OrgSettingsRead,
+    OrgSettingsUpdate,
     OrganizationCreate,
     OrganizationRead,
     OrganizationUpdate,
 )
-from app.services import organization_service, user_service, workflow_service
+from app.services import auto_membership_service, organization_service, user_service, workflow_service
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -140,6 +142,55 @@ async def deactivate_organization(
     org = await organization_service.deactivate_organization(db, org_id)
     if org is None:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+
+@router.get("/{org_id}/settings", response_model=OrgSettingsRead)
+async def get_org_settings(
+    org_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get organization settings. Requires org membership."""
+    await _get_org_membership(db, org_id, user)
+    org = await organization_service.get_organization(db, org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return OrgSettingsRead(
+        auto_join_new_users=bool(org.settings.get("auto_join_new_users", False)),
+        default_org=bool(org.settings.get("default_org", False)),
+    )
+
+
+@router.patch("/{org_id}/settings", response_model=OrgSettingsRead)
+async def update_org_settings(
+    org_id: UUID,
+    body: OrgSettingsUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update organization settings. Requires org admin role."""
+    membership = await _get_org_membership(db, org_id, user)
+    _check_min_role(membership, OrgRole.ADMIN)
+
+    org = await organization_service.get_organization(db, org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    new_settings = dict(org.settings)
+    changes = body.model_dump(exclude_unset=True)
+    new_settings.update(changes)
+
+    await organization_service.update_organization(db, org_id, settings=new_settings)
+
+    if changes.get("default_org") is True:
+        await auto_membership_service.apply_default_org_bulk(db, org_id)
+
+    await db.commit()
+
+    return OrgSettingsRead(
+        auto_join_new_users=bool(new_settings.get("auto_join_new_users", False)),
+        default_org=bool(new_settings.get("default_org", False)),
+    )
 
 
 @router.get("/{org_id}/members", response_model=PaginatedResponse[OrgMemberRead])
