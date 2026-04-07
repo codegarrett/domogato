@@ -124,7 +124,14 @@
     "apiKeyCopied": "API key copied to clipboard",
     "apiKeyFailed": "Failed to manage API key",
     "confirmRegenerateKey": "Regenerating the key will invalidate the current one. Any existing integrations will stop working. Continue?",
-    "confirmRevokeKey": "Revoking the key will disable all external integrations using it. Continue?"
+    "confirmRevokeKey": "Revoking the key will disable all external integrations using it. Continue?",
+    "dangerZone": "Danger Zone",
+    "purgeDesc": "Permanently delete all tickets, issue reports, and epics in this project. This cannot be undone. Labels, workflows, sprints, and project settings are preserved.",
+    "purgeConfirmPlaceholder": "Type PURGE to confirm",
+    "purgeButton": "Purge All Data",
+    "purgeHint": "This will hard-delete all tickets, issue reports, epics, comments, attachments, activity logs, and reset the ticket counter to zero.",
+    "purgeComplete": "Project data purged",
+    "purgeFailed": "Failed to purge project data"
   },
   "tickets": {
     "createTicket": "Create Ticket",

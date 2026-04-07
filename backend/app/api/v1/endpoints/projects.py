@@ -11,6 +11,7 @@ from app.core.permissions import (
     ORG_ROLE_HIERARCHY,
     ProjectRole,
     PROJECT_ROLE_HIERARCHY,
+    require_system_admin,
     resolve_effective_project_role,
 )
 from app.models.user import User
@@ -25,7 +26,7 @@ from app.schemas.project import (
     ProjectSettingsUpdate,
     ProjectUpdate,
 )
-from app.services import auto_membership_service, organization_service, project_service, user_service, workflow_service
+from app.services import auto_membership_service, organization_service, project_service, purge_service, user_service, workflow_service
 from app.services import cache_service
 
 router = APIRouter(tags=["projects"])
@@ -335,6 +336,29 @@ async def revoke_api_key(
     await project_service.update_project(db, project_id, settings=new_settings)
     await cache_service.invalidate(f"project:{project_id}")
     await db.commit()
+
+
+# ---------- Project purge (dev convenience, system admin only) ----------
+
+
+@router.post("/projects/{project_id}/purge")
+async def purge_project_data(
+    project_id: UUID,
+    user: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hard-delete all tickets, issue reports, epics, and satellite data for a project.
+
+    Resets the ticket sequence to 0.  System admin only.
+    """
+    project = await project_service.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    summary = await purge_service.purge_project_data(db, project_id)
+    await db.commit()
+    await cache_service.invalidate(f"project:{project_id}")
+    return summary
 
 
 # ---------- Project member endpoints ----------

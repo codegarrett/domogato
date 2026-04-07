@@ -1,3 +1,5 @@
+#temp files
+temp/
 # OS
 .DS_Store
 Thumbs.db

@@ -124,7 +124,14 @@
     "apiKeyCopied": "Clave API copiada al portapapeles",
     "apiKeyFailed": "Error al gestionar la clave API",
     "confirmRegenerateKey": "Regenerar la clave invalidará la actual. Las integraciones existentes dejarán de funcionar. ¿Continuar?",
-    "confirmRevokeKey": "Revocar la clave deshabilitará todas las integraciones externas que la usen. ¿Continuar?"
+    "confirmRevokeKey": "Revocar la clave deshabilitará todas las integraciones externas que la usen. ¿Continuar?",
+    "dangerZone": "Zona de Peligro",
+    "purgeDesc": "Eliminar permanentemente todos los tickets, reportes de problemas y épicas de este proyecto. Esta acción no se puede deshacer. Las etiquetas, flujos de trabajo, sprints y configuración del proyecto se conservan.",
+    "purgeConfirmPlaceholder": "Escribe PURGE para confirmar",
+    "purgeButton": "Purgar Todos los Datos",
+    "purgeHint": "Esto eliminará permanentemente todos los tickets, reportes de problemas, épicas, comentarios, archivos adjuntos, registros de actividad y reiniciará el contador de tickets a cero.",
+    "purgeComplete": "Datos del proyecto purgados",
+    "purgeFailed": "Error al purgar los datos del proyecto"
   },
   "tickets": {
     "createTicket": "Crear ticket",

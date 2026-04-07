@@ -97,3 +97,18 @@ export async function generateProjectApiKey(projectId: string) {
 export async function revokeProjectApiKey(projectId: string) {
   await apiClient.delete(`/projects/${projectId}/settings/api-key`)
 }
+
+export interface PurgeSummary {
+  tickets: number
+  issue_reports: number
+  epics: number
+  ai_embeddings: number
+  notifications: number
+  daily_snapshots: number
+  s3_objects: number
+}
+
+export async function purgeProjectData(projectId: string) {
+  const { data } = await apiClient.post<PurgeSummary>(`/projects/${projectId}/purge`)
+  return data
+}

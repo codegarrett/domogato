@@ -73,6 +73,32 @@
           />
         </div>
       </div>
+      <!-- Danger Zone: Purge Project Data (system admin only) -->
+      <div v-if="authStore.isSystemAdmin" class="settings-card danger-card">
+        <div class="font-semibold mb-1" style="color: var(--p-red-500)">{{ t('projects.dangerZone') }}</div>
+        <p class="text-sm text-color-secondary mt-0 mb-3">{{ t('projects.purgeDesc') }}</p>
+
+        <div class="flex flex-column gap-3">
+          <div class="flex align-items-center gap-2">
+            <InputText
+              v-model="purgeConfirmText"
+              :placeholder="t('projects.purgeConfirmPlaceholder')"
+              class="flex-1"
+              size="small"
+            />
+            <Button
+              :label="t('projects.purgeButton')"
+              icon="pi pi-trash"
+              severity="danger"
+              size="small"
+              :loading="purging"
+              :disabled="purgeConfirmText !== 'PURGE'"
+              @click="handlePurge"
+            />
+          </div>
+          <small class="text-color-secondary">{{ t('projects.purgeHint') }}</small>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -82,19 +108,23 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
 import ToggleSwitch from 'primevue/toggleswitch'
 import {
   getProjectSettings,
   updateProjectSettings,
   generateProjectApiKey,
   revokeProjectApiKey,
+  purgeProjectData,
   type ProjectSettings,
 } from '@/api/projects'
 import { useToastService } from '@/composables/useToast'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const toast = useToastService()
 const route = useRoute()
+const authStore = useAuthStore()
 const projectId = route.params.projectId as string
 
 const loading = ref(true)
@@ -102,6 +132,8 @@ const settings = ref<ProjectSettings>({ auto_add_org_members: false, api_key: nu
 const showKey = ref(false)
 const generatingKey = ref(false)
 const revokingKey = ref(false)
+const purging = ref(false)
+const purgeConfirmText = ref('')
 
 const maskedKey = computed(() => {
   if (!settings.value.api_key) return ''
@@ -176,6 +208,25 @@ async function handleRevokeKey() {
   }
 }
 
+async function handlePurge() {
+  if (purgeConfirmText.value !== 'PURGE') return
+  purging.value = true
+  try {
+    const summary = await purgeProjectData(projectId)
+    const parts: string[] = []
+    if (summary.tickets) parts.push(`${summary.tickets} tickets`)
+    if (summary.issue_reports) parts.push(`${summary.issue_reports} issue reports`)
+    if (summary.epics) parts.push(`${summary.epics} epics`)
+    const detail = parts.length ? `Deleted ${parts.join(', ')}.` : 'No data to purge.'
+    toast.showSuccess(t('projects.purgeComplete'), detail)
+    purgeConfirmText.value = ''
+  } catch {
+    toast.showError(t('common.error'), t('projects.purgeFailed'))
+  } finally {
+    purging.value = false
+  }
+}
+
 async function copyKey() {
   if (!settings.value.api_key) return
   try {
@@ -212,6 +263,9 @@ async function copyKey() {
   align-items: flex-start;
   justify-content: space-between;
   gap: 2rem;
+}
+.danger-card {
+  border-color: var(--p-red-200);
 }
 .api-key-display {
   display: flex;
