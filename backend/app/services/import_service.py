@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_redis
 from app.models.label import Label, ticket_labels
+from app.models.membership import ProjectMembership
 from app.models.project import Project
 from app.models.sprint import Sprint
 from app.models.ticket import Ticket
@@ -268,6 +269,7 @@ async def execute_import(
     column_mappings: list[dict[str, str | None]],
     value_mappings: dict[str, list[dict[str, str | None]]],
     options: dict[str, Any],
+    user_mappings: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     """Execute the import: retrieve cached rows, apply mappings, create tickets."""
 
@@ -385,7 +387,7 @@ async def execute_import(
 
         mapped_rows.append({"row_number": row_idx, "data": mapped})
 
-    user_id_map = await _resolve_users(db, user_display_names)
+    user_id_map = await _resolve_users(db, user_display_names, user_mappings=user_mappings)
     label_id_map, created_labels = await _find_or_create_labels(
         db, project_id, label_names, create=options.get("create_labels", True)
     )
@@ -403,6 +405,7 @@ async def execute_import(
             "total_processed": len(rows),
             "tickets_created": 0,
             "tickets_skipped": skipped,
+            "unresolved_assignees": 0,
             "labels_created": created_labels,
             "sprints_created": created_sprints,
             "parent_links_resolved": 0,
@@ -422,6 +425,7 @@ async def execute_import(
     external_key_to_ticket_id: dict[str, UUID] = {}
     parent_key_rows: list[tuple[UUID, str]] = []
     created_count = 0
+    unresolved_assignees_count = 0
 
     for i, mr in enumerate(mapped_rows):
         data = mr["data"]
@@ -456,6 +460,9 @@ async def execute_import(
                 assignee_id = user_id_map.get(name.lower())
                 if assignee_id is None:
                     unmatched_assignee = name
+                    # Only count as unresolved when the name was not an explicit "leave unassigned" choice
+                    if user_mappings is None or name not in user_mappings:
+                        unresolved_assignees_count += 1
 
             reporter_id_val = None
             unmatched_reporter = None
@@ -589,6 +596,7 @@ async def execute_import(
         "total_processed": len(rows),
         "tickets_created": created_count,
         "tickets_skipped": skipped,
+        "unresolved_assignees": unresolved_assignees_count,
         "labels_created": created_labels,
         "sprints_created": created_sprints,
         "parent_links_resolved": parent_links,
@@ -597,17 +605,102 @@ async def execute_import(
 
 
 async def _resolve_users(
-    db: AsyncSession, display_names: set[str]
+    db: AsyncSession,
+    display_names: set[str],
+    user_mappings: dict[str, str | None] | None = None,
 ) -> dict[str, UUID]:
-    """Match display names to user IDs (case-insensitive)."""
-    if not display_names:
-        return {}
-    result = await db.execute(
-        select(User.id, User.display_name).where(
-            func.lower(User.display_name).in_([n.lower() for n in display_names])
+    """Match display names to user IDs (case-insensitive).
+
+    user_mappings overrides take priority: a UUID string sets the mapping
+    directly; an explicit None marks the name as intentionally unassigned
+    and skips the DB lookup for it.
+    """
+    result: dict[str, UUID] = {}
+
+    # Apply overrides from user_mappings first, collect which names are covered
+    overridden: set[str] = set()
+    if user_mappings:
+        for source_name, user_id_str in user_mappings.items():
+            key = source_name.lower()
+            if user_id_str is not None:
+                try:
+                    result[key] = UUID(user_id_str)
+                except ValueError:
+                    pass
+            # Explicit None → intentionally unassigned; mark as covered so DB lookup is skipped
+            overridden.add(key)
+
+    # DB lookup for names not covered by overrides
+    remaining = {n for n in display_names if n.lower() not in overridden}
+    if remaining:
+        db_result = await db.execute(
+            select(User.id, User.display_name).where(
+                func.lower(User.display_name).in_([n.lower() for n in remaining])
+            )
         )
+        for row in db_result.all():
+            result[row.display_name.lower()] = row.id
+
+    return result
+
+
+async def preview_users(
+    db: AsyncSession,
+    project_id: UUID,
+    names: list[str],
+) -> dict[str, Any]:
+    """Resolve a list of raw import names against project members.
+
+    Returns match quality per name and the full project member roster
+    for use in the manual-override dropdown.
+    """
+    members_result = await db.execute(
+        select(User.id, User.display_name, User.email, User.avatar_url)
+        .join(ProjectMembership, ProjectMembership.user_id == User.id)
+        .where(ProjectMembership.project_id == project_id)
+        .order_by(User.display_name)
     )
-    return {row.display_name.lower(): row.id for row in result.all()}
+    members = members_result.all()
+
+    by_display_name: dict[str, Any] = {m.display_name.lower(): m for m in members}
+    by_email: dict[str, Any] = {m.email.lower(): m for m in members}
+
+    matches = []
+    for name in names:
+        name_lower = name.lower()
+        match_type = "none"
+        matched_user_id = None
+        matched_display_name = None
+
+        if name_lower in by_display_name:
+            m = by_display_name[name_lower]
+            match_type = "exact"
+            matched_user_id = str(m.id)
+            matched_display_name = m.display_name
+        elif name_lower in by_email:
+            m = by_email[name_lower]
+            match_type = "email"
+            matched_user_id = str(m.id)
+            matched_display_name = m.display_name
+
+        matches.append({
+            "source_name": name,
+            "matched_user_id": matched_user_id,
+            "matched_display_name": matched_display_name,
+            "match_type": match_type,
+        })
+
+    project_members = [
+        {
+            "user_id": str(m.id),
+            "display_name": m.display_name,
+            "email": m.email,
+            "avatar_url": m.avatar_url,
+        }
+        for m in members
+    ]
+
+    return {"matches": matches, "project_members": project_members}
 
 
 async def _find_or_create_labels(

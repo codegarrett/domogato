@@ -691,8 +691,22 @@
     "stepUpload": "Subir",
     "stepColumns": "Columnas",
     "stepValues": "Valores",
+    "stepUsers": "Usuarios",
     "stepPreview": "Vista Previa",
-    "stepResults": "Resultados"
+    "stepResults": "Resultados",
+    "userResolutionTitle": "Resolución de Usuarios",
+    "userResolutionDescription": "Revisa cómo los asignados y reporteros de tu archivo de importación coinciden con los miembros del proyecto. Corrige los errores antes de importar.",
+    "userResolutionNone": "No hay columnas de asignado o reportero mapeadas. Haz clic en Siguiente para continuar con la vista previa.",
+    "userResolutionHint": "Limpiar un mapeo dejará esos tickets sin asignar. Puedes reasignarlos después de la importación.",
+    "userPreviewFailed": "Error al cargar las coincidencias de usuarios",
+    "userSourceName": "Nombre Origen",
+    "userMatchStatus": "Estado de Coincidencia",
+    "userMappedTo": "Mapeado a",
+    "userLeaveUnassigned": "Dejar sin asignar",
+    "matchExact": "Coincidencia exacta",
+    "matchEmail": "Coincidencia por email",
+    "matchNone": "Sin coincidencia",
+    "unresolvedAssignees": "Asignados sin resolver"
   },
   "editor": {
     "placeholder": "Escribe algo...",

@@ -111,7 +111,7 @@
         </div>
 
         <!-- Step 2: Value Mapping -->
-        <div v-if="activeStep === 2 && analysis">
+        <div v-if="activeStep === 2 && analysis" class="step-value-mapping">
           <h2 class="text-xl font-semibold mb-2">{{ $t('import.valueMappingTitle') }}</h2>
           <p class="text-color-secondary mb-4">{{ $t('import.valueMappingDescription') }}</p>
 
@@ -165,12 +165,86 @@
 
           <div class="flex justify-content-between mt-4">
             <Button :label="$t('common.back')" icon="pi pi-arrow-left" severity="secondary" outlined @click="activeStep = 1" />
+            <Button :label="$t('import.next')" icon="pi pi-arrow-right" iconPos="right" @click="goToUserResolution" />
+          </div>
+        </div>
+
+        <!-- Step 3: User Resolution -->
+        <div v-if="activeStep === 3 && analysis">
+          <h2 class="text-xl font-semibold mb-2">{{ $t('import.userResolutionTitle') }}</h2>
+          <p class="text-color-secondary mb-4">{{ $t('import.userResolutionDescription') }}</p>
+
+          <div v-if="loadingUserPreview" class="flex justify-content-center align-items-center p-6">
+            <ProgressSpinner style="width: 2rem; height: 2rem" strokeWidth="4" />
+          </div>
+
+          <div v-else-if="userResolutionRows.length === 0" class="p-4 surface-ground border-round mb-4">
+            <div class="flex align-items-center gap-2 text-color-secondary">
+              <i class="pi pi-info-circle text-xl"></i>
+              <span>{{ $t('import.userResolutionNone') }}</span>
+            </div>
+          </div>
+
+          <div v-else>
+            <DataTable :value="userResolutionRows" responsiveLayout="scroll" class="mb-4">
+              <Column field="source_name" :header="$t('import.userSourceName')" style="width: 30%">
+                <template #body="{ data: row }">
+                  <span class="font-medium font-monospace">{{ row.source_name }}</span>
+                </template>
+              </Column>
+              <Column :header="$t('import.userMatchStatus')" style="width: 20%">
+                <template #body="{ data: row }">
+                  <Tag
+                    v-if="row.match_type === 'exact'"
+                    :value="$t('import.matchExact')"
+                    severity="success"
+                    icon="pi pi-check"
+                  />
+                  <Tag
+                    v-else-if="row.match_type === 'email'"
+                    :value="$t('import.matchEmail')"
+                    severity="warn"
+                    icon="pi pi-envelope"
+                  />
+                  <Tag
+                    v-else
+                    :value="$t('import.matchNone')"
+                    severity="danger"
+                    icon="pi pi-times"
+                  />
+                </template>
+              </Column>
+              <Column :header="$t('import.userMappedTo')" style="width: 50%">
+                <template #body="{ data: row }">
+                  <Select
+                    v-model="userMappings[row.source_name]"
+                    :options="memberOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    :placeholder="$t('import.userLeaveUnassigned')"
+                    class="w-full"
+                    showClear
+                    filter
+                    filterPlaceholder="Search members..."
+                  />
+                </template>
+              </Column>
+            </DataTable>
+
+            <div class="surface-ground border-round p-3 mb-4 flex align-items-center gap-2">
+              <i class="pi pi-info-circle text-color-secondary"></i>
+              <span class="text-color-secondary text-sm">{{ $t('import.userResolutionHint') }}</span>
+            </div>
+          </div>
+
+          <div class="flex justify-content-between">
+            <Button :label="$t('common.back')" icon="pi pi-arrow-left" severity="secondary" outlined @click="activeStep = 2" />
             <Button :label="$t('import.next')" icon="pi pi-arrow-right" iconPos="right" @click="goToPreview" />
           </div>
         </div>
 
-        <!-- Step 3: Preview -->
-        <div v-if="activeStep === 3 && analysis">
+        <!-- Step 4: Preview -->
+        <div v-if="activeStep === 4 && analysis">
           <h2 class="text-xl font-semibold mb-2">{{ $t('import.previewTitle') }}</h2>
           <p class="text-color-secondary mb-4">{{ $t('import.previewDescription', { total: analysis.total_rows }) }}</p>
 
@@ -203,7 +277,7 @@
           </div>
 
           <div class="flex justify-content-between">
-            <Button :label="$t('common.back')" icon="pi pi-arrow-left" severity="secondary" outlined @click="activeStep = 2" />
+            <Button :label="$t('common.back')" icon="pi pi-arrow-left" severity="secondary" outlined @click="activeStep = 3" />
             <Button
               :label="$t('import.executeImport', { count: analysis.total_rows })"
               icon="pi pi-check"
@@ -214,30 +288,38 @@
           </div>
         </div>
 
-        <!-- Step 4: Results -->
-        <div v-if="activeStep === 4 && importResult">
+        <!-- Step 5: Results -->
+        <div v-if="activeStep === 5 && importResult">
           <h2 class="text-xl font-semibold mb-4">{{ $t('import.resultsTitle') }}</h2>
 
           <div class="grid mb-4">
-            <div class="col-6 md:col-3">
+            <div class="col-6 md:col-2">
               <div class="surface-ground border-round p-3 text-center">
                 <div class="text-3xl font-bold text-primary">{{ importResult.tickets_created }}</div>
                 <div class="text-color-secondary text-sm mt-1">{{ $t('import.ticketsCreated') }}</div>
               </div>
             </div>
-            <div class="col-6 md:col-3">
+            <div class="col-6 md:col-2">
               <div class="surface-ground border-round p-3 text-center">
                 <div class="text-3xl font-bold">{{ importResult.tickets_skipped }}</div>
                 <div class="text-color-secondary text-sm mt-1">{{ $t('import.ticketsSkipped') }}</div>
               </div>
             </div>
-            <div class="col-6 md:col-3">
+            <div class="col-6 md:col-2">
               <div class="surface-ground border-round p-3 text-center">
                 <div class="text-3xl font-bold text-green-500">{{ importResult.parent_links_resolved }}</div>
                 <div class="text-color-secondary text-sm mt-1">{{ $t('import.parentLinks') }}</div>
               </div>
             </div>
-            <div class="col-6 md:col-3">
+            <div class="col-6 md:col-2">
+              <div class="surface-ground border-round p-3 text-center">
+                <div class="text-3xl font-bold" :class="importResult.unresolved_assignees > 0 ? 'text-orange-500' : 'text-green-500'">
+                  {{ importResult.unresolved_assignees }}
+                </div>
+                <div class="text-color-secondary text-sm mt-1">{{ $t('import.unresolvedAssignees') }}</div>
+              </div>
+            </div>
+            <div class="col-6 md:col-2">
               <div class="surface-ground border-round p-3 text-center">
                 <div class="text-3xl font-bold" :class="importResult.errors.length > 0 ? 'text-red-500' : 'text-green-500'">
                   {{ importResult.errors.length }}
@@ -284,11 +366,14 @@ import { getProject, type Project } from '@/api/projects'
 import { getWorkflow, type WorkflowStatus } from '@/api/workflows'
 import {
   analyzeImport,
+  previewUsers,
   executeImport,
   type ImportAnalyzeResponse,
   type ImportResult,
   type ColumnMapping,
   type ValueMapping,
+  type UserPreviewResponse,
+  type ProjectMemberSummary,
 } from '@/api/importTickets'
 
 import Button from 'primevue/button'
@@ -316,6 +401,7 @@ const stepLabels = computed(() => [
   t('import.stepUpload'),
   t('import.stepColumns'),
   t('import.stepValues'),
+  t('import.stepUsers'),
   t('import.stepPreview'),
   t('import.stepResults'),
 ])
@@ -332,6 +418,11 @@ const executing = ref(false)
 
 const analysis = ref<ImportAnalyzeResponse | null>(null)
 const importResult = ref<ImportResult | null>(null)
+
+// User resolution state
+const userPreview = ref<UserPreviewResponse | null>(null)
+const userMappings = ref<Record<string, string | null>>({})
+const loadingUserPreview = ref(false)
 
 const fileSizeFormatted = computed(() => {
   const s = fileSize.value
@@ -432,10 +523,35 @@ function autoSuggestValueMappings(field: string, values: string[]): { source: st
   })
 }
 
+// Rows to display in the user resolution table
+const userResolutionRows = computed(() => {
+  if (!userPreview.value) return []
+  return userPreview.value.matches
+})
+
+// Options for the member dropdown: null value = leave unassigned
+const memberOptions = computed((): { label: string; value: string | null }[] => {
+  if (!userPreview.value) return []
+  return userPreview.value.project_members.map((m: ProjectMemberSummary) => ({
+    label: `${m.display_name} (${m.email})`,
+    value: m.user_id,
+  }))
+})
+
 const previewColumns = computed(() => {
   return columnMappingRows.value
     .filter((r) => r.target)
     .map((r) => r.target as string)
+})
+
+// Build a lookup: user_id → display_name for resolved mappings
+const resolvedUserNames = computed(() => {
+  const lookup: Record<string, string> = {}
+  if (!userPreview.value) return lookup
+  for (const member of userPreview.value.project_members) {
+    lookup[member.user_id] = member.display_name
+  }
+  return lookup
 })
 
 const previewRows = computed(() => {
@@ -465,6 +581,13 @@ const previewRows = computed(() => {
           val = val.map((v: string) => fieldMap[v] ?? v)
         } else {
           val = fieldMap[String(val)] ?? val
+        }
+      }
+      // Resolve assignee/reporter to display names via userMappings
+      if ((tgt === 'assignee' || tgt === 'reporter') && typeof val === 'string') {
+        const resolvedId = userMappings.value[val]
+        if (resolvedId) {
+          val = resolvedUserNames.value[resolvedId] ?? val
         }
       }
       mapped[tgt] = val
@@ -550,8 +673,54 @@ function goToValueMapping() {
   activeStep.value = 2
 }
 
-function goToPreview() {
+async function goToUserResolution() {
+  if (!analysis.value) return
+
+  // Collect unique names from mapped assignee/reporter columns
+  const mappedTargets = columnMappingRows.value
+    .filter((r) => r.target)
+    .map((r) => r.target as string)
+
+  const allNames = new Set<string>()
+  if (mappedTargets.includes('assignee')) {
+    ;(analysis.value.unique_values['assignee'] || []).forEach((n) => allNames.add(n))
+  }
+  if (mappedTargets.includes('reporter')) {
+    ;(analysis.value.unique_values['reporter'] || []).forEach((n) => allNames.add(n))
+  }
+
   activeStep.value = 3
+
+  if (allNames.size === 0) {
+    // No user fields mapped — show the step with empty state, skip fetch
+    userPreview.value = { matches: [], project_members: [] }
+    return
+  }
+
+  // Re-fetch on each visit so changes to column mapping are reflected
+  loadingUserPreview.value = true
+  userPreview.value = null
+  try {
+    userPreview.value = await previewUsers(projectId.value, Array.from(allNames))
+
+    // Pre-populate userMappings with auto-matched users
+    const newMappings: Record<string, string | null> = {}
+    for (const match of userPreview.value.matches) {
+      if (match.match_type !== 'none' && match.matched_user_id) {
+        newMappings[match.source_name] = match.matched_user_id
+      }
+    }
+    userMappings.value = newMappings
+  } catch (e: any) {
+    toast.showError(t('import.userPreviewFailed'), e?.response?.data?.detail || e.message)
+    userPreview.value = { matches: [], project_members: [] }
+  } finally {
+    loadingUserPreview.value = false
+  }
+}
+
+function goToPreview() {
+  activeStep.value = 4
 }
 
 async function doExecute() {
@@ -574,9 +743,10 @@ async function doExecute() {
       import_session_id: analysis.value.import_session_id,
       column_mappings: colMappings,
       value_mappings: valMappings,
+      user_mappings: userMappings.value,
       options: importOptions.value,
     })
-    activeStep.value = 4
+    activeStep.value = 5
     toast.showSuccess(t('import.importComplete'), t('import.ticketsCreatedMsg', { count: importResult.value.tickets_created }))
   } catch (e: any) {
     toast.showError(t('import.executeFailed'), e?.response?.data?.detail || e.message)

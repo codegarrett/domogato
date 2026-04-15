@@ -37,11 +37,35 @@ export interface ImportResult {
   total_processed: number
   tickets_created: number
   tickets_skipped: number
+  unresolved_assignees: number
   labels_created: string[]
   sprints_created: string[]
   parent_links_resolved: number
   errors: ImportRowError[]
 }
+
+// -- User preview types --
+
+export interface UserMatch {
+  source_name: string
+  matched_user_id: string | null
+  matched_display_name: string | null
+  match_type: 'exact' | 'email' | 'none'
+}
+
+export interface ProjectMemberSummary {
+  user_id: string
+  display_name: string
+  email: string
+  avatar_url: string | null
+}
+
+export interface UserPreviewResponse {
+  matches: UserMatch[]
+  project_members: ProjectMemberSummary[]
+}
+
+// -- API functions --
 
 export async function analyzeImport(
   projectId: string,
@@ -55,12 +79,24 @@ export async function analyzeImport(
   return data
 }
 
+export async function previewUsers(
+  projectId: string,
+  names: string[],
+): Promise<UserPreviewResponse> {
+  const { data } = await apiClient.post<UserPreviewResponse>(
+    `/projects/${projectId}/import/preview-users`,
+    { names },
+  )
+  return data
+}
+
 export async function executeImport(
   projectId: string,
   payload: {
     import_session_id: string
     column_mappings: ColumnMapping[]
     value_mappings: Record<string, ValueMapping[]>
+    user_mappings: Record<string, string | null>
     options: ImportOptions
   },
 ): Promise<ImportResult> {

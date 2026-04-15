@@ -39,6 +39,7 @@ class ImportExecuteRequest(BaseModel):
     import_session_id: str
     column_mappings: list[ColumnMapping]
     value_mappings: dict[str, list[ValueMapping]] = Field(default_factory=dict)
+    user_mappings: dict[str, str | None] = Field(default_factory=dict)
     options: ImportOptions = Field(default_factory=ImportOptions)
 
 
@@ -52,7 +53,33 @@ class ImportResult(BaseModel):
     total_processed: int
     tickets_created: int
     tickets_skipped: int
+    unresolved_assignees: int = 0
     labels_created: list[str]
     sprints_created: list[str]
     parent_links_resolved: int
     errors: list[ImportRowError]
+
+
+# -- User preview schemas --
+
+class UserPreviewRequest(BaseModel):
+    names: list[str]
+
+
+class UserMatch(BaseModel):
+    source_name: str
+    matched_user_id: str | None = None
+    matched_display_name: str | None = None
+    match_type: str  # "exact" | "email" | "none"
+
+
+class ProjectMemberSummary(BaseModel):
+    user_id: str
+    display_name: str
+    email: str
+    avatar_url: str | None = None
+
+
+class UserPreviewResponse(BaseModel):
+    matches: list[UserMatch]
+    project_members: list[ProjectMemberSummary]

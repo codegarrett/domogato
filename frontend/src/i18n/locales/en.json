@@ -691,8 +691,22 @@
     "stepUpload": "Upload",
     "stepColumns": "Columns",
     "stepValues": "Values",
+    "stepUsers": "Users",
     "stepPreview": "Preview",
-    "stepResults": "Results"
+    "stepResults": "Results",
+    "userResolutionTitle": "User Resolution",
+    "userResolutionDescription": "Review how assignees and reporters from your import file match to project members. Correct any mismatches before importing.",
+    "userResolutionNone": "No assignee or reporter columns are mapped. Click Next to continue to the preview.",
+    "userResolutionHint": "Clearing a mapping will leave those tickets unassigned. You can reassign them after the import.",
+    "userPreviewFailed": "Failed to load user matches",
+    "userSourceName": "Source Name",
+    "userMatchStatus": "Match Status",
+    "userMappedTo": "Mapped To",
+    "userLeaveUnassigned": "Leave unassigned",
+    "matchExact": "Exact match",
+    "matchEmail": "Email match",
+    "matchNone": "No match",
+    "unresolvedAssignees": "Unresolved Assignees"
   },
   "editor": {
     "placeholder": "Write something...",

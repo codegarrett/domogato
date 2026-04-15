@@ -17,6 +17,8 @@ from app.schemas.import_tickets import (
     ImportAnalyzeResponse,
     ImportExecuteRequest,
     ImportResult,
+    UserPreviewRequest,
+    UserPreviewResponse,
 )
 from app.services import import_service, project_service
 
@@ -67,6 +69,26 @@ async def analyze_import(
 
 
 @router.post(
+    "/projects/{project_id}/import/preview-users",
+    response_model=UserPreviewResponse,
+)
+async def preview_import_users(
+    project_id: UUID,
+    body: UserPreviewRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_maintainer(db, project_id, user)
+
+    result = await import_service.preview_users(
+        db=db,
+        project_id=project_id,
+        names=body.names,
+    )
+    return result
+
+
+@router.post(
     "/projects/{project_id}/import/execute",
     response_model=ImportResult,
 )
@@ -89,6 +111,7 @@ async def execute_import(
                 field: [vm.model_dump() for vm in vms]
                 for field, vms in body.value_mappings.items()
             },
+            user_mappings=body.user_mappings or None,
             options=body.options.model_dump(),
         )
     except ValueError as exc:
