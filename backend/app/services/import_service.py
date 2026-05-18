@@ -56,7 +56,7 @@ TARGET_FIELDS = [
     "title", "description", "ticket_type", "priority", "status",
     "assignee", "reporter", "labels", "sprint", "story_points",
     "due_date", "start_date", "external_key", "parent_key",
-    "resolution", "resolved_at", "created_date", "updated_date",
+    "ticket_number", "resolution", "resolved_at", "created_date", "updated_date",
 ]
 
 MULTI_VALUE_FIELDS = {"labels", "sprint"}
@@ -223,6 +223,33 @@ def _parse_story_points(value: Any) -> int | None:
         return int(float(str(value)))
     except (ValueError, TypeError):
         return None
+
+
+def _parse_ticket_number(value: Any) -> int | None:
+    """Parse a ticket number from a raw value.
+
+    Handles pure integers ("1015"), float strings ("1015.0"), and
+    prefixed key formats like "ORBIS-1015" or "PROJ-42" by taking the
+    numeric suffix after the last hyphen.
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    # Try float/int string directly
+    try:
+        n = int(float(s))
+        return n if n > 0 else None
+    except (ValueError, TypeError):
+        pass
+    # Try "PREFIX-NNN" format
+    if "-" in s:
+        suffix = s.rsplit("-", 1)[-1]
+        try:
+            n = int(suffix)
+            return n if n > 0 else None
+        except ValueError:
+            pass
+    return None
 
 
 async def analyze_import(
@@ -412,25 +439,85 @@ async def execute_import(
             "errors": errors,
         }
 
-    result = await db.execute(
-        text(
-            "UPDATE projects SET ticket_sequence = ticket_sequence + :count "
-            "WHERE id = :project_id RETURNING ticket_sequence"
-        ),
-        {"project_id": project_id, "count": ticket_count},
-    )
-    end_number = result.scalar_one()
-    start_number = end_number - ticket_count + 1
+    # ------------------------------------------------------------------
+    # Explicit ticket number resolution
+    # Parse ticket_number from mapped data; validate against batch and DB
+    # ------------------------------------------------------------------
+    explicit_num_map: dict[int, int] = {}  # row_number → desired ticket_number
+    for mr in mapped_rows:
+        raw_tn = mr["data"].get("ticket_number")
+        if raw_tn is not None:
+            parsed = _parse_ticket_number(raw_tn)
+            if parsed:
+                explicit_num_map[mr["row_number"]] = parsed
+
+    # Detect duplicates within this batch
+    explicit_conflicts: dict[int, str] = {}  # row_number → reason string
+    seen_in_batch: dict[int, int] = {}  # ticket_number → first row_number
+    for row_num, num in explicit_num_map.items():
+        if num in seen_in_batch:
+            explicit_conflicts[row_num] = (
+                f"Ticket number {num} appears more than once in this import "
+                f"(first claimed by row {seen_in_batch[num]})"
+            )
+        else:
+            seen_in_batch[num] = row_num
+
+    # Detect conflicts with tickets already in the project
+    candidate_nums = {
+        num for rn, num in explicit_num_map.items() if rn not in explicit_conflicts
+    }
+    if candidate_nums:
+        taken_result = await db.execute(
+            select(Ticket.ticket_number).where(
+                Ticket.project_id == project_id,
+                Ticket.ticket_number.in_(list(candidate_nums)),
+            )
+        )
+        taken_nums = {r.ticket_number for r in taken_result.all()}
+        for row_num, num in explicit_num_map.items():
+            if num in taken_nums and row_num not in explicit_conflicts:
+                explicit_conflicts[row_num] = (
+                    f"Ticket number {num} already exists in this project"
+                )
+
+    # Rows that will receive an auto-assigned number
+    auto_mapped_rows = [
+        mr for mr in mapped_rows
+        if mr["row_number"] not in explicit_num_map
+        or mr["row_number"] in explicit_conflicts
+    ]
+    auto_count = len(auto_mapped_rows)
+
+    # Bulk-reserve sequence only for auto-numbered rows
+    number_assignment: dict[int, int] = {}
+    if auto_count > 0:
+        result = await db.execute(
+            text(
+                "UPDATE projects SET ticket_sequence = ticket_sequence + :count "
+                "WHERE id = :project_id RETURNING ticket_sequence"
+            ),
+            {"project_id": project_id, "count": auto_count},
+        )
+        end_number = result.scalar_one()
+        start_auto = end_number - auto_count + 1
+        for idx, mr in enumerate(auto_mapped_rows):
+            number_assignment[mr["row_number"]] = start_auto + idx
+
+    # Assign explicit numbers for valid explicit rows
+    for row_num, num in explicit_num_map.items():
+        if row_num not in explicit_conflicts:
+            number_assignment[row_num] = num
 
     external_key_to_ticket_id: dict[str, UUID] = {}
     parent_key_rows: list[tuple[UUID, str]] = []
     created_count = 0
     unresolved_assignees_count = 0
 
-    for i, mr in enumerate(mapped_rows):
+    for mr in mapped_rows:
         data = mr["data"]
         row_num = mr["row_number"]
-        ticket_number = start_number + i
+        ticket_number = number_assignment[row_num]
 
         try:
             ticket_type = str(data.get("ticket_type", "task")).lower()
@@ -497,6 +584,9 @@ async def execute_import(
                     sprint_id = sprint_id_map[sname.lower()]
 
             import_meta: dict[str, Any] = {"source": "csv_import", "imported_at": datetime.now(timezone.utc).isoformat()}
+            if row_num in explicit_conflicts:
+                import_meta["explicit_number_conflict"] = explicit_conflicts[row_num]
+                import_meta["requested_ticket_number"] = explicit_num_map.get(row_num)
             if data.get("external_key"):
                 import_meta["external_key"] = str(data["external_key"])
             if data.get("created_date"):
@@ -580,6 +670,22 @@ async def execute_import(
             parent_links += 1
 
     await db.flush()
+
+    # Ensure ticket_sequence is at least as high as the largest explicit number used,
+    # so future create_ticket calls don't collide with preserved numbers.
+    valid_explicit_nums = [
+        explicit_num_map[rn]
+        for rn in explicit_num_map
+        if rn not in explicit_conflicts
+    ]
+    if valid_explicit_nums:
+        await db.execute(
+            text(
+                "UPDATE projects SET ticket_sequence = GREATEST(ticket_sequence, :max_num) "
+                "WHERE id = :project_id"
+            ),
+            {"project_id": project_id, "max_num": max(valid_explicit_nums)},
+        )
 
     await redis.delete(f"{REDIS_PREFIX}{import_session_id}")
 

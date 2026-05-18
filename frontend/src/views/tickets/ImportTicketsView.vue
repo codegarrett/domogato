@@ -453,6 +453,7 @@ const TARGET_FIELDS = [
   { value: 'start_date', label: 'Start Date' },
   { value: 'external_key', label: 'External Key' },
   { value: 'parent_key', label: 'Parent Key' },
+  { value: 'ticket_number', label: 'Ticket Number / Key' },
   { value: 'resolution', label: 'Resolution' },
   { value: 'resolved_at', label: 'Resolved Date' },
   { value: 'created_date', label: 'Created Date' },
