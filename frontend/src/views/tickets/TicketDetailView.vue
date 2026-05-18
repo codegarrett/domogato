@@ -736,13 +736,12 @@ import {
 } from '@/api/time-tracking'
 import {
   listAttachments as fetchAttachments,
-  createAttachment as createAttachmentApi,
-  uploadToPresignedUrl,
-  getDownloadUrl,
+  uploadAttachment,
   deleteAttachment as deleteAttachmentApi,
   formatFileSize,
   type Attachment,
 } from '@/api/attachments'
+import { downloadFromApi } from '@/utils/download'
 import {
   listDependencies as fetchDependencies,
   createDependency as createDependencyApi,
@@ -1182,12 +1181,7 @@ async function onFileSelected(event: Event) {
   attachmentUploading.value = true
   try {
     for (const file of Array.from(files)) {
-      const { upload_url } = await createAttachmentApi(ticket.value.id, {
-        filename: file.name,
-        content_type: file.type || 'application/octet-stream',
-        size_bytes: file.size,
-      })
-      await uploadToPresignedUrl(upload_url, file)
+      await uploadAttachment(ticket.value.id, file)
     }
     await loadAttachments()
   } catch (e) {
@@ -1200,8 +1194,7 @@ async function onFileSelected(event: Event) {
 
 async function downloadFile(att: Attachment) {
   try {
-    const url = await getDownloadUrl(att.id)
-    window.open(url, '_blank')
+    await downloadFromApi(`/attachments/${att.id}/download`, att.filename)
   } catch (e) {
     console.error(e)
   }

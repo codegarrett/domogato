@@ -7,35 +7,25 @@ from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_avatar_upload_request(client: AsyncClient):
+async def test_avatar_upload(client: AsyncClient):
     response = await client.post(
         "/api/v1/users/me/avatar",
-        json={"filename": "photo.jpg", "content_type": "image/jpeg"},
+        files={"file": ("photo.jpg", b"\xff\xd8\xff fake jpeg", "image/jpeg")},
     )
     assert response.status_code in (201, 503)
     if response.status_code == 201:
         data = response.json()
-        assert "upload_url" in data
-        assert "avatar_key" in data
-        assert "avatar/" in data["avatar_key"]
+        assert "avatar_url" in data
+        assert data["avatar_url"].endswith("/avatar")
 
 
 @pytest.mark.asyncio
 async def test_avatar_upload_invalid_type(client: AsyncClient):
     response = await client.post(
         "/api/v1/users/me/avatar",
-        json={"filename": "doc.pdf", "content_type": "application/pdf"},
+        files={"file": ("doc.pdf", b"%PDF", "application/pdf")},
     )
     assert response.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_avatar_confirm_wrong_key(client: AsyncClient):
-    response = await client.post(
-        "/api/v1/users/me/avatar/confirm",
-        json={"avatar_key": "users/wrong-id/avatar/test.jpg"},
-    )
-    assert response.status_code == 403
 
 
 @pytest.mark.asyncio

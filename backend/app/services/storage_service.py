@@ -1,7 +1,9 @@
-"""S3/MinIO storage service for file uploads and downloads using presigned URLs."""
+"""S3/MinIO storage service — internal object store accessed only by the API."""
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
 import aioboto3
@@ -15,6 +17,7 @@ logger = structlog.get_logger()
 _session = aioboto3.Session()
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
 
 ALLOWED_CONTENT_TYPES = frozenset({
     "image/jpeg",
@@ -39,6 +42,15 @@ ALLOWED_CONTENT_TYPES = frozenset({
     "video/mp4",
     "audio/mpeg",
 })
+
+AVATAR_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
+
+
+@dataclass(frozen=True)
+class StoredObject:
+    body: bytes
+    content_type: str
+    content_length: int
 
 
 def _s3_kwargs() -> dict[str, Any]:
@@ -67,50 +79,64 @@ class StorageUnavailableError(Exception):
     """Raised when S3/MinIO storage is not reachable."""
 
 
-async def generate_upload_presign(
-    s3_key: str,
-    content_type: str,
-    expiry: int | None = None,
-) -> str:
+async def put_object(s3_key: str, body: bytes, content_type: str) -> None:
     try:
         async with _session.client(**_s3_kwargs()) as s3:
-            url = await s3.generate_presigned_url(
-                "put_object",
-                Params={
-                    "Bucket": settings.S3_BUCKET_NAME,
-                    "Key": s3_key,
-                    "ContentType": content_type,
-                },
-                ExpiresIn=expiry or settings.S3_PRESIGN_EXPIRY,
+            await s3.put_object(
+                Bucket=settings.S3_BUCKET_NAME,
+                Key=s3_key,
+                Body=body,
+                ContentType=content_type,
             )
-        return url
     except Exception as exc:
-        await logger.aerror("s3_upload_presign_error", s3_key=s3_key, error=str(exc))
+        await logger.aerror("s3_put_error", s3_key=s3_key, error=str(exc))
         raise StorageUnavailableError("File storage is temporarily unavailable") from exc
 
 
-async def generate_download_presign(
-    s3_key: str,
-    filename: str | None = None,
-    expiry: int | None = None,
-) -> str:
-    params: dict[str, Any] = {
-        "Bucket": settings.S3_BUCKET_NAME,
-        "Key": s3_key,
-    }
-    if filename:
-        params["ResponseContentDisposition"] = f'attachment; filename="{filename}"'
-
+async def get_object_bytes(s3_key: str) -> StoredObject:
     try:
         async with _session.client(**_s3_kwargs()) as s3:
-            url = await s3.generate_presigned_url(
-                "get_object",
-                Params=params,
-                ExpiresIn=expiry or settings.S3_PRESIGN_EXPIRY,
+            response = await s3.get_object(
+                Bucket=settings.S3_BUCKET_NAME,
+                Key=s3_key,
             )
-        return url
+            body = await response["Body"].read()
+            content_type = response.get("ContentType") or "application/octet-stream"
+            return StoredObject(
+                body=body,
+                content_type=content_type,
+                content_length=len(body),
+            )
     except Exception as exc:
-        await logger.aerror("s3_download_presign_error", s3_key=s3_key, error=str(exc))
+        await logger.aerror("s3_get_error", s3_key=s3_key, error=str(exc))
+        raise StorageUnavailableError("File storage is temporarily unavailable") from exc
+
+
+async def iter_object_chunks(s3_key: str, chunk_size: int = 64 * 1024) -> AsyncIterator[bytes]:
+    """Stream an object from S3 in chunks."""
+    async with _session.client(**_s3_kwargs()) as s3:
+        response = await s3.get_object(
+            Bucket=settings.S3_BUCKET_NAME,
+            Key=s3_key,
+        )
+        stream = response["Body"]
+        while True:
+            chunk = await stream.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+
+async def get_object_content_type(s3_key: str) -> str:
+    try:
+        async with _session.client(**_s3_kwargs()) as s3:
+            response = await s3.head_object(
+                Bucket=settings.S3_BUCKET_NAME,
+                Key=s3_key,
+            )
+            return response.get("ContentType") or "application/octet-stream"
+    except Exception as exc:
+        await logger.aerror("s3_head_error", s3_key=s3_key, error=str(exc))
         raise StorageUnavailableError("File storage is temporarily unavailable") from exc
 
 

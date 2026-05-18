@@ -356,52 +356,18 @@ All KB endpoints use the existing project role-based access control. The minimum
 
 ### Page Attachments (Phase 3.3)
 
+> See [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md).
+
 | Method | Path | Description | Auth | Min Role |
 |--------|------|-------------|------|----------|
-| `POST` | `/api/v1/kb/pages/{page_id}/attachments` | Create + get presigned upload URL | Yes | Developer |
+| `POST` | `/api/v1/kb/pages/{page_id}/attachments` | Upload file (multipart `file`) | Yes | Developer |
 | `GET` | `/api/v1/kb/pages/{page_id}/attachments` | List attachments for a page | Yes | Project Guest |
-| `GET` | `/api/v1/kb/attachments/{attachment_id}/download` | Get presigned download URL | Yes | Project Guest |
-| `DELETE` | `/api/v1/kb/attachments/{attachment_id}` | Delete attachment | Yes | Developer (own) / Maintainer (any) |
+| `GET` | `/api/v1/kb/attachments/{attachment_id}/download` | Download file (streamed bytes) | Yes | Project Guest |
+| `DELETE` | `/api/v1/kb/attachments/{attachment_id}` | Delete attachment (S3 + DB) | Yes | Developer (own) / Maintainer (any) |
 
-**Create attachment request:**
+**Upload response (201):** `KBAttachmentRead` JSON (no `upload_url`).
 
-```json
-{
-    "filename": "architecture-diagram.png",
-    "content_type": "image/png",
-    "size_bytes": 245000
-}
-```
-
-**Create attachment response:**
-
-```json
-{
-    "attachment": {
-        "id": "uuid",
-        "page_id": "uuid",
-        "filename": "architecture-diagram.png",
-        "content_type": "image/png",
-        "size_bytes": 245000,
-        "created_by": "uuid",
-        "created_at": "2026-03-24T10:00:00Z"
-    },
-    "upload_url": "https://minio:9000/projecthub-attachments/projects/..."
-}
-```
-
-**Download response:**
-
-```json
-{
-    "download_url": "https://minio:9000/projecthub-attachments/projects/...?signature=..."
-}
-```
-
-**Validation rules:**
-- `size_bytes` must not exceed 50MB (52428800 bytes)
-- `filename` is required, max 500 characters
-- Reuses existing `storage_service.py` for S3 presigned URL generation
+**Download:** Raw file bytes with `Content-Disposition: attachment`.
 
 ---
 

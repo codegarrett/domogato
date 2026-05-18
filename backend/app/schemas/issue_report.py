@@ -67,17 +67,9 @@ class IssueReportAttachmentRead(BaseModel):
     content_type: str
     size_bytes: int
     created_at: datetime
+    download_path: str
 
     model_config = {"from_attributes": True}
-
-
-class IssueReportAttachmentPresignResponse(BaseModel):
-    attachment: IssueReportAttachmentRead
-    upload_url: str
-
-
-class IssueReportAttachmentDownloadResponse(BaseModel):
-    download_url: str
 
 
 class IssueReportLabelRead(BaseModel):

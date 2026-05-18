@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { uploadFile } from '@/utils/files'
 import type { PaginatedResponse } from '@/types/api'
 
 export interface UserRead {
@@ -12,11 +13,6 @@ export interface UserRead {
   last_login_at: string | null
   created_at: string
   updated_at: string
-}
-
-export interface AvatarUploadResponse {
-  upload_url: string
-  avatar_key: string
 }
 
 export interface AccountUrls {
@@ -35,19 +31,8 @@ export async function updateCurrentUser(payload: {
   return data
 }
 
-export async function requestAvatarUpload(filename: string, contentType: string) {
-  const { data } = await apiClient.post<AvatarUploadResponse>('/users/me/avatar', {
-    filename,
-    content_type: contentType,
-  })
-  return data
-}
-
-export async function confirmAvatarUpload(avatarKey: string) {
-  const { data } = await apiClient.post<{ avatar_url: string }>('/users/me/avatar/confirm', {
-    avatar_key: avatarKey,
-  })
-  return data
+export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
+  return uploadFile<{ avatar_url: string }>('/users/me/avatar', file)
 }
 
 export async function deleteAvatar() {

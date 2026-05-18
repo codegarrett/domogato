@@ -18,10 +18,12 @@ async def create_attachment(
     uploaded_by_id: UUID | None,
     filename: str,
     content_type: str,
-    size_bytes: int,
-) -> tuple[Attachment, str]:
-    """Create an attachment record and return it with a presigned upload URL."""
+    file_body: bytes,
+) -> Attachment:
+    """Create an attachment record and store the file in S3."""
     s3_key = storage_service.generate_s3_key(str(project_id), filename)
+
+    await storage_service.put_object(s3_key, file_body, content_type)
 
     attachment = Attachment(
         ticket_id=ticket_id,
@@ -29,15 +31,13 @@ async def create_attachment(
         uploaded_by_id=uploaded_by_id,
         filename=filename,
         content_type=content_type,
-        size_bytes=size_bytes,
+        size_bytes=len(file_body),
         s3_key=s3_key,
     )
     db.add(attachment)
     await db.flush()
     await db.refresh(attachment)
-
-    upload_url = await storage_service.generate_upload_presign(s3_key, content_type)
-    return attachment, upload_url
+    return attachment
 
 
 async def list_attachments(
@@ -67,12 +67,6 @@ async def get_attachment(db: AsyncSession, attachment_id: UUID) -> Attachment | 
         select(Attachment).where(Attachment.id == attachment_id)
     )
     return result.scalar_one_or_none()
-
-
-async def get_download_url(attachment: Attachment) -> str:
-    return await storage_service.generate_download_presign(
-        attachment.s3_key, filename=attachment.filename,
-    )
 
 
 async def delete_attachment(db: AsyncSession, attachment_id: UUID) -> bool:

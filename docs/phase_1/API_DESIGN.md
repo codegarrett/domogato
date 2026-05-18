@@ -378,31 +378,18 @@ X-RateLimit-Reset: 1711276800
 
 ### Attachments
 
+> See [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md) for architecture and frontend usage.
+
 | Method | Path | Description | Auth | Min Role |
 |---|---|---|---|---|
 | `GET` | `/api/v1/tickets/{ticket_id}/attachments` | List attachments | Yes | Project Guest |
-| `POST` | `/api/v1/tickets/{ticket_id}/attachments/presign` | Get presigned upload URL | Yes | Reporter |
-| `POST` | `/api/v1/tickets/{ticket_id}/attachments` | Confirm upload (register metadata) | Yes | Reporter |
-| `GET` | `/api/v1/attachments/{attachment_id}/download` | Get presigned download URL | Yes | Project Guest |
-| `DELETE` | `/api/v1/attachments/{attachment_id}` | Delete attachment | Yes | Uploader / Maintainer |
+| `POST` | `/api/v1/tickets/{ticket_id}/attachments` | Upload file (`multipart/form-data`, field `file`) | Yes | Developer |
+| `GET` | `/api/v1/attachments/{attachment_id}/download` | Download file (streamed bytes) | Yes | Project Guest |
+| `DELETE` | `/api/v1/attachments/{attachment_id}` | Delete attachment (S3 + DB) | Yes | Maintainer |
 
-**Presign upload request:**
-```json
-{
-    "filename": "screenshot.png",
-    "content_type": "image/png",
-    "size_bytes": 245000
-}
-```
+**Upload:** `Content-Type: multipart/form-data`, part name `file`. Max 100 MB. Allowed types enforced server-side.
 
-**Presign upload response:**
-```json
-{
-    "upload_url": "https://s3.../presigned-put-url",
-    "s3_key": "org-id/project-id/ticket-id/att-id/screenshot.png",
-    "expires_in": 3600
-}
-```
+**Download response:** Raw file body with `Content-Disposition: attachment`. Auth via `Authorization` header or `?access_token=` query param.
 
 ---
 

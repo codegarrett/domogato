@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.models.membership import OrgMembership
 from app.models.organization import Organization
 from app.models.user import User
+from app.utils.avatars import resolve_avatar_url
 
 
 def generate_slug(name: str) -> str:
@@ -194,7 +195,7 @@ async def list_members(
             "user_id": user.id,
             "email": user.email,
             "display_name": user.display_name,
-            "avatar_url": user.avatar_url,
+            "avatar_url": resolve_avatar_url(user.id, user.avatar_url),
             "role": membership.role,
             "created_at": membership.created_at,
         })

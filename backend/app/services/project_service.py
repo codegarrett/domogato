@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.membership import OrgMembership, ProjectMembership
 from app.models.project import Project
 from app.models.user import User
+from app.utils.avatars import resolve_avatar_url
 
 
 async def create_project(
@@ -218,7 +219,7 @@ async def list_members(
             "user_id": user.id,
             "email": user.email,
             "display_name": user.display_name,
-            "avatar_url": user.avatar_url,
+            "avatar_url": resolve_avatar_url(user.id, user.avatar_url),
             "role": membership.role,
             "created_at": membership.created_at,
         })

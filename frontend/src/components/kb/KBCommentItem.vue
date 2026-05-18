@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { type KBComment } from '@/api/kb'
 import Avatar from 'primevue/avatar'
+import { assetUrl } from '@/utils/assetUrl'
 
 const props = defineProps<{
   comment: KBComment
@@ -39,7 +40,7 @@ function formatDate(dateStr: string) {
     <div class="comment-header flex align-items-center gap-2 mb-1">
       <Avatar
         :label="initials"
-        :image="comment.author.avatar_url || undefined"
+        :image="assetUrl(comment.author.avatar_url)"
         shape="circle"
         size="small"
         class="flex-shrink-0"

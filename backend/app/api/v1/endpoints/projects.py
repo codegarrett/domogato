@@ -27,6 +27,7 @@ from app.schemas.project import (
     ProjectUpdate,
 )
 from app.services import auto_membership_service, organization_service, project_service, purge_service, user_service, workflow_service
+from app.utils.avatars import resolve_avatar_url
 from app.services import cache_service
 
 router = APIRouter(tags=["projects"])
@@ -434,7 +435,7 @@ async def add_project_member(
         user_id=target_user_id,
         email=target.email,
         display_name=target.display_name,
-        avatar_url=target.avatar_url,
+        avatar_url=resolve_avatar_url(target.id, target.avatar_url),
         role=membership.role,
         created_at=membership.created_at,
     )
@@ -461,7 +462,7 @@ async def update_project_member_role(
         user_id=user_id,
         email=target.email,
         display_name=target.display_name,
-        avatar_url=target.avatar_url,
+        avatar_url=resolve_avatar_url(target.id, target.avatar_url),
         role=updated.role,
         created_at=updated.created_at,
     )

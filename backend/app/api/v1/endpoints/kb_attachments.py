@@ -4,11 +4,11 @@ import re
 import uuid as _uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_current_user_bearer_or_query, get_db
 from app.core.permissions import (
     PROJECT_ROLE_HIERARCHY,
     ProjectRole,
@@ -18,19 +18,17 @@ from app.models.kb_attachment import KBPageAttachment
 from app.models.kb_page import KBPage
 from app.models.project import Project
 from app.models.user import User
-from app.schemas.kb import (
-    KBAttachmentCreate,
-    KBAttachmentDownloadResponse,
-    KBAttachmentPresignResponse,
-    KBAttachmentRead,
-)
+from app.schemas.kb import KBAttachmentRead
 from app.services import kb_service
-from app.tasks.embedding_tasks import embed_kb_attachment
 from app.services.storage_service import (
+    ALLOWED_CONTENT_TYPES,
+    MAX_FILE_SIZE,
     StorageUnavailableError,
-    generate_download_presign,
-    generate_upload_presign,
+    delete_object,
+    put_object,
 )
+from app.tasks.embedding_tasks import embed_kb_attachment
+from app.utils.file_responses import streaming_s3_response
 
 router = APIRouter(tags=["knowledge-base"])
 
@@ -87,26 +85,47 @@ async def _resolve_project_id(db: AsyncSession, page: KBPage) -> tuple[UUID, UUI
 
 @router.post(
     "/kb/pages/{page_id}/attachments",
-    response_model=KBAttachmentPresignResponse,
+    response_model=KBAttachmentRead,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_attachment(
     page_id: UUID,
-    body: KBAttachmentCreate,
+    file: UploadFile = File(...),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     page = await _get_page_or_404(db, page_id)
     await _require_page_role(db, page, user, ProjectRole.DEVELOPER)
 
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="File type not allowed")
+
+    body = await file.read()
+    if len(body) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(body) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large")
+
     project_id, space_id = await _resolve_project_id(db, page)
-    s3_key = _kb_s3_key(project_id, space_id, page_id, body.filename)
+    s3_key = _kb_s3_key(project_id, space_id, page_id, file.filename)
+
+    try:
+        await put_object(s3_key, body, content_type)
+    except StorageUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File storage is temporarily unavailable. Please try again later.",
+        )
 
     attachment = KBPageAttachment(
         page_id=page_id,
-        filename=body.filename,
-        content_type=body.content_type,
-        size_bytes=body.size_bytes,
+        filename=file.filename,
+        content_type=content_type,
+        size_bytes=len(body),
         s3_key=s3_key,
         created_by=user.id,
     )
@@ -114,23 +133,12 @@ async def create_attachment(
     await db.flush()
     await db.refresh(attachment)
 
-    try:
-        upload_url = await generate_upload_presign(s3_key, body.content_type)
-    except StorageUnavailableError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="File storage is temporarily unavailable. Please try again later.",
-        )
-
     embed_kb_attachment.apply_async(
         args=[str(attachment.id), str(page_id)],
         countdown=10,
     )
 
-    return KBAttachmentPresignResponse(
-        attachment=KBAttachmentRead.model_validate(attachment),
-        upload_url=upload_url,
-    )
+    return KBAttachmentRead.model_validate(attachment)
 
 
 @router.get(
@@ -154,13 +162,10 @@ async def list_attachments(
     return [KBAttachmentRead.model_validate(a) for a in attachments]
 
 
-@router.get(
-    "/kb/attachments/{attachment_id}/download",
-    response_model=KBAttachmentDownloadResponse,
-)
+@router.get("/kb/attachments/{attachment_id}/download")
 async def download_attachment(
     attachment_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_bearer_or_query),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -174,15 +179,16 @@ async def download_attachment(
     await _require_page_role(db, page, user, ProjectRole.GUEST)
 
     try:
-        download_url = await generate_download_presign(
-            attachment.s3_key, attachment.filename,
+        return await streaming_s3_response(
+            attachment.s3_key,
+            content_type=attachment.content_type,
+            filename=attachment.filename,
         )
     except StorageUnavailableError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="File storage is temporarily unavailable. Please try again later.",
         )
-    return KBAttachmentDownloadResponse(download_url=download_url)
 
 
 @router.delete(
@@ -212,5 +218,6 @@ async def delete_attachment(
             detail="Insufficient permissions to delete this attachment",
         )
 
+    await delete_object(attachment.s3_key)
     await db.delete(attachment)
     await db.flush()

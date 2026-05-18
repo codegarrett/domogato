@@ -27,7 +27,7 @@
         >
           <Avatar
             v-if="u.avatar_url"
-            :image="u.avatar_url"
+            :image="assetUrl(u.avatar_url)"
             shape="circle"
             size="normal"
           />
@@ -64,6 +64,7 @@ import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
 import Avatar from 'primevue/avatar'
+import { assetUrl } from '@/utils/assetUrl'
 
 export interface PickerUser {
   id: string

@@ -3,12 +3,12 @@ from __future__ import annotations
 import uuid as uuid_mod
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_current_user_bearer_or_query, get_db
 from app.core.password import hash_password, validate_password_strength
 from app.core.permissions import require_system_admin
 from app.models.user import User
@@ -23,33 +23,19 @@ from app.schemas.user import (
 )
 from app.services import user_service
 from app.services.storage_service import (
-    generate_avatar_s3_key,
-    generate_upload_presign,
-    delete_object,
+    AVATAR_CONTENT_TYPES,
+    MAX_AVATAR_SIZE,
     StorageUnavailableError,
+    delete_object,
+    generate_avatar_s3_key,
+    put_object,
 )
-from app.core.config import settings
+from app.utils.avatars import extract_avatar_s3_key, resolve_avatar_url
+from app.utils.file_responses import streaming_s3_response
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-AVATAR_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
-
-
-class AvatarUploadRequest(BaseModel):
-    filename: str
-    content_type: str
-
-
 class AvatarUploadResponse(BaseModel):
-    upload_url: str
-    avatar_key: str
-
-
-class AvatarConfirmRequest(BaseModel):
-    avatar_key: str
-
-
-class AvatarConfirmResponse(BaseModel):
     avatar_url: str
 
 
@@ -89,7 +75,7 @@ async def get_current_user_profile(
         id=full_user.id,
         email=full_user.email,
         display_name=full_user.display_name,
-        avatar_url=full_user.avatar_url,
+        avatar_url=resolve_avatar_url(full_user.id, full_user.avatar_url),
         is_system_admin=full_user.is_system_admin,
         is_active=full_user.is_active,
         preferences=full_user.preferences or {},
@@ -123,35 +109,39 @@ async def update_current_user(
 
 
 @router.post("/me/avatar", response_model=AvatarUploadResponse, status_code=status.HTTP_201_CREATED)
-async def request_avatar_upload(
-    body: AvatarUploadRequest,
+async def upload_avatar(
+    file: UploadFile = File(...),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    if body.content_type not in AVATAR_CONTENT_TYPES:
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
+
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in AVATAR_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Content type must be one of: {', '.join(sorted(AVATAR_CONTENT_TYPES))}",
         )
-    avatar_key = generate_avatar_s3_key(str(user.id), body.filename)
+
+    body = await file.read()
+    if len(body) == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+    if len(body) > MAX_AVATAR_SIZE:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Avatar too large")
+
+    existing_key = extract_avatar_s3_key(user.avatar_url)
+    if existing_key:
+        await delete_object(existing_key)
+
+    avatar_key = generate_avatar_s3_key(str(user.id), file.filename)
     try:
-        upload_url = await generate_upload_presign(avatar_key, body.content_type)
+        await put_object(avatar_key, body, content_type)
     except StorageUnavailableError:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Storage unavailable")
-    return AvatarUploadResponse(upload_url=upload_url, avatar_key=avatar_key)
 
-
-@router.post("/me/avatar/confirm", response_model=AvatarConfirmResponse)
-async def confirm_avatar_upload(
-    body: AvatarConfirmRequest,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    if not body.avatar_key.startswith(f"users/{user.id}/avatar/"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid avatar key")
-
-    avatar_url = f"{settings.S3_ENDPOINT_URL}/{settings.S3_BUCKET_NAME}/{body.avatar_key}"
-    await user_service.update_user_profile(db, user, avatar_url=avatar_url)
-    return AvatarConfirmResponse(avatar_url=avatar_url)
+    await user_service.update_user_profile(db, user, avatar_url=avatar_key)
+    return AvatarUploadResponse(avatar_url=resolve_avatar_url(user.id, avatar_key))
 
 
 @router.delete("/me/avatar", status_code=status.HTTP_204_NO_CONTENT)
@@ -159,9 +149,9 @@ async def delete_avatar(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.avatar_url and user.avatar_url.startswith(f"{settings.S3_ENDPOINT_URL}"):
-        key = user.avatar_url.split(f"{settings.S3_BUCKET_NAME}/", 1)[-1]
-        await delete_object(key)
+    existing_key = extract_avatar_s3_key(user.avatar_url)
+    if existing_key:
+        await delete_object(existing_key)
     await user_service.update_user_profile(db, user, avatar_url=None)
 
 
@@ -185,11 +175,34 @@ async def search_users(
     )
     return [
         UserSearchResult(
-            id=str(u.id), email=u.email,
-            display_name=u.display_name, avatar_url=u.avatar_url,
+            id=str(u.id),
+            email=u.email,
+            display_name=u.display_name,
+            avatar_url=resolve_avatar_url(u.id, u.avatar_url),
         )
         for u in users
     ]
+
+
+@router.get("/{user_id}/avatar")
+async def get_user_avatar(
+    user_id: UUID,
+    _user: User = Depends(get_current_user_bearer_or_query),
+    db: AsyncSession = Depends(get_db),
+):
+    target = await user_service.get_user_by_id(db, user_id)
+    s3_key = extract_avatar_s3_key(target.avatar_url) if target else None
+    if target is None or s3_key is None:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    try:
+        return await streaming_s3_response(
+            s3_key,
+            filename=None,
+            inline=True,
+        )
+    except StorageUnavailableError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Storage unavailable")
 
 
 @router.get("", response_model=PaginatedResponse[UserRead])
@@ -265,7 +278,7 @@ async def get_user(
     user = await user_service.get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return UserRead.model_validate(user)
 
 
 @router.patch("/{user_id}", response_model=UserRead)

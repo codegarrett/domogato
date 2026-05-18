@@ -51,18 +51,13 @@ async def test_create_attachment(admin_client: AsyncClient):
 
     resp = await admin_client.post(
         f"/api/v1/tickets/{ticket_id}/attachments",
-        json={
-            "filename": "report.pdf",
-            "content_type": "application/pdf",
-            "size_bytes": 12345,
-        },
+        files={"file": ("report.pdf", b"%PDF-1.4 test", "application/pdf")},
     )
     assert resp.status_code == 201
     data = resp.json()
-    assert data["attachment"]["filename"] == "report.pdf"
-    assert data["attachment"]["content_type"] == "application/pdf"
-    assert data["attachment"]["size_bytes"] == 12345
-    assert "upload_url" in data
+    assert data["filename"] == "report.pdf"
+    assert data["content_type"] == "application/pdf"
+    assert data["size_bytes"] == len(b"%PDF-1.4 test")
 
 
 @pytest.mark.asyncio
@@ -71,11 +66,7 @@ async def test_create_attachment_invalid_content_type(admin_client: AsyncClient)
 
     resp = await admin_client.post(
         f"/api/v1/tickets/{ticket_id}/attachments",
-        json={
-            "filename": "malware.exe",
-            "content_type": "application/x-executable",
-            "size_bytes": 100,
-        },
+        files={"file": ("malware.exe", b"MZ", "application/x-executable")},
     )
     assert resp.status_code == 400
 
@@ -87,11 +78,7 @@ async def test_list_attachments(admin_client: AsyncClient):
     for i in range(3):
         resp = await admin_client.post(
             f"/api/v1/tickets/{ticket_id}/attachments",
-            json={
-                "filename": f"file{i}.txt",
-                "content_type": "text/plain",
-                "size_bytes": 100 + i,
-            },
+            files={"file": (f"file{i}.txt", f"content{i}".encode(), "text/plain")},
         )
         assert resp.status_code == 201
 
@@ -108,14 +95,10 @@ async def test_delete_attachment(admin_client: AsyncClient):
 
     create_resp = await admin_client.post(
         f"/api/v1/tickets/{ticket_id}/attachments",
-        json={
-            "filename": "to-delete.txt",
-            "content_type": "text/plain",
-            "size_bytes": 50,
-        },
+        files={"file": ("to-delete.txt", b"bye", "text/plain")},
     )
     assert create_resp.status_code == 201
-    att_id = create_resp.json()["attachment"]["id"]
+    att_id = create_resp.json()["id"]
 
     del_resp = await admin_client.delete(f"/api/v1/attachments/{att_id}")
     assert del_resp.status_code == 204
@@ -128,17 +111,15 @@ async def test_delete_attachment(admin_client: AsyncClient):
 async def test_download_attachment(admin_client: AsyncClient):
     _, ticket_id = await _setup_ticket(admin_client)
 
+    content = b"%PDF-1.4 download test"
     create_resp = await admin_client.post(
         f"/api/v1/tickets/{ticket_id}/attachments",
-        json={
-            "filename": "download-me.pdf",
-            "content_type": "application/pdf",
-            "size_bytes": 99999,
-        },
+        files={"file": ("download-me.pdf", content, "application/pdf")},
     )
     assert create_resp.status_code == 201
-    att_id = create_resp.json()["attachment"]["id"]
+    att_id = create_resp.json()["id"]
 
     dl_resp = await admin_client.get(f"/api/v1/attachments/{att_id}/download")
     assert dl_resp.status_code == 200
-    assert "download_url" in dl_resp.json()
+    assert dl_resp.content == content
+    assert "application/pdf" in dl_resp.headers.get("content-type", "")

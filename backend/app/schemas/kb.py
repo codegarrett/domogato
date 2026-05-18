@@ -223,15 +223,6 @@ class KBAttachmentRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class KBAttachmentPresignResponse(BaseModel):
-    attachment: KBAttachmentRead
-    upload_url: str
-
-
-class KBAttachmentDownloadResponse(BaseModel):
-    download_url: str
-
-
 # ---------------------------------------------------------------------------
 # Template
 # ---------------------------------------------------------------------------

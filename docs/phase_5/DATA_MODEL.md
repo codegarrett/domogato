@@ -25,7 +25,7 @@ CREATE TABLE users (
 ```
 
 **Phase 5 Usage:**
-- `avatar_url`: Updated via new avatar upload/confirm flow (S3 presigned URL)
+- `avatar_url`: S3 key for uploaded avatars, or external OIDC `picture` URL; clients receive `/api/v1/users/{id}/avatar` (see `docs/FILE_STORAGE.md`)
 - `preferences`: Stores user settings (locale, dark mode, notification preferences)
 - `is_system_admin`: Used by admin views to gate access
 - `is_active`: Toggled by admin user management

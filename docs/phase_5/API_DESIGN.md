@@ -4,59 +4,45 @@
 
 ### Avatar Upload
 
+> See [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md).
+
 #### `POST /api/v1/users/me/avatar`
 
-Generate a presigned S3 URL for avatar upload.
+Upload a profile avatar in a single request.
 
 **Min Role:** Authenticated user (self only)
 
-**Request:**
-```json
-{
-  "filename": "profile.jpg",
-  "content_type": "image/jpeg"
-}
-```
+**Request:** `multipart/form-data` with field name `file`.
 
 **Response (201):**
+
 ```json
 {
-  "upload_url": "https://s3.example.com/...",
-  "avatar_key": "users/abc-123/avatar/profile.jpg"
+  "avatar_url": "/api/v1/users/{user_id}/avatar"
 }
 ```
 
 **Validation:**
 - `content_type` must be one of: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
-- `filename` must have a valid image extension
+- Max size 5 MB
 
 ---
 
-#### `POST /api/v1/users/me/avatar/confirm`
+#### `GET /api/v1/users/{user_id}/avatar`
 
-Confirm upload and set `avatar_url` on the user record.
+Stream the user's uploaded avatar (inline image).
 
-**Min Role:** Authenticated user (self only)
+**Min Role:** Any authenticated user
 
-**Request:**
-```json
-{
-  "avatar_key": "users/abc-123/avatar/profile.jpg"
-}
-```
+**Auth:** `Authorization: Bearer` header or `?access_token=` query parameter (for `<img src>`).
 
-**Response (200):**
-```json
-{
-  "avatar_url": "https://bucket.s3.region.amazonaws.com/users/abc-123/avatar/profile.jpg"
-}
-```
+**Response:** Image bytes (`Content-Disposition: inline`). `404` if no uploaded avatar (OIDC-only users may have an external `picture` URL in `avatar_url` instead).
 
 ---
 
 #### `DELETE /api/v1/users/me/avatar`
 
-Remove avatar from S3 and clear `avatar_url`.
+Remove avatar from S3 and clear stored avatar key.
 
 **Min Role:** Authenticated user (self only)
 
@@ -73,6 +59,7 @@ Return the Keycloak account management URL for the current user.
 **Min Role:** Authenticated user
 
 **Response (200):**
+
 ```json
 {
   "account_url": "https://keycloak.example.com/realms/projecthub/account",
@@ -131,6 +118,7 @@ The `preferences` JSONB field on the `User` model stores application settings:
 ```
 
 Updated via `PATCH /api/v1/users/me` with:
+
 ```json
 {
   "preferences": {

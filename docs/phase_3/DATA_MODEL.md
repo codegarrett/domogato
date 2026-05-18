@@ -299,7 +299,7 @@ CREATE INDEX ix_kb_page_attachments_page_id ON kb_page_attachments(page_id);
 ```
 
 **Notes:**
-- Reuses the same S3 presigned URL pattern as ticket attachments
+- Same API-proxied upload/download pattern as ticket attachments (see `docs/FILE_STORAGE.md`)
 - S3 key pattern: `projects/{project_id}/kb/{space_id}/{page_id}/{uuid}_{filename}`
 - No `updated_at` -- attachments are immutable once uploaded
 - `created_by` is SET NULL on user deletion to preserve attachment records

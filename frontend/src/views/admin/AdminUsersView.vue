@@ -42,7 +42,7 @@
         <template #body="{ data }">
           <Avatar
             v-if="data.avatar_url"
-            :image="data.avatar_url"
+            :image="assetUrl(data.avatar_url)"
             shape="circle"
             size="normal"
           />
@@ -175,6 +175,7 @@ import AdminSubNav from '@/components/common/AdminSubNav.vue'
 import { listUsers, adminUpdateUser, adminCreateUser, type UserRead } from '@/api/users'
 import { useAuthStore } from '@/stores/auth'
 import { useToastService } from '@/composables/useToast'
+import { assetUrl } from '@/utils/assetUrl'
 
 const { t } = useI18n()
 const toast = useToastService()

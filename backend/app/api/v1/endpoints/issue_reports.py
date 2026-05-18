@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_current_user_bearer_or_query, get_db
 from app.core import events
 from app.core.permissions import (
     PROJECT_ROLE_HIERARCHY,
@@ -16,9 +16,6 @@ from app.models.user import User
 from app.schemas.common import PaginatedResponse
 from app.schemas.issue_report import (
     CreateTicketFromReports,
-    IssueReportAttachmentCreate,
-    IssueReportAttachmentDownloadResponse,
-    IssueReportAttachmentPresignResponse,
     IssueReportAttachmentRead,
     IssueReportCreate,
     IssueReportLabelRead,
@@ -30,6 +27,12 @@ from app.schemas.issue_report import (
 )
 from app.schemas.ticket import TicketRead
 from app.services import issue_report_service, project_service, storage_service
+from app.services.storage_service import MAX_FILE_SIZE, StorageUnavailableError
+from app.utils.file_responses import streaming_s3_response
+from app.utils.storage_urls import (
+    issue_report_attachment_download_path,
+    rewrite_legacy_s3_urls,
+)
 
 router = APIRouter(tags=["issue-reports"])
 
@@ -54,6 +57,19 @@ async def _require_project_role(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
 
+def _attachment_read(att) -> IssueReportAttachmentRead:
+    return IssueReportAttachmentRead(
+        id=att.id,
+        issue_report_id=att.issue_report_id,
+        uploaded_by_id=att.uploaded_by_id,
+        filename=att.filename,
+        content_type=att.content_type,
+        size_bytes=att.size_bytes,
+        created_at=att.created_at,
+        download_path=issue_report_attachment_download_path(att.id),
+    )
+
+
 async def _enrich_report(db: AsyncSession, report) -> IssueReportRead:
     """Build an IssueReportRead from an ORM IssueReport, resolving display names."""
     from app.models.user import User as UserModel
@@ -64,6 +80,14 @@ async def _enrich_report(db: AsyncSession, report) -> IssueReportRead:
         u = (await db.execute(select(UserModel.display_name).where(UserModel.id == report.created_by))).scalar_one_or_none()
         created_by_name = u
 
+    attachments = []
+    s3_key_to_path: dict[str, str] = {}
+    if hasattr(report, "attachments") and report.attachments:
+        for att in report.attachments:
+            path = issue_report_attachment_download_path(att.id)
+            s3_key_to_path[att.s3_key] = path
+            attachments.append(_attachment_read(att))
+
     reporters = []
     if hasattr(report, "reporters") and report.reporters:
         for r in report.reporters:
@@ -71,7 +95,9 @@ async def _enrich_report(db: AsyncSession, report) -> IssueReportRead:
             reporters.append(IssueReportReporterRead(
                 user_id=r.user_id,
                 display_name=name,
-                original_description=r.original_description,
+                original_description=rewrite_legacy_s3_urls(
+                    r.original_description, s3_key_to_path,
+                ),
                 created_at=r.created_at,
             ))
 
@@ -96,11 +122,6 @@ async def _enrich_report(db: AsyncSession, report) -> IssueReportRead:
                 "created_at": link.created_at,
             })
 
-    attachments = []
-    if hasattr(report, "attachments") and report.attachments:
-        for att in report.attachments:
-            attachments.append(IssueReportAttachmentRead.model_validate(att))
-
     labels = []
     if hasattr(report, "labels") and report.labels:
         for lbl in report.labels:
@@ -110,7 +131,7 @@ async def _enrich_report(db: AsyncSession, report) -> IssueReportRead:
         id=report.id,
         project_id=report.project_id,
         title=report.title,
-        description=report.description,
+        description=rewrite_legacy_s3_urls(report.description, s3_key_to_path),
         source_url=report.source_url,
         status=report.status,
         priority=report.priority,
@@ -433,13 +454,13 @@ async def get_ticket_issue_reports(
 
 @router.post(
     "/projects/{project_id}/issue-reports/{report_id}/attachments",
-    response_model=IssueReportAttachmentPresignResponse,
+    response_model=IssueReportAttachmentRead,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_attachment(
     project_id: UUID,
     report_id: UUID,
-    body: IssueReportAttachmentCreate,
+    file: UploadFile = File(...),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -449,23 +470,36 @@ async def create_attachment(
     if report is None or report.project_id != project_id:
         raise HTTPException(status_code=404, detail="Issue report not found")
 
-    if body.content_type not in storage_service.ALLOWED_CONTENT_TYPES:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in storage_service.ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail="File type not allowed")
 
-    attachment, upload_url = await issue_report_service.create_issue_report_attachment(
-        db,
-        issue_report_id=report_id,
-        project_id=project_id,
-        uploaded_by_id=user.id,
-        filename=body.filename,
-        content_type=body.content_type,
-        size_bytes=body.size_bytes,
-    )
+    body = await file.read()
+    if len(body) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(body) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large")
 
-    return IssueReportAttachmentPresignResponse(
-        attachment=IssueReportAttachmentRead.model_validate(attachment),
-        upload_url=upload_url,
-    )
+    try:
+        attachment = await issue_report_service.create_issue_report_attachment(
+            db,
+            issue_report_id=report_id,
+            project_id=project_id,
+            uploaded_by_id=user.id,
+            filename=file.filename,
+            content_type=content_type,
+            file_body=body,
+        )
+    except StorageUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File storage is temporarily unavailable",
+        )
+
+    return _attachment_read(attachment)
 
 
 @router.get(
@@ -479,24 +513,37 @@ async def list_attachments(
     db: AsyncSession = Depends(get_db),
 ):
     await _require_project_role(db, project_id, user, ProjectRole.GUEST)
-    return await issue_report_service.list_issue_report_attachments(db, report_id)
+    rows = await issue_report_service.list_issue_report_attachments(db, report_id)
+    return [_attachment_read(att) for att in rows]
 
 
-@router.get(
-    "/issue-report-attachments/{attachment_id}/download",
-    response_model=IssueReportAttachmentDownloadResponse,
-)
+@router.get("/issue-report-attachments/{attachment_id}/download")
 async def download_attachment(
     attachment_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_bearer_or_query),
     db: AsyncSession = Depends(get_db),
 ):
     attachment = await issue_report_service.get_issue_report_attachment(db, attachment_id)
     if attachment is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    url = await storage_service.generate_download_presign(attachment.s3_key, filename=attachment.filename)
-    return IssueReportAttachmentDownloadResponse(download_url=url)
+    report = await issue_report_service.get_issue_report(db, attachment.issue_report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Issue report not found")
+
+    await _require_project_role(db, report.project_id, user, ProjectRole.GUEST)
+
+    try:
+        return await streaming_s3_response(
+            attachment.s3_key,
+            content_type=attachment.content_type,
+            filename=attachment.filename,
+        )
+    except StorageUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File storage is temporarily unavailable",
+        )
 
 
 @router.delete(

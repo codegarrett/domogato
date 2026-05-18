@@ -32,17 +32,20 @@ Phase 1 established 138 backend pytest tests. Phase 2 grew this to **179 passing
 
 ### Test Patterns
 
-**Attachment tests** require mocking S3. Use `unittest.mock.AsyncMock` to patch `aioboto3.Session`:
+**Attachment tests** require mocking S3. Patch `put_object` or the aioboto3 client used by `storage_service`:
 
 ```python
-@pytest.fixture
-def mock_s3(monkeypatch):
-    mock_client = AsyncMock()
-    mock_client.generate_presigned_url.return_value = "https://minio/presigned"
-    # Patch the storage service's S3 client creation
-    monkeypatch.setattr("app.services.storage_service.get_s3_client", lambda: mock_client)
-    return mock_client
+@patch("app.services.storage_service.put_object", new_callable=AsyncMock)
+async def test_upload(mock_put, admin_client, ticket_id):
+    mock_put.return_value = None
+    resp = await admin_client.post(
+        f"/api/v1/tickets/{ticket_id}/attachments",
+        files={"file": ("test.txt", b"hello", "text/plain")},
+    )
+    assert resp.status_code == 201
 ```
+
+See [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md).
 
 **Dependency cycle detection** tests should cover:
 - Direct cycle: A blocks B, B blocks A

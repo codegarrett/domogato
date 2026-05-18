@@ -1,7 +1,7 @@
 <template>
   <div class="avatar-upload">
     <div class="avatar-preview" @click="openFilePicker">
-      <img v-if="currentUrl" :src="currentUrl" alt="Avatar" class="avatar-img" />
+      <img v-if="currentUrl" :src="assetUrl(currentUrl)" alt="Avatar" class="avatar-img" />
       <Avatar
         v-else
         :label="initials"
@@ -48,8 +48,8 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
-import axios from 'axios'
-import { requestAvatarUpload, confirmAvatarUpload, deleteAvatar } from '@/api/users'
+import { uploadAvatar, deleteAvatar } from '@/api/users'
+import { assetUrl } from '@/utils/assetUrl'
 import { useToastService } from '@/composables/useToast'
 
 defineProps<{
@@ -83,11 +83,7 @@ async function onFileSelected(event: Event) {
 
   uploading.value = true
   try {
-    const { upload_url, avatar_key } = await requestAvatarUpload(file.name, file.type)
-    await axios.put(upload_url, file, {
-      headers: { 'Content-Type': file.type },
-    })
-    const { avatar_url } = await confirmAvatarUpload(avatar_key)
+    const { avatar_url } = await uploadAvatar(file)
     emit('updated', avatar_url)
     toast.showSuccess(t('common.success'), t('profile.avatarUpdated'))
   } catch {

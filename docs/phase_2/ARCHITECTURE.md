@@ -139,30 +139,20 @@ API Instance 1                    Redis                    API Instance 2
 
 ## File Attachment Flow
 
-### Upload Flow (3-step presigned URL pattern)
+> **Updated:** Files are proxied through the API, not presigned URLs. See [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md).
+
+### Upload Flow
 
 ```
 Browser                    API                     MinIO (S3)
   │                         │                         │
-  │ POST /presign           │                         │
-  │ {filename, type, size}  │                         │
-  │────────────────────────▶│                         │
-  │                         │ generate_presigned_url  │
-  │                         │────────────────────────▶│
-  │  {upload_url, s3_key}   │                         │
-  │◀────────────────────────│                         │
-  │                         │                         │
-  │ PUT upload_url          │                         │
-  │ [file bytes]            │                         │
-  │────────────────────────────────────────────────▶  │
-  │  200 OK                 │                         │
-  │◀────────────────────────────────────────────────  │
-  │                         │                         │
   │ POST /attachments       │                         │
-  │ {filename, s3_key, ...} │                         │
-  │────────────────────────▶│                         │
-  │                         │ create attachment row   │
-  │  {attachment object}    │                         │
+  │ multipart: file         │                         │
+  │────────────────────────▶│ RBAC check              │
+  │                         │ put_object              │
+  │                         │────────────────────────▶│
+  │                         │ INSERT metadata         │
+  │  {attachment JSON}      │                         │
   │◀────────────────────────│                         │
 ```
 
@@ -171,28 +161,21 @@ Browser                    API                     MinIO (S3)
 ```
 Browser                    API                     MinIO (S3)
   │                         │                         │
-  │ GET /download           │                         │
-  │────────────────────────▶│ generate_presigned_get  │
-  │                         │────────────────────────▶│
-  │  {download_url}         │                         │
-  │◀────────────────────────│                         │
-  │                         │                         │
-  │ GET download_url        │                         │
-  │────────────────────────────────────────────────▶  │
+  │ GET /attachments/{id}/download                   │
+  │────────────────────────▶│ RBAC check              │
+  │                         │ get_object (stream)     │
+  │                         │◀────────────────────────│
   │  [file bytes]           │                         │
-  │◀────────────────────────────────────────────────  │
+  │◀────────────────────────│                         │
 ```
 
 ### S3 Key Structure
 
 ```
-{org_id}/{project_id}/{ticket_id}/{attachment_id}/{original_filename}
+projects/{project_id}/attachments/{uuid}_{filename}
 ```
 
-This structure allows:
-- Bulk deletion of all attachments for a ticket/project/org
-- S3 lifecycle policies per organization
-- Access logging scoped to organizational boundaries
+See `FILE_STORAGE.md` for KB and avatar key patterns.
 
 ---
 

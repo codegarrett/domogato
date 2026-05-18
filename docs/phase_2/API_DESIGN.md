@@ -15,43 +15,13 @@ For the original API specification, see `docs/phase_1/API_DESIGN.md`.
 | Method | Path | Description | Auth | Min Role |
 |--------|------|-------------|------|----------|
 | `GET` | `/api/v1/tickets/{ticket_id}/attachments` | List attachments for a ticket | Yes | Project Guest |
-| `POST` | `/api/v1/tickets/{ticket_id}/attachments/presign` | Get presigned upload URL | Yes | Reporter |
-| `POST` | `/api/v1/tickets/{ticket_id}/attachments` | Confirm upload (register metadata) | Yes | Reporter |
-| `GET` | `/api/v1/attachments/{attachment_id}/download` | Get presigned download URL | Yes | Project Guest |
-| `DELETE` | `/api/v1/attachments/{attachment_id}` | Delete attachment (S3 + DB) | Yes | Uploader / Maintainer |
+| `POST` | `/api/v1/tickets/{ticket_id}/attachments` | Upload attachment (multipart `file`) | Yes | Developer |
+| `GET` | `/api/v1/attachments/{attachment_id}/download` | Download file (streamed bytes) | Yes | Project Guest |
+| `DELETE` | `/api/v1/attachments/{attachment_id}` | Delete attachment (S3 + DB) | Yes | Maintainer |
 
-**Presign upload request:**
+> See [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md).
 
-```json
-{
-    "filename": "screenshot.png",
-    "content_type": "image/png",
-    "size_bytes": 245000
-}
-```
-
-**Presign upload response:**
-
-```json
-{
-    "upload_url": "https://minio:9000/projecthub-attachments/...",
-    "s3_key": "{org_id}/{project_id}/{ticket_id}/{attachment_id}/screenshot.png",
-    "expires_in": 3600
-}
-```
-
-**Confirm upload request:**
-
-```json
-{
-    "filename": "screenshot.png",
-    "content_type": "image/png",
-    "size_bytes": 245000,
-    "s3_key": "{org_id}/{project_id}/{ticket_id}/{attachment_id}/screenshot.png"
-}
-```
-
-**Attachment response:**
+**Upload response (201):**
 
 ```json
 {

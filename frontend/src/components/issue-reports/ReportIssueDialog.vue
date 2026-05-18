@@ -225,8 +225,7 @@ import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import {
   createIssueReport,
-  createIssueReportAttachment,
-  uploadToPresignedUrl,
+  uploadIssueReportAttachment,
   findSimilarReports,
   addReporter,
   formatFileSize,
@@ -398,12 +397,7 @@ async function submitReport() {
     if (pendingFiles.value.length > 0) {
       for (const file of pendingFiles.value) {
         try {
-          const { upload_url } = await createIssueReportAttachment(
-            props.projectId,
-            report.id,
-            { filename: file.name, content_type: file.type || 'application/octet-stream', size_bytes: file.size },
-          )
-          await uploadToPresignedUrl(upload_url, file)
+          await uploadIssueReportAttachment(props.projectId, report.id, file)
         } catch {
           toast.showError(t('issueReports.uploadFailed'), file.name)
         }

@@ -243,37 +243,38 @@ Use PostgreSQL's built-in full-text search via `tsvector` columns and `tsquery` 
 
 ---
 
-## ADR-009: File Storage -- S3-Compatible with Presigned URLs
+## ADR-009: File Storage -- S3-Compatible, API-Proxied Through Backend
 
-**Date:** 2026-03-24
+**Date:** 2026-03-24 (amended 2026-05)
 
-**Status:** Accepted
+**Status:** Accepted (supersedes presigned-URL variant)
 
 **Context:**
-Users need to upload file attachments (images, documents, screenshots) to tickets and comments.
+Users need to upload file attachments and avatars. Production deployments use MinIO inside Docker; browsers cannot reach internal hostnames like `http://minio:9000`. Authorization must be enforced on every file read.
 
 **Decision:**
-Store files in S3-compatible storage, using presigned URLs for direct browser-to-S3 uploads and downloads.
+Store files in S3-compatible storage (MinIO, AWS S3, etc.). **Only the API and Celery** connect to S3. Clients upload via `multipart/form-data` to the API and download via streamed `GET` responses after RBAC checks.
 
 **Rationale:**
-- Presigned upload URLs allow the browser to upload directly to S3, bypassing the API server (no memory/CPU pressure on the backend for large files)
-- S3-compatible API works with AWS S3, MinIO, DigitalOcean Spaces, etc.
-- Presigned download URLs provide time-limited access control without proxying through the backend
-- Scalable to any volume of files without backend changes
-- Cost-effective for storage and bandwidth
+- Enforces permissions on every upload and download (no bypass via direct S3 URLs)
+- Works when S3 is on a private Docker network; clients only see `/api/v1/...`
+- Same storage backend for dev (MinIO) and prod (S3)
+- Simpler frontend (no second hop to MinIO, no broken presigned URLs)
+- Optional response caching can be added at the API or nginx layer later without client changes
 
 **Flow:**
-1. Client requests presigned upload URL from backend (which checks permissions)
-2. Client uploads file directly to S3 using the presigned URL
-3. Client confirms upload to backend (registers metadata: filename, size, content type)
-4. For downloads, client requests presigned download URL from backend
+1. Client `POST`s file to API (auth + role check)
+2. API `put_object` to S3 and saves metadata in PostgreSQL
+3. Client `GET`s download URL on API; API streams from S3 after role check
+
+**Canonical documentation:** [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md)
 
 **Alternatives Considered:**
 | Alternative | Reason Rejected |
 |---|---|
-| **Local filesystem** | Not scalable, not available across multiple API instances, no CDN integration, complicates Docker deployment |
-| **Database BLOBs** | Bloats database, poor performance for large files, complicates backups |
-| **Backend-proxied upload** | Works but wastes backend CPU/memory for large files. Presigned URLs are the standard approach. |
+| **Presigned URLs (original ADR)** | Exposes internal S3 endpoints to browsers; breaks in Docker prod; RBAC only at URL mint time |
+| **Local filesystem** | Not scalable across API replicas, complicates backups |
+| **Database BLOBs** | Bloats PostgreSQL, poor performance for large files |
 
 ---
 

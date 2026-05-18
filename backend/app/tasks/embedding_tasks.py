@@ -161,23 +161,13 @@ async def _embed_kb_attachment_async(attachment_id: str, page_id: str) -> None:
 
 
 async def _download_s3_file(s3_key: str) -> bytes | None:
-    """Download a file from S3 using aioboto3."""
-    import aioboto3
+    """Download a file from S3 via the storage service."""
+    from app.services.storage_service import StorageUnavailableError, get_object_bytes
 
-    session = aioboto3.Session()
     try:
-        async with session.client(
-            "s3",
-            endpoint_url=settings.S3_ENDPOINT_URL,
-            aws_access_key_id=settings.S3_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY,
-        ) as s3:
-            response = await s3.get_object(
-                Bucket=settings.S3_BUCKET_NAME,
-                Key=s3_key,
-            )
-            return await response["Body"].read()
-    except Exception:
+        stored = await get_object_bytes(s3_key)
+        return stored.body
+    except StorageUnavailableError:
         logger.exception("s3_download_failed", s3_key=s3_key)
         return None
 

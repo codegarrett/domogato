@@ -32,7 +32,7 @@ Open-source project management platform with integrated knowledge base and AI as
 | Database | PostgreSQL 16 + pgvector |
 | Cache/Broker | Redis 7 |
 | Task Queue | Celery |
-| File Storage | S3-compatible (MinIO bundled for dev) |
+| File Storage | S3-compatible (MinIO internal); API-proxied uploads/downloads |
 | AI/LLM | OpenAI, Anthropic, Ollama, Azure OpenAI |
 | Reverse Proxy | Nginx |
 | Containerization | Docker Compose |
@@ -68,7 +68,7 @@ This starts: PostgreSQL, Redis, MinIO, API server, Celery worker, Celery beat, f
 |---------|-----|
 | Application | http://localhost |
 | Frontend (direct) | http://localhost:3035 |
-| MinIO Console | http://localhost:9003 |
+| MinIO Console | http://localhost:9003 (ops only — app files go through the API) |
 
 The first user to register becomes the system admin. Database migrations run automatically on API startup.
 
@@ -85,6 +85,8 @@ Set **all** `REQUIRED` variables in `.env`. At minimum:
 - `SECRET_KEY` — `openssl rand -hex 32`
 - `ALLOWED_ORIGINS` — your domain as a JSON array
 - `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`
+
+File uploads and downloads are served by the API, not MinIO directly. See [`docs/FILE_STORAGE.md`](docs/FILE_STORAGE.md).
 
 See `.env.example` for detailed documentation on every setting.
 
@@ -129,7 +131,7 @@ domogato/
 │   │   └── router/      # Vue Router config
 │   └── e2e/             # Playwright tests
 ├── nginx/               # Reverse proxy config
-├── docs/                # Phase documentation
+├── docs/                # Phase documentation + FILE_STORAGE.md
 ├── docker-compose.yml       # Development stack
 ├── docker-compose.prod.yml  # Production stack
 └── .env.example             # Configuration reference

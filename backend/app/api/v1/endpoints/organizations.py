@@ -21,6 +21,7 @@ from app.schemas.organization import (
     OrganizationUpdate,
 )
 from app.services import auto_membership_service, organization_service, user_service, workflow_service
+from app.utils.avatars import resolve_avatar_url
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -261,7 +262,7 @@ async def add_member(
         user_id=target_user_id,
         email=target.email,
         display_name=target.display_name,
-        avatar_url=target.avatar_url,
+        avatar_url=resolve_avatar_url(target.id, target.avatar_url),
         role=new_membership.role,
         created_at=new_membership.created_at,
     )
@@ -289,7 +290,7 @@ async def update_member_role(
         user_id=user_id,
         email=target.email,
         display_name=target.display_name,
-        avatar_url=target.avatar_url,
+        avatar_url=resolve_avatar_url(target.id, target.avatar_url),
         role=updated.role,
         created_at=updated.created_at,
     )

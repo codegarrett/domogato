@@ -83,6 +83,21 @@
           <div v-if="uploading" class="flex align-items-center gap-2 text-color-secondary text-sm mb-2">
             <i class="pi pi-spin pi-spinner" /> {{ $t('issueReports.uploadingFiles') }}
           </div>
+          <div v-if="imageAttachments.length > 0" class="flex flex-wrap gap-3 mb-3">
+            <a
+              v-for="att in imageAttachments"
+              :key="`img-${att.id}`"
+              href="#"
+              class="issue-report-thumb border-round overflow-hidden surface-border border-1"
+              @click.prevent="downloadAttachment(att.id, att.filename)"
+            >
+              <img
+                :src="assetUrl(attachmentDownloadPath(att))"
+                :alt="att.filename"
+                class="issue-report-thumb-img"
+              />
+            </a>
+          </div>
           <div v-if="report.attachments.length === 0 && !uploading" class="text-sm text-color-secondary">
             {{ $t('issueReports.noAttachments') }}
           </div>
@@ -101,7 +116,7 @@
                 rounded
                 size="small"
                 :aria-label="$t('issueReports.download')"
-                @click="downloadAttachment(att.id)"
+                @click="downloadAttachment(att.id, att.filename)"
               />
               <Button
                 icon="pi pi-trash"
@@ -250,14 +265,14 @@ import {
   getIssueReport,
   updateIssueReport,
   deleteIssueReport,
-  createIssueReportAttachment,
-  uploadToPresignedUrl,
-  getIssueReportAttachmentDownloadUrl,
+  uploadIssueReportAttachment,
   deleteIssueReportAttachment,
   formatFileSize,
   type IssueReport,
 } from '@/api/issue-reports'
 import { useToastService } from '@/composables/useToast'
+import { downloadFromApi } from '@/utils/download'
+import { assetUrl } from '@/utils/assetUrl'
 import CreateTicketFromReportsDialog from '@/components/issue-reports/CreateTicketFromReportsDialog.vue'
 
 const { t } = useI18n()
@@ -269,6 +284,9 @@ const projectId = computed(() => route.params.projectId as string)
 const reportId = computed(() => route.params.reportId as string)
 
 const report = ref<IssueReport | null>(null)
+const imageAttachments = computed(() =>
+  (report.value?.attachments ?? []).filter((a) => a.content_type.startsWith('image/')),
+)
 const loading = ref(true)
 const editing = ref(false)
 const saving = ref(false)
@@ -387,12 +405,7 @@ async function onUploadFiles(e: Event) {
   uploading.value = true
   try {
     for (const file of Array.from(input.files)) {
-      const { upload_url } = await createIssueReportAttachment(
-        projectId.value,
-        report.value.id,
-        { filename: file.name, content_type: file.type || 'application/octet-stream', size_bytes: file.size },
-      )
-      await uploadToPresignedUrl(upload_url, file)
+      await uploadIssueReportAttachment(projectId.value, report.value.id, file)
     }
     toast.showSuccess(t('issueReports.uploadSuccess'), '')
     await loadReport()
@@ -404,10 +417,15 @@ async function onUploadFiles(e: Event) {
   }
 }
 
-async function downloadAttachment(attachmentId: string) {
+function attachmentDownloadPath(att: { id: string; download_path?: string }) {
+  return att.download_path ?? `/issue-report-attachments/${att.id}/download`
+}
+
+async function downloadAttachment(attachmentId: string, filename: string) {
   try {
-    const url = await getIssueReportAttachmentDownloadUrl(attachmentId)
-    window.open(url, '_blank')
+    const att = report.value?.attachments.find((a) => a.id === attachmentId)
+    const path = att ? attachmentDownloadPath(att) : `/issue-report-attachments/${attachmentId}/download`
+    await downloadFromApi(path, filename)
   } catch {
     toast.showError(t('common.error'), '')
   }
@@ -446,5 +464,15 @@ onMounted(() => loadReport())
 }
 .linked-ticket-item:hover {
   background: var(--p-content-hover-background, var(--p-surface-100));
+}
+.issue-report-thumb {
+  display: block;
+  width: 120px;
+  height: 90px;
+}
+.issue-report-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 </style>

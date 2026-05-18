@@ -14,6 +14,10 @@ apiClient.interceptors.request.use((config) => {
   if (accessToken.value) {
     config.headers.Authorization = `Bearer ${accessToken.value}`
   }
+  // Let the browser set multipart boundary — a bare multipart/form-data header breaks uploads.
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
   return config
 })
 

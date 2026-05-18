@@ -109,7 +109,7 @@ def create_app() -> FastAPI:
             {"name": "webhooks", "description": "Webhook CRUD and delivery history"},
             {"name": "reports", "description": "Project reports: summary, velocity, burndown, CFD, cycle time, sprint report, and CSV exports"},
             {"name": "timeline", "description": "Gantt/timeline data for tickets"},
-            {"name": "attachments", "description": "File uploads and downloads via S3 presigned URLs"},
+            {"name": "attachments", "description": "File uploads and downloads proxied through the API"},
             {"name": "dependencies", "description": "Ticket dependency links (blocks, blocked-by, relates-to)"},
             {"name": "ai", "description": "AI chat, conversations, and configuration"},
         ],

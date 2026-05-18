@@ -314,22 +314,22 @@ async def create_issue_report_attachment(
     uploaded_by_id: UUID | None,
     filename: str,
     content_type: str,
-    size_bytes: int,
-) -> tuple[IssueReportAttachment, str]:
+    file_body: bytes,
+) -> IssueReportAttachment:
     s3_key = storage_service.generate_s3_key(str(project_id), filename)
+    await storage_service.put_object(s3_key, file_body, content_type)
     attachment = IssueReportAttachment(
         issue_report_id=issue_report_id,
         uploaded_by_id=uploaded_by_id,
         filename=filename,
         content_type=content_type,
-        size_bytes=size_bytes,
+        size_bytes=len(file_body),
         s3_key=s3_key,
     )
     db.add(attachment)
     await db.flush()
     await db.refresh(attachment)
-    upload_url = await storage_service.generate_upload_presign(s3_key, content_type)
-    return attachment, upload_url
+    return attachment
 
 
 async def list_issue_report_attachments(

@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class UserBase(BaseModel):
@@ -23,6 +23,32 @@ class UserRead(UserBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def resolve_stored_avatar_url(cls, value: Any) -> Any:
+        from app.models.user import User
+        from app.utils.avatars import resolve_avatar_url
+
+        if isinstance(value, User):
+            return {
+                "id": value.id,
+                "email": value.email,
+                "display_name": value.display_name,
+                "avatar_url": resolve_avatar_url(value.id, value.avatar_url),
+                "is_system_admin": value.is_system_admin,
+                "is_active": value.is_active,
+                "preferences": value.preferences or {},
+                "last_login_at": value.last_login_at,
+                "created_at": value.created_at,
+                "updated_at": value.updated_at,
+            }
+        if isinstance(value, dict) and value.get("id") is not None:
+            value = {
+                **value,
+                "avatar_url": resolve_avatar_url(value["id"], value.get("avatar_url")),
+            }
+        return value
 
 
 class UserReadWithMemberships(UserRead):

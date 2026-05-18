@@ -26,7 +26,6 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY_ID: str = "minioadmin"
     S3_SECRET_ACCESS_KEY: str = "minioadmin"
     S3_BUCKET_NAME: str = "projecthub-attachments"
-    S3_PRESIGN_EXPIRY: int = 3600
 
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"

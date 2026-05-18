@@ -168,33 +168,22 @@ KB-specific additions:
 
 ## Inline Image Upload Flow
 
+> See [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md). KB inline images should use API URLs, not direct MinIO links.
+
 ```
 Browser                         API                        MinIO (S3)
   │                              │                            │
-  │ User pastes/drops image      │                            │
-  │                              │                            │
-  │ POST /kb/pages/{id}/         │                            │
-  │   attachments                │                            │
-  │ {filename, content_type,     │                            │
-  │  size_bytes}                 │                            │
-  │─────────────────────────────▶│                            │
-  │                              │  generate_presign_upload   │
+  │ POST /kb/pages/{id}/attachments (multipart file)          │
+  │─────────────────────────────▶│ put_object + metadata      │
   │                              │───────────────────────────▶│
-  │  {upload_url, attachment}    │                            │
+  │  {attachment JSON}           │                            │
   │◀─────────────────────────────│                            │
   │                              │                            │
-  │ PUT upload_url               │                            │
-  │ [image bytes]                │                            │
-  │──────────────────────────────────────────────────────────▶│
-  │  200 OK                      │                            │
-  │◀──────────────────────────────────────────────────────────│
-  │                              │                            │
-  │ Insert <img src="download    │                            │
-  │   URL"> into TipTap editor   │                            │
+  │ Insert <img src="/api/v1/kb/attachments/{id}/download?…"> │
   └──────────────────────────────┘                            │
 ```
 
-The image node in TipTap uses the S3 download URL as its `src`. When the page is saved, the HTML content includes the image references.
+Use `assetUrl()` on the frontend when embedding authenticated image URLs in the editor or viewer.
 
 ---
 

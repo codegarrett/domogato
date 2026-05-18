@@ -112,10 +112,10 @@ Reverse proxy and static file server:
 
 File attachment storage:
 
-- Presigned URLs for direct browser-to-S3 uploads (bypasses backend for large files)
-- Presigned URLs for time-limited download access
+- API-proxied uploads and downloads (RBAC on every access) — see [`docs/FILE_STORAGE.md`](../FILE_STORAGE.md)
+- S3/MinIO used only by API and Celery (internal endpoint)
 - Compatible with AWS S3, MinIO, or any S3-compatible provider
-- Organized by bucket path: `/{org_id}/{project_id}/{ticket_id}/{attachment_id}/{filename}`
+- Keys under `projects/{project_id}/attachments/...`, `users/{user_id}/avatar/...`, etc.
 
 ## Project Structure
 
@@ -143,7 +143,7 @@ backend/
 │   │           ├── epics.py        # Epic CRUD, progress tracking
 │   │           ├── tickets.py      # Ticket CRUD, search, bulk ops, hierarchy
 │   │           ├── comments.py     # Comment CRUD, @mentions
-│   │           ├── attachments.py  # Upload/download presigned URLs
+│   │           ├── attachments.py  # Upload/download (API-proxied)
 │   │           ├── workflows.py    # Workflow CRUD, statuses, transitions
 │   │           ├── custom_fields.py # Field definitions and values
 │   │           ├── sprints.py      # Sprint CRUD, planning, completion
@@ -210,7 +210,7 @@ backend/
 │   │   ├── search_service.py      # PostgreSQL FTS queries
 │   │   ├── notification_service.py
 │   │   ├── webhook_service.py
-│   │   └── storage_service.py     # S3 presigned URL generation
+│   │   └── storage_service.py     # S3 put/get/delete (internal)
 │   ├── websocket/
 │   │   ├── __init__.py
 │   │   ├── manager.py             # Connection registry, Redis pub/sub bridge

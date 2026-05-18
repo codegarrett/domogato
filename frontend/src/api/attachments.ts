@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { uploadFile } from '@/utils/files'
 
 export interface Attachment {
   id: string
@@ -11,41 +12,8 @@ export interface Attachment {
   created_at: string
 }
 
-export interface AttachmentCreate {
-  filename: string
-  content_type: string
-  size_bytes: number
-}
-
-export interface AttachmentPresignResponse {
-  attachment: Attachment
-  upload_url: string
-}
-
-export interface AttachmentDownloadResponse {
-  download_url: string
-}
-
-export async function createAttachment(
-  ticketId: string,
-  body: AttachmentCreate,
-): Promise<AttachmentPresignResponse> {
-  const { data } = await apiClient.post<AttachmentPresignResponse>(
-    `/tickets/${ticketId}/attachments`,
-    body,
-  )
-  return data
-}
-
-export async function uploadToPresignedUrl(
-  uploadUrl: string,
-  file: File,
-): Promise<void> {
-  await fetch(uploadUrl, {
-    method: 'PUT',
-    body: file,
-    headers: { 'Content-Type': file.type },
-  })
+export async function uploadAttachment(ticketId: string, file: File): Promise<Attachment> {
+  return uploadFile<Attachment>(`/tickets/${ticketId}/attachments`, file)
 }
 
 export async function listAttachments(
@@ -57,13 +25,6 @@ export async function listAttachments(
     { params },
   )
   return data
-}
-
-export async function getDownloadUrl(attachmentId: string): Promise<string> {
-  const { data } = await apiClient.get<AttachmentDownloadResponse>(
-    `/attachments/${attachmentId}/download`,
-  )
-  return data.download_url
 }
 
 export async function deleteAttachment(attachmentId: string): Promise<void> {

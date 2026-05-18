@@ -18,6 +18,7 @@ from app.models.project import Project
 from app.models.user import User
 from app.schemas.kb import CommentAuthor, CommentCreate, CommentRead, CommentUpdate
 from app.services import kb_service
+from app.utils.avatars import resolve_avatar_url
 
 router = APIRouter(tags=["knowledge-base"])
 
@@ -70,7 +71,7 @@ def _build_comment_tree(
             author=CommentAuthor(
                 id=c.author_id,
                 display_name=author.display_name if author else "Unknown",
-                avatar_url=author.avatar_url if author else None,
+                avatar_url=resolve_avatar_url(author.id, author.avatar_url) if author else None,
             ),
             body=c.body,
             is_deleted=c.is_deleted,
@@ -164,7 +165,7 @@ async def create_comment(
         author=CommentAuthor(
             id=user.id,
             display_name=user.display_name,
-            avatar_url=user.avatar_url,
+            avatar_url=resolve_avatar_url(user.id, user.avatar_url),
         ),
         body=comment.body,
         is_deleted=comment.is_deleted,
@@ -210,7 +211,7 @@ async def update_comment(
         author=CommentAuthor(
             id=user.id,
             display_name=user.display_name,
-            avatar_url=user.avatar_url,
+            avatar_url=resolve_avatar_url(user.id, user.avatar_url),
         ),
         body=comment.body,
         is_deleted=comment.is_deleted,

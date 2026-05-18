@@ -1,4 +1,6 @@
 import apiClient from './client'
+import { uploadFile } from '@/utils/files'
+import { downloadFromApi } from '@/utils/download'
 
 // ---------------------------------------------------------------------------
 // Types – Spaces
@@ -431,28 +433,16 @@ export async function deleteComment(commentId: string): Promise<void> {
 // Attachments
 // ===========================================================================
 
-export async function createAttachment(
-  pageId: string,
-  body: { filename: string; content_type: string; size_bytes: number },
-): Promise<{ attachment: KBAttachment; upload_url: string }> {
-  const { data } = await apiClient.post<{ attachment: KBAttachment; upload_url: string }>(
-    `/kb/pages/${pageId}/attachments`,
-    body,
-  )
-  return data
+export async function uploadAttachment(pageId: string, file: File): Promise<KBAttachment> {
+  return uploadFile<KBAttachment>(`/kb/pages/${pageId}/attachments`, file)
+}
+
+export async function downloadKbAttachment(attachmentId: string, filename: string): Promise<void> {
+  await downloadFromApi(`/kb/attachments/${attachmentId}/download`, filename)
 }
 
 export async function listAttachments(pageId: string): Promise<KBAttachment[]> {
   const { data } = await apiClient.get<KBAttachment[]>(`/kb/pages/${pageId}/attachments`)
-  return data
-}
-
-export async function downloadAttachment(
-  attachmentId: string,
-): Promise<{ download_url: string }> {
-  const { data } = await apiClient.get<{ download_url: string }>(
-    `/kb/attachments/${attachmentId}/download`,
-  )
   return data
 }
 

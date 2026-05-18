@@ -1,5 +1,6 @@
 import apiClient from './client'
 import type { PaginatedResponse } from '@/types/api'
+import { uploadFile } from '@/utils/files'
 
 export interface IssueReportReporter {
   user_id: string
@@ -23,6 +24,8 @@ export interface IssueReportAttachment {
   content_type: string
   size_bytes: number
   created_at: string
+  /** API path for download (use with assetUrl() for images). */
+  download_path: string
 }
 
 export interface IssueReportLabel {
@@ -180,29 +183,15 @@ export async function getTicketIssueReports(ticketId: string) {
 
 // ---- Attachments ----
 
-export interface AttachmentPresignResponse {
-  attachment: IssueReportAttachment
-  upload_url: string
-}
-
-export async function createIssueReportAttachment(
+export async function uploadIssueReportAttachment(
   projectId: string,
   reportId: string,
-  body: { filename: string; content_type: string; size_bytes: number },
-) {
-  const { data } = await apiClient.post<AttachmentPresignResponse>(
+  file: File,
+): Promise<IssueReportAttachment> {
+  return uploadFile<IssueReportAttachment>(
     `/projects/${projectId}/issue-reports/${reportId}/attachments`,
-    body,
+    file,
   )
-  return data
-}
-
-export async function uploadToPresignedUrl(uploadUrl: string, file: File): Promise<void> {
-  await fetch(uploadUrl, {
-    method: 'PUT',
-    body: file,
-    headers: { 'Content-Type': file.type },
-  })
 }
 
 export async function listIssueReportAttachments(projectId: string, reportId: string) {
@@ -210,13 +199,6 @@ export async function listIssueReportAttachments(projectId: string, reportId: st
     `/projects/${projectId}/issue-reports/${reportId}/attachments`,
   )
   return data
-}
-
-export async function getIssueReportAttachmentDownloadUrl(attachmentId: string) {
-  const { data } = await apiClient.get<{ download_url: string }>(
-    `/issue-report-attachments/${attachmentId}/download`,
-  )
-  return data.download_url
 }
 
 export async function deleteIssueReportAttachment(attachmentId: string) {

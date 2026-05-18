@@ -7,6 +7,7 @@ import Tag from 'primevue/tag'
 import Avatar from 'primevue/avatar'
 import Select from 'primevue/select'
 import { useToastService } from '@/composables/useToast'
+import { assetUrl } from '@/utils/assetUrl'
 import { useWebSocket } from '@/composables/useWebSocket'
 import {
   listBoards,
@@ -398,7 +399,7 @@ onUnmounted(() => {
           >
             <Avatar
               v-if="a.avatar_url"
-              :image="a.avatar_url"
+              :image="assetUrl(a.avatar_url)"
               shape="circle"
               class="flex-shrink-0"
               style="width: 1.5rem; height: 1.5rem"
@@ -432,7 +433,7 @@ onUnmounted(() => {
             <template v-if="swimlaneMode === 'assignee' && lane.key !== '_unassigned'">
               <Avatar
                 v-if="memberMap.get(lane.key)?.avatar_url"
-                :image="memberMap.get(lane.key)!.avatar_url!"
+                :image="assetUrl(memberMap.get(lane.key)!.avatar_url!)"
                 shape="circle"
                 class="flex-shrink-0"
                 style="width: 1.75rem; height: 1.75rem"

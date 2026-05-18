@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from uuid import UUID
 
 import structlog
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -58,23 +58,8 @@ async def close_redis() -> None:
         redis_client = None
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
-):
-    """Extract and validate JWT, then get or create the user.
-    Supports both locally-issued JWTs (iss=projecthub) and OIDC JWTs.
-    """
-    from app.models.user import User
-
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = credentials.credentials
+async def _authenticate_token(token: str, db: AsyncSession):
+    """Validate a JWT and return the user."""
     local = is_local_token(token)
     await logger.adebug("auth_token_received", is_local=local, token_prefix=token[:20] if token else "")
 
@@ -121,4 +106,42 @@ async def get_current_user(
 
     return user
 
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """Extract and validate JWT, then get or create the user.
+    Supports both locally-issued JWTs (iss=projecthub) and OIDC JWTs.
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await _authenticate_token(credentials.credentials, db)
+
+
+async def get_current_user_bearer_or_query(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    access_token: str | None = Query(None, alias="access_token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Like get_current_user but also accepts ?access_token= for img/download links."""
+    token: str | None = None
+    if credentials is not None:
+        token = credentials.credentials
+    elif access_token:
+        token = access_token
+
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await _authenticate_token(token, db)
 

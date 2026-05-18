@@ -97,8 +97,8 @@ AppLayout.vue
 1. User clicks "Change Avatar"
 2. File picker opens (accept: image/*)
 3. Frontend calls POST /users/me/avatar { filename, content_type }
-4. Backend generates presigned PUT URL, returns it
-5. Frontend uploads file directly to S3 using presigned URL
+4. Frontend POSTs multipart file to `POST /api/v1/users/me/avatar`
+5. Backend stores in S3 and returns API avatar URL (`/api/v1/users/{id}/avatar`)
 6. Frontend calls POST /users/me/avatar/confirm { avatar_key }
 7. Backend builds public URL, sets user.avatar_url, returns it
 8. Frontend updates auth store with new avatar_url
