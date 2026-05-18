@@ -4,7 +4,8 @@ import { useAuth } from '@/composables/useAuth'
 function filenameFromDisposition(disposition: string | undefined): string | null {
   if (!disposition) return null
   const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition)
-  return match ? decodeURIComponent(match[1].replace(/"/g, '')) : null
+  const name = match?.[1]
+  return name ? decodeURIComponent(name.replace(/"/g, '')) : null
 }
 
 /** Download a file from an API-proxied download endpoint. */

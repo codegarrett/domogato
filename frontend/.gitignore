@@ -11,6 +11,10 @@ dist-ssr/
 # TypeScript build info
 *.tsbuildinfo
 
+# Accidental tsc/vue-tsc emit in src (Vite bundles from .ts/.vue only)
+src/**/*.js
+!src/**/__tests__/**
+
 # IDE
 .idea/
 .vscode/
