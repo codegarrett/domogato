@@ -84,19 +84,20 @@
             <i class="pi pi-spin pi-spinner" /> {{ $t('issueReports.uploadingFiles') }}
           </div>
           <div v-if="imageAttachments.length > 0" class="flex flex-wrap gap-3 mb-3">
-            <a
+            <button
               v-for="att in imageAttachments"
               :key="`img-${att.id}`"
-              href="#"
+              type="button"
               class="issue-report-thumb border-round overflow-hidden surface-border border-1"
-              @click.prevent="downloadAttachment(att.id, att.filename)"
+              :aria-label="att.filename"
+              @click="openImagePreview(att)"
             >
               <img
                 :src="assetUrl(attachmentDownloadPath(att))"
                 :alt="att.filename"
                 class="issue-report-thumb-img"
               />
-            </a>
+            </button>
           </div>
           <div v-if="report.attachments.length === 0 && !uploading" class="text-sm text-color-secondary">
             {{ $t('issueReports.noAttachments') }}
@@ -247,6 +248,33 @@
       :selected-reports="[report]"
       @created="onTicketCreated"
     />
+
+    <Dialog
+      v-model:visible="showImagePreview"
+      modal
+      dismissable-mask
+      :show-header="false"
+      :style="{ width: 'min(92vw, 56rem)' }"
+      :content-style="{ padding: 0, overflow: 'hidden' }"
+      class="image-preview-dialog"
+      @hide="previewAttachment = null"
+    >
+      <div v-if="previewAttachment" class="image-preview-wrap">
+        <img
+          :src="previewImageUrl"
+          :alt="previewAttachment.filename"
+          class="image-preview-full"
+        />
+        <Button
+          icon="pi pi-download"
+          rounded
+          severity="secondary"
+          class="image-preview-download"
+          :aria-label="$t('issueReports.download')"
+          @click="downloadAttachment(previewAttachment.id, previewAttachment.filename)"
+        />
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -256,6 +284,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
@@ -269,6 +298,7 @@ import {
   deleteIssueReportAttachment,
   formatFileSize,
   type IssueReport,
+  type IssueReportAttachment,
 } from '@/api/issue-reports'
 import { useToastService } from '@/composables/useToast'
 import { downloadFromApi } from '@/utils/download'
@@ -292,7 +322,14 @@ const editing = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
 const showCreateTicketDialog = ref(false)
+const showImagePreview = ref(false)
+const previewAttachment = ref<IssueReportAttachment | null>(null)
 const attachFileInput = ref<HTMLInputElement | null>(null)
+
+const previewImageUrl = computed(() => {
+  if (!previewAttachment.value) return undefined
+  return assetUrl(attachmentDownloadPath(previewAttachment.value))
+})
 
 const editForm = ref({
   title: '',
@@ -421,6 +458,11 @@ function attachmentDownloadPath(att: { id: string; download_path?: string }) {
   return att.download_path ?? `/issue-report-attachments/${att.id}/download`
 }
 
+function openImagePreview(att: IssueReportAttachment) {
+  previewAttachment.value = att
+  showImagePreview.value = true
+}
+
 async function downloadAttachment(attachmentId: string, filename: string) {
   try {
     const att = report.value?.attachments.find((a) => a.id === attachmentId)
@@ -469,10 +511,38 @@ onMounted(() => loadReport())
   display: block;
   width: 120px;
   height: 90px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
 }
 .issue-report-thumb-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.image-preview-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--p-surface-950, #0f172a);
+}
+.image-preview-full {
+  display: block;
+  max-width: 100%;
+  max-height: min(80vh, 48rem);
+  width: auto;
+  height: auto;
+}
+.image-preview-download {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: rgba(15, 23, 42, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+}
+.image-preview-download:hover {
+  background: rgba(15, 23, 42, 0.9) !important;
 }
 </style>
