@@ -24,7 +24,7 @@ class UserRead(UserBase):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="wrap")
+    @model_validator(mode="before")
     @classmethod
     def resolve_stored_avatar_url(cls, value: Any) -> Any:
         from app.models.user import User

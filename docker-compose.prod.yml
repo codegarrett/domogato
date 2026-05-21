@@ -16,16 +16,16 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass ${REDIS_PASSWORD:-}
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-} ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     restart: unless-stopped
 
   api:
@@ -56,8 +56,8 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-projecthub-attachments}
       # Celery
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?}@redis:6379/2
       # LLM / AI Chat
       LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -106,8 +106,8 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-projecthub}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-projecthub}
       REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?}@redis:6379/2
       SECRET_KEY: ${SECRET_KEY:?}
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
@@ -152,8 +152,8 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-projecthub}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-projecthub}
       REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?}@redis:6379/2
       SECRET_KEY: ${SECRET_KEY:?}
       # Email (beat triggers digest emails)
       SMTP_ENABLED: ${SMTP_ENABLED:-false}

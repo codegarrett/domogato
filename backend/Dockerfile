@@ -17,7 +17,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 FROM deps AS production
 RUN addgroup --system app && adduser --system --ingroup app app
 COPY --chown=app:app . .
-RUN chmod +x entrypoint.sh
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 USER app
 EXPOSE 8000
 ENTRYPOINT ["./entrypoint.sh"]
