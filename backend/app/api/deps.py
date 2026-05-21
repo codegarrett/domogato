@@ -2,11 +2,12 @@ from collections.abc import AsyncGenerator
 from uuid import UUID
 
 import structlog
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.auth_cookie import COOKIE_NAME
 from app.core.config import settings
 from app.core.local_jwt import decode_local_token, is_local_token
 from app.core.security import validate_token
@@ -124,12 +125,24 @@ async def get_current_user(
     return await _authenticate_token(credentials.credentials, db)
 
 
-async def get_current_user_bearer_or_query(
+async def get_bearer_token(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    access_token: str | None = Query(None, alias="access_token"),
+) -> str:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return credentials.credentials
+
+
+async def get_current_user_bearer_or_cookie(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    access_token: str | None = Cookie(None, alias=COOKIE_NAME),
     db: AsyncSession = Depends(get_db),
 ):
-    """Like get_current_user but also accepts ?access_token= for img/download links."""
+    """Like get_current_user but also accepts the HttpOnly session cookie for img/download requests."""
     token: str | None = None
     if credentials is not None:
         token = credentials.credentials
@@ -144,4 +157,8 @@ async def get_current_user_bearer_or_query(
         )
 
     return await _authenticate_token(token, db)
+
+
+# Backward-compatible alias
+get_current_user_bearer_or_query = get_current_user_bearer_or_cookie
 

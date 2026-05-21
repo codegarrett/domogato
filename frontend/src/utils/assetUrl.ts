@@ -1,11 +1,7 @@
-import { useAuth } from '@/composables/useAuth'
+import { normalizeAssetPath } from '@/utils/apiPaths'
 
-/** Append access_token for API-served assets (avatars) loaded via img src. */
+/** Absolute API path for authenticated assets loaded via img src (uses HttpOnly session cookie). */
 export function assetUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  const { accessToken } = useAuth()
-  if (!accessToken.value) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}access_token=${encodeURIComponent(accessToken.value)}`
+  return normalizeAssetPath(url)
 }

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_bearer_token, get_current_user, get_db
+from app.core.auth_cookie import clear_auth_cookie, set_auth_cookie
 from app.core.config import settings
 from app.core.local_jwt import create_access_token
 from app.core.password import hash_password, verify_password, validate_password_strength
@@ -93,7 +94,7 @@ async def get_oidc_config(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
     """Authenticate with email and password (local auth mode only)."""
     effective = await get_effective_auth_settings(db)
     if effective["auth_mode"].value != "local":
@@ -134,6 +135,8 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         expires_minutes=settings.LOCAL_JWT_EXPIRE_MINUTES,
     )
 
+    set_auth_cookie(response, token)
+
     return AuthTokenResponse(
         access_token=token,
         expires_in=settings.LOCAL_JWT_EXPIRE_MINUTES * 60,
@@ -142,7 +145,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/register", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
     """Create a new user account with password (local auth, registration must be enabled)."""
     effective = await get_effective_auth_settings(db)
     if effective["auth_mode"].value != "local":
@@ -197,6 +200,8 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         expires_minutes=settings.LOCAL_JWT_EXPIRE_MINUTES,
     )
 
+    set_auth_cookie(response, token)
+
     return AuthTokenResponse(
         access_token=token,
         expires_in=settings.LOCAL_JWT_EXPIRE_MINUTES * 60,
@@ -206,6 +211,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/refresh", response_model=AuthTokenResponse)
 async def refresh_token(
+    response: Response,
     current_user: User = Depends(get_current_user),
 ):
     """Issue a fresh access token for an authenticated user with a valid (non-expired) token."""
@@ -221,11 +227,31 @@ async def refresh_token(
         expires_minutes=settings.LOCAL_JWT_EXPIRE_MINUTES,
     )
 
+    set_auth_cookie(response, token)
+
     return AuthTokenResponse(
         access_token=token,
         expires_in=settings.LOCAL_JWT_EXPIRE_MINUTES * 60,
         user=_user_summary(current_user),
     )
+
+
+@router.post("/session")
+async def establish_session(
+    response: Response,
+    _user: User = Depends(get_current_user),
+    token: str = Depends(get_bearer_token),
+):
+    """Set the HttpOnly session cookie from a Bearer token (e.g. after OIDC login)."""
+    set_auth_cookie(response, token)
+    return {"ok": True}
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """Clear the HttpOnly session cookie."""
+    clear_auth_cookie(response)
+    return {"ok": True}
 
 
 @router.post("/change-password")

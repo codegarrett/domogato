@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.auth_cookie import set_auth_cookie
 from app.core.config import settings
 from app.core.local_jwt import create_access_token
 from app.core.password import hash_password, validate_password_strength
@@ -53,6 +54,7 @@ async def get_setup_status(db: AsyncSession = Depends(get_db)):
 @router.post("/initialize", response_model=SetupInitializeResponse, status_code=status.HTTP_201_CREATED)
 async def initialize_setup(
     body: SetupInitializeRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Create the first system administrator. Only works when no admin exists."""
@@ -93,6 +95,8 @@ async def initialize_setup(
         email=user.email,
         expires_minutes=settings.LOCAL_JWT_EXPIRE_MINUTES,
     )
+
+    set_auth_cookie(response, token)
 
     return SetupInitializeResponse(
         access_token=token,

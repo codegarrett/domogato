@@ -4,6 +4,7 @@ import { useAuth } from '@/composables/useAuth'
 import apiClient from '@/api/client'
 import { setLocale } from '@/i18n'
 import { useUiStore } from '@/stores/ui'
+import { syncSessionCookie, clearSessionCookie } from '@/utils/sessionCookie'
 import axios from 'axios'
 
 export interface AuthConfig {
@@ -110,6 +111,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (isAuthenticated.value) {
       await fetchCurrentUser()
+      await syncSessionCookie()
     }
   }
 
@@ -143,6 +145,7 @@ export const useAuthStore = defineStore('auth', () => {
     const response = await axios.post(`${baseUrl}/auth/login`, { email, password })
     const { access_token } = response.data
     setLocalToken(access_token)
+    await syncSessionCookie()
     await fetchCurrentUser()
   }
 
@@ -155,6 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
     })
     const { access_token } = response.data
     setLocalToken(access_token)
+    await syncSessionCookie()
     await fetchCurrentUser()
   }
 
@@ -164,6 +168,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function doCallback(): Promise<string> {
     const returnTo = await handleCallback()
+    await syncSessionCookie()
     await fetchCurrentUser()
     return returnTo
   }
@@ -171,6 +176,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function doLogout(): Promise<void> {
     currentUser.value = null
     loggedOut.value = true
+    await clearSessionCookie()
     await logout()
     if (isLocalMode.value) {
       window.location.href = '/auth/login'

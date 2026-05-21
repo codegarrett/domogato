@@ -1,5 +1,5 @@
 import apiClient from '@/api/client'
-import { useAuth } from '@/composables/useAuth'
+import { normalizeApiPath } from '@/utils/apiPaths'
 
 function filenameFromDisposition(disposition: string | undefined): string | null {
   if (!disposition) return null
@@ -10,14 +10,7 @@ function filenameFromDisposition(disposition: string | undefined): string | null
 
 /** Download a file from an API-proxied download endpoint. */
 export async function downloadFromApi(path: string, fallbackFilename = 'download'): Promise<void> {
-  const { accessToken } = useAuth()
-  const separator = path.includes('?') ? '&' : '?'
-  const url =
-    accessToken.value != null
-      ? `${path}${separator}access_token=${encodeURIComponent(accessToken.value)}`
-      : path
-
-  const response = await apiClient.get(url, { responseType: 'blob' })
+  const response = await apiClient.get(normalizeApiPath(path), { responseType: 'blob' })
   const blob = response.data as Blob
   const name = filenameFromDisposition(response.headers['content-disposition']) ?? fallbackFilename
 

@@ -100,6 +100,8 @@ function scheduleTokenRefresh(token: string, setToken: (t: string | null) => voi
       const newToken = response.data.access_token
       setToken(newToken)
       scheduleTokenRefresh(newToken, setToken)
+      const { syncSessionCookie } = await import('@/utils/sessionCookie')
+      await syncSessionCookie()
     } catch (e) {
       console.error('Token refresh failed:', e)
       setToken(null)
