@@ -1,0 +1,135 @@
+/* Shared typography for rendered HTML / Markdown (KB pages, ticket descriptions, etc.) */
+.prose {
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.prose h1,
+.prose h2,
+.prose h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose h1 {
+  font-size: 1.5rem;
+}
+
+.prose h2 {
+  font-size: 1.25rem;
+}
+
+.prose h3 {
+  font-size: 1.1rem;
+}
+
+.prose p {
+  margin-bottom: 1em;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+.prose ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.prose pre {
+  background: var(--app-card-alt-bg);
+  color: var(--p-text-color, #334155);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.85rem;
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
+}
+
+.prose pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.prose code {
+  background: var(--p-surface-100, #f1f5f9);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.875em;
+  color: var(--p-text-color, #334155);
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--p-primary-200, #c7d2fe);
+  padding-left: 1rem;
+  color: var(--p-text-muted-color, #64748b);
+  margin: 1em 0;
+}
+
+.prose a {
+  text-decoration: underline;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--p-content-border-color, #dee2e6);
+  margin: 1em 0;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+  display: block;
+}
+
+.prose table th,
+.prose table td {
+  border: 1px solid var(--p-content-border-color, #dee2e6);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.prose table th {
+  background: var(--app-card-alt-bg);
+  font-weight: 600;
+}
+
+.prose table tr:nth-child(even) {
+  background: var(--p-content-background);
+}
+
+.prose table tr:hover {
+  background: var(--app-card-alt-bg);
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.prose--compact {
+  line-height: 1.6;
+}
+
+.prose--compact p {
+  margin-bottom: 0.5em;
+}
+
+.prose--compact h2,
+.prose--compact h3 {
+  margin-top: 0.75em;
+}

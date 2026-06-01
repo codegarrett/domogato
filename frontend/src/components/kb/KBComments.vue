@@ -3,7 +3,8 @@ import { ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
-import RichTextEditor from '@/components/editor/RichTextEditor.vue'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import { sanitizeMarkdownInput } from '@/utils/richContent'
 import KBCommentItem from './KBCommentItem.vue'
 import {
   listComments,
@@ -39,7 +40,7 @@ async function addComment() {
   submitting.value = true
   try {
     const body: { body: string; parent_comment_id?: string } = {
-      body: newCommentBody.value,
+      body: sanitizeMarkdownInput(newCommentBody.value),
     }
     if (replyingTo.value) body.parent_comment_id = replyingTo.value
     await createComment(props.pageId, body)
@@ -101,8 +102,9 @@ onMounted(load)
         </button>
       </div>
 
-      <RichTextEditor
+      <MarkdownEditor
         v-model="newCommentBody"
+        :rows="6"
         :placeholder="replyingTo ? t('kb.replyPlaceholder') : t('kb.commentPlaceholder')"
       />
 

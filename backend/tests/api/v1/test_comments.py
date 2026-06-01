@@ -74,6 +74,17 @@ async def _create_comment(
 
 
 @pytest.mark.asyncio
+async def test_create_comment_strips_html(admin_client: AsyncClient, db_session: AsyncSession):
+    _, ticket, _ = await _setup_ticket(admin_client, db_session, slug="cmt-strip-html-org")
+    comment = await _create_comment(
+        admin_client,
+        ticket["id"],
+        body="<p>Hello <script>x</script></p>",
+    )
+    assert comment["body"] == "Hello x"
+
+
+@pytest.mark.asyncio
 async def test_create_comment(admin_client: AsyncClient, db_session: AsyncSession):
     _, ticket, _ = await _setup_ticket(admin_client, db_session, slug="create-cmt-org")
 

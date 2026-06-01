@@ -15,19 +15,17 @@ import {
   type PageTreeNode,
   type PageAncestor,
 } from '@/api/kb'
-import { marked } from 'marked'
-import TurndownService from 'turndown'
-import { strikethrough, taskListItems } from 'turndown-plugin-gfm'
+import { sanitizeMarkdownInput } from '@/utils/richContent'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import Textarea from 'primevue/textarea'
 import ProgressSpinner from 'primevue/progressspinner'
 import Breadcrumb from 'primevue/breadcrumb'
 import Select from 'primevue/select'
 import TabView from 'primevue/tabview'
 import TabPanel from 'primevue/tabpanel'
-import RichTextEditor from '@/components/editor/RichTextEditor.vue'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import RichContent from '@/components/common/RichContent.vue'
 import KBVersionHistory from '@/components/kb/KBVersionHistory.vue'
 import KBComments from '@/components/kb/KBComments.vue'
 import KBTemplatePicker from '@/components/kb/KBTemplatePicker.vue'
@@ -50,28 +48,17 @@ const ancestors = ref<PageAncestor[]>([])
 const loading = ref(true)
 const loadingPage = ref(false)
 
-const renderedHtml = computed(() => {
-  if (!activePage.value) return ''
-  const html = activePage.value.content_html || ''
-  if (html) return html
-  const md = activePage.value.content_markdown || ''
-  if (md) return marked.parse(md, { async: false }) as string
-  return ''
-})
-
 const editingTitle = ref(false)
 const titleDraft = ref('')
 
 const isEditing = ref(false)
-const editorContent = ref('')
 const markdownDraft = ref('')
-const editorMode = ref<'wysiwyg' | 'markdown'>('wysiwyg')
 const savingContent = ref(false)
 
 const showCreateDialog = ref(false)
 const showTemplatePicker = ref(false)
 const savingPage = ref(false)
-const newPage = ref({ title: '', parent_page_id: '', content_markdown: '', content_html: '', page_type: '' })
+const newPage = ref({ title: '', parent_page_id: '', content_markdown: '', page_type: '' })
 
 // ── Breadcrumb model ──
 const breadcrumbHome = computed(() => ({
@@ -207,14 +194,12 @@ async function saveTitle() {
 
 // ── Create page ──
 function openCreateDialog() {
-  newPage.value = { title: '', parent_page_id: '', content_markdown: '', content_html: '', page_type: '' }
+  newPage.value = { title: '', parent_page_id: '', content_markdown: '', page_type: '' }
   showTemplatePicker.value = true
 }
 
-function onTemplateSelected(template: { content_markdown: string; content_html: string; page_type?: string | null }) {
-  const md = template.content_markdown || ''
-  newPage.value.content_markdown = md
-  newPage.value.content_html = template.content_html || (md ? marked.parse(md, { async: false }) as string : '')
+function onTemplateSelected(template: { content_markdown: string; page_type?: string | null }) {
+  newPage.value.content_markdown = template.content_markdown || ''
   newPage.value.page_type = template.page_type || ''
   showTemplatePicker.value = false
   showCreateDialog.value = true
@@ -230,10 +215,11 @@ async function onCreatePage() {
   if (!title || !space.value) return
   savingPage.value = true
   try {
-    const body: { title: string; parent_page_id?: string; content_markdown?: string; content_html?: string; page_type?: string } = { title }
+    const body: { title: string; parent_page_id?: string; content_markdown?: string; page_type?: string } = { title }
     if (newPage.value.parent_page_id) body.parent_page_id = newPage.value.parent_page_id
-    if (newPage.value.content_markdown) body.content_markdown = newPage.value.content_markdown
-    if (newPage.value.content_html) body.content_html = newPage.value.content_html
+    if (newPage.value.content_markdown) {
+      body.content_markdown = sanitizeMarkdownInput(newPage.value.content_markdown)
+    }
     if (newPage.value.page_type) body.page_type = newPage.value.page_type
     const created = await createPage(space.value.id, body)
     showCreateDialog.value = false
@@ -265,83 +251,14 @@ async function onDeletePage() {
   }
 }
 
-const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
-turndown.use(strikethrough)
-turndown.use(taskListItems)
-
-function cellText(cell: HTMLElement): string {
-  const p = cell.querySelector('p')
-  return (p ? p.textContent : cell.textContent)?.trim() ?? ''
-}
-
-turndown.addRule('tiptapTable', {
-  filter: 'table',
-  replacement(_content: string, node: TurndownService.Node) {
-    const el = node as unknown as HTMLTableElement
-    const rows = Array.from(el.querySelectorAll('tr'))
-    if (!rows.length) return ''
-
-    const matrix: string[][] = rows.map((row) =>
-      Array.from(row.querySelectorAll('th, td')).map((c) => cellText(c as HTMLElement)),
-    )
-
-    const colCount = Math.max(...matrix.map((r) => r.length))
-    const colWidths = Array.from({ length: colCount }, (_, ci) =>
-      Math.max(3, ...matrix.map((r) => (r[ci] ?? '').length)),
-    )
-
-    const pad = (s: string, w: number) => s + ' '.repeat(Math.max(0, w - s.length))
-    const formatRow = (cells: string[]) =>
-      '| ' + Array.from({ length: colCount }, (_, i) => pad(cells[i] ?? '', colWidths[i] ?? 0)).join(' | ') + ' |'
-
-    const headerRow = rows[0]?.querySelector('th') ? 0 : -1
-    const lines: string[] = []
-
-    if (headerRow === 0) {
-      lines.push(formatRow(matrix[0] ?? []))
-      lines.push('| ' + colWidths.map((w) => '-'.repeat(w)).join(' | ') + ' |')
-      for (let i = 1; i < matrix.length; i++) lines.push(formatRow(matrix[i] ?? []))
-    } else {
-      const emptyHeader = Array.from({ length: colCount }, () => '')
-      lines.push(formatRow(emptyHeader))
-      lines.push('| ' + colWidths.map((w) => '-'.repeat(w)).join(' | ') + ' |')
-      for (const row of matrix) lines.push(formatRow(row))
-    }
-
-    return '\n\n' + lines.join('\n') + '\n\n'
-  },
-})
-
-turndown.remove('colgroup')
-
 function startEditing() {
   if (!activePage.value) return
-  const html = activePage.value.content_html || ''
-  const md = activePage.value.content_markdown || ''
-  editorContent.value = html || (md ? marked.parse(md, { async: false }) as string : '')
-  markdownDraft.value = md || (html ? turndown.turndown(html) : '')
+  markdownDraft.value = activePage.value.content_markdown || ''
   isEditing.value = true
-  editorMode.value = 'wysiwyg'
 }
 
 function cancelEditing() {
   isEditing.value = false
-}
-
-function switchToWysiwyg() {
-  if (editorMode.value === 'wysiwyg') return
-  if (markdownDraft.value.trim()) {
-    editorContent.value = marked.parse(markdownDraft.value, { async: false }) as string
-  }
-  editorMode.value = 'wysiwyg'
-}
-
-function switchToMarkdown() {
-  if (editorMode.value === 'markdown') return
-  if (editorContent.value.trim()) {
-    markdownDraft.value = turndown.turndown(editorContent.value)
-  }
-  editorMode.value = 'markdown'
 }
 
 async function onVersionRestored() {
@@ -354,15 +271,9 @@ async function saveContent() {
   if (!activePage.value) return
   savingContent.value = true
   try {
-    const body: Record<string, string> = {}
-    if (editorMode.value === 'wysiwyg') {
-      body.content_html = editorContent.value
-      body.content_markdown = turndown.turndown(editorContent.value)
-    } else {
-      body.content_markdown = markdownDraft.value
-      body.content_html = marked.parse(markdownDraft.value, { async: false }) as string
-    }
-    activePage.value = await updatePage(activePage.value.id, body)
+    activePage.value = await updatePage(activePage.value.id, {
+      content_markdown: sanitizeMarkdownInput(markdownDraft.value),
+    })
     isEditing.value = false
   } finally {
     savingContent.value = false
@@ -490,49 +401,25 @@ onMounted(loadSpace)
 
       <div v-if="isEditing" class="editor-area">
         <div class="editor-toolbar-row flex align-items-center gap-2 mb-2">
-          <div class="flex gap-1">
-            <Button
-              :label="'WYSIWYG'"
-              size="small"
-              :severity="editorMode === 'wysiwyg' ? 'primary' : 'secondary'"
-              :text="editorMode !== 'wysiwyg'"
-              @click="switchToWysiwyg"
-            />
-            <Button
-              label="Markdown"
-              size="small"
-              :severity="editorMode === 'markdown' ? 'primary' : 'secondary'"
-              :text="editorMode !== 'markdown'"
-              @click="switchToMarkdown"
-            />
-          </div>
+          <span class="text-sm text-color-secondary">{{ $t('kb.markdownEditor') }}</span>
           <div class="flex-1" />
           <Button :label="$t('kb.cancel')" severity="secondary" size="small" text @click="cancelEditing" />
           <Button :label="$t('kb.save')" icon="pi pi-check" size="small" :loading="savingContent" @click="saveContent" />
         </div>
 
-        <RichTextEditor
-          v-if="editorMode === 'wysiwyg'"
-          v-model="editorContent"
-          placeholder="Start writing..."
-        />
-        <Textarea
-          v-else
-          v-model="markdownDraft"
-          class="w-full markdown-editor"
-          :rows="20"
-          autoResize
-        />
+        <MarkdownEditor v-model="markdownDraft" :rows="20" placeholder="Start writing..." />
       </div>
 
-      <template v-else>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div
-          class="prose cursor-pointer"
-          v-html="renderedHtml || `<p class='text-color-secondary'>Click the edit button to start writing...</p>`"
-          @dblclick="startEditing"
+      <div
+        v-else
+        class="cursor-pointer"
+        @dblclick="startEditing"
+      >
+        <RichContent
+          :content="activePage.content_markdown"
+          empty-text="Click the edit button to start writing..."
         />
-      </template>
+      </div>
 
       <div class="page-meta mt-6 mb-6 text-xs text-color-secondary">
         Updated {{ formatDate(activePage.updated_at) }}
@@ -781,75 +668,6 @@ onMounted(loadSpace)
   font-size: 3rem;
   display: block;
   margin-bottom: 1rem;
-}
-
-/* ── Prose ── */
-.prose {
-  line-height: 1.7;
-}
-
-.prose :deep(h1),
-.prose :deep(h2),
-.prose :deep(h3) {
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-}
-
-.prose :deep(p) {
-  margin-bottom: 1em;
-}
-
-.prose :deep(ul),
-.prose :deep(ol) {
-  padding-left: 1.5em;
-  margin-bottom: 1em;
-}
-
-.prose :deep(pre) {
-  background: var(--app-card-alt-bg);
-  padding: 1rem;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin-bottom: 1em;
-}
-
-.prose :deep(code) {
-  font-size: 0.875em;
-}
-
-.prose :deep(blockquote) {
-  border-left: 3px solid var(--p-primary-200, #c7d2fe);
-  padding-left: 1rem;
-  color: var(--p-text-muted-color, #64748b);
-  margin: 1em 0;
-}
-
-.prose :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 1em 0;
-  overflow-x: auto;
-  display: block;
-}
-
-.prose :deep(table th),
-.prose :deep(table td) {
-  border: 1px solid var(--p-content-border-color, #dee2e6);
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.prose :deep(table th) {
-  background: var(--app-card-alt-bg);
-  font-weight: 600;
-}
-
-.prose :deep(table tr:nth-child(even)) {
-  background: var(--p-content-background);
-}
-
-.prose :deep(table tr:hover) {
-  background: var(--app-card-alt-bg);
 }
 
 .markdown-editor {

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.comment import Comment
 from app.models.user import User
+from app.utils.markdown_sanitize import sanitize_markdown
 
 
 async def create_comment(
@@ -20,7 +21,7 @@ async def create_comment(
     comment = Comment(
         ticket_id=ticket_id,
         author_id=author_id,
-        body=body,
+        body=sanitize_markdown(body) or "",
     )
     db.add(comment)
     await db.flush()
@@ -91,7 +92,7 @@ async def update_comment(
     if comment is None:
         return None
 
-    comment.body = body
+    comment.body = sanitize_markdown(body) or ""
     comment.is_edited = True
     await db.flush()
     await db.refresh(comment)

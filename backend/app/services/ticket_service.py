@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.project import Project
 from app.models.ticket import Ticket
+from app.utils.markdown_sanitize import sanitize_markdown
 from app.models.workflow import Workflow, WorkflowStatus, WorkflowTransition
 
 
@@ -65,7 +66,7 @@ async def create_ticket(
         project_id=project_id,
         ticket_number=ticket_number,
         title=title,
-        description=description,
+        description=sanitize_markdown(description) if description is not None else None,
         ticket_type=ticket_type,
         priority=priority,
         workflow_status_id=initial_status.id,
@@ -153,7 +154,11 @@ async def update_ticket(
         return None
 
     for key, value in kwargs.items():
-        if value is not None and hasattr(ticket, key):
+        if not hasattr(ticket, key):
+            continue
+        if key == "description" and isinstance(value, str):
+            value = sanitize_markdown(value)
+        if value is not None:
             setattr(ticket, key, value)
     await db.flush()
     await db.refresh(ticket)

@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import RichContent from '@/components/common/RichContent.vue'
 import {
   listVersions,
   getVersion,
@@ -147,7 +148,7 @@ watch(() => props.pageId, load)
       modal
       :style="{ width: '50rem' }"
     >
-      <div v-if="viewingVersionFull" class="prose" v-html="viewingVersionFull.content_html" />
+      <RichContent v-if="viewingVersionFull" :content="viewingVersionFull.content_markdown" />
     </Dialog>
 
     <!-- Diff Dialog -->

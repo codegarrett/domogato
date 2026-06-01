@@ -10,6 +10,7 @@ from app.models.kb_space import KBSpace
 from app.models.kb_page import KBPage
 from app.models.kb_page_version import KBPageVersion
 from app.schemas.kb import SpaceCreate, SpaceUpdate, PageCreate, PageUpdate, PageMoveRequest
+from app.utils.markdown_sanitize import sanitize_markdown
 
 
 # ---------------------------------------------------------------------------
@@ -162,8 +163,8 @@ async def create_page(
         parent_page_id=data.parent_page_id,
         title=data.title,
         slug=slug,
-        content_markdown=data.content_markdown,
-        content_html=data.content_html,
+        content_markdown=sanitize_markdown(data.content_markdown) or "",
+        content_html="",
         position=max_pos + 1,
         is_published=data.is_published,
         created_by=user_id,
@@ -216,6 +217,10 @@ async def update_page(
 ) -> KBPage:
     update_data = data.model_dump(exclude_unset=True)
     change_summary = update_data.pop("change_summary", None)
+    update_data.pop("content_html", None)
+    if "content_markdown" in update_data:
+        update_data["content_markdown"] = sanitize_markdown(update_data["content_markdown"]) or ""
+        update_data["content_html"] = ""
 
     for key, value in update_data.items():
         setattr(page, key, value)

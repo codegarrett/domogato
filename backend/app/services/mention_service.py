@@ -14,9 +14,9 @@ MENTION_PATTERN = re.compile(r'@([\w.+\-]+@[\w\-]+\.[\w.\-]+)', re.UNICODE)
 MENTION_DISPLAY_PATTERN = re.compile(r'@([\w\s]+?)(?=[\s<,;.!?]|$)', re.UNICODE)
 
 
-def extract_mentions(html_body: str) -> set[str]:
-    """Extract email addresses from @email mentions in HTML body."""
-    text = re.sub(r'<[^>]+>', ' ', html_body)
+def extract_mentions(body: str) -> set[str]:
+    """Extract email addresses from @email mentions in comment/description body."""
+    text = re.sub(r"<[^>]+>", " ", body)
     emails = set()
     for match in MENTION_PATTERN.finditer(text):
         emails.add(match.group(1).lower())
@@ -38,14 +38,14 @@ async def resolve_mentioned_users(
 async def process_mentions(
     db: AsyncSession,
     *,
-    html_body: str,
+    body: str,
     ticket_id: UUID,
     ticket_title: str,
     author_id: UUID,
     author_name: str,
 ) -> list[UUID]:
     """Parse @mentions from body and create notifications. Returns list of notified user IDs."""
-    emails = extract_mentions(html_body)
+    emails = extract_mentions(body)
     if not emails:
         return []
 

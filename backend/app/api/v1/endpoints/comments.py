@@ -69,7 +69,7 @@ async def create_comment(
     if ticket and body.body:
         await mention_service.process_mentions(
             db,
-            html_body=body.body,
+            body=body.body,
             ticket_id=ticket_id,
             ticket_title=ticket.title,
             author_id=user.id,

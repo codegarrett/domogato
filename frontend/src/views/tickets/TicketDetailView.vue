@@ -77,10 +77,16 @@
             @focusout="onDescriptionFocusOut"
             @click="onDescriptionSectionClick"
           >
-            <RichTextEditor
+            <MarkdownEditor
+              v-if="descEditing"
               v-model="descDraft"
-              :readonly="!descEditing"
               :placeholder="$t('tickets.descriptionPlaceholder')"
+            />
+            <RichContent
+              v-else
+              :content="ticket.description ?? ''"
+              :empty-text="$t('tickets.descriptionPlaceholder')"
+              compact
             />
           </div>
         </div>
@@ -109,14 +115,14 @@
                         <Tag v-if="c.is_edited" :value="$t('tickets.edited')" severity="secondary" class="text-xs" />
                       </div>
                       <template v-if="editingCommentId === c.id">
-                        <RichTextEditor v-model="commentEditDraft" class="mb-2" :placeholder="$t('tickets.commentPlaceholder')" />
+                        <MarkdownEditor v-model="commentEditDraft" class="mb-2" :placeholder="$t('tickets.commentPlaceholder')" />
                         <div class="flex gap-2">
                           <Button :label="$t('common.save')" size="small" :loading="commentSaving" @click="saveCommentEdit(c.id)" />
                           <Button :label="$t('common.cancel')" size="small" severity="secondary" outlined @click="cancelCommentEdit" />
                         </div>
                       </template>
                       <template v-else>
-                        <div class="comment-body text-sm" v-html="c.body" />
+                        <RichContent :content="c.body" compact />
                         <div v-if="canEditComment(c)" class="flex gap-2 mt-2">
                           <Button :label="$t('common.edit')" size="small" text icon="pi pi-pencil" @click="startCommentEdit(c)" />
                           <Button :label="$t('common.delete')" size="small" text severity="danger" icon="pi pi-trash" @click="removeComment(c.id)" />
@@ -128,7 +134,7 @@
 
                 <div class="border-top-1 surface-border pt-4 mt-2">
                   <label class="block text-sm font-semibold text-color-secondary mb-2">{{ $t('tickets.addComment') }}</label>
-                  <RichTextEditor v-model="newCommentBody" :placeholder="$t('tickets.commentPlaceholder')" class="mb-3" />
+                  <MarkdownEditor v-model="newCommentBody" :placeholder="$t('tickets.commentPlaceholder')" class="mb-3" />
                   <Button :label="$t('common.comment')" icon="pi pi-send" :loading="commentPosting" :disabled="isCommentEmpty(newCommentBody)" @click="submitComment" />
                 </div>
               </div>
@@ -694,8 +700,10 @@ import Textarea from 'primevue/textarea'
 import TabView from 'primevue/tabview'
 import TabPanel from 'primevue/tabpanel'
 import Avatar from 'primevue/avatar'
-import RichTextEditor from '@/components/editor/RichTextEditor.vue'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import RichContent from '@/components/common/RichContent.vue'
 import ImageAttachmentGallery from '@/components/common/ImageAttachmentGallery.vue'
+import { sanitizeMarkdownInput } from '@/utils/richContent'
 import {
   getTicket,
   updateTicket,
@@ -998,9 +1006,8 @@ function canEditComment(c: Comment): boolean {
   return c.author_id === currentUser.value.id
 }
 
-function isCommentEmpty(html: string): boolean {
-  const txt = html.replace(/<[^>]+>/g, '').replace(/\s|&nbsp;/g, '')
-  return txt.length === 0
+function isCommentEmpty(text: string): boolean {
+  return !sanitizeMarkdownInput(text).trim()
 }
 
 function chipStyle(lbl: Label) {
@@ -1348,7 +1355,7 @@ async function saveDescriptionExplicit() {
   if (!ticket.value || !descEditing.value) return
   savingDescription.value = true
   try {
-    await patchTicket({ description: descDraft.value || null })
+    await patchTicket({ description: sanitizeMarkdownInput(descDraft.value) || null })
     descEditing.value = false
   } catch (e) {
     console.error(e)
@@ -1382,7 +1389,7 @@ async function saveDescriptionFromBlur() {
   }
   savingDescription.value = true
   try {
-    await patchTicket({ description: descDraft.value || null })
+    await patchTicket({ description: sanitizeMarkdownInput(descDraft.value) || null })
     descEditing.value = false
   } catch (e) {
     console.error(e)
@@ -1536,7 +1543,7 @@ async function submitComment() {
   if (!ticket.value || isCommentEmpty(newCommentBody.value)) return
   commentPosting.value = true
   try {
-    const created = await createComment(ticket.value.id, newCommentBody.value)
+    const created = await createComment(ticket.value.id, sanitizeMarkdownInput(newCommentBody.value))
     comments.value = [...comments.value, created]
     newCommentBody.value = ''
     void refreshActivity()
@@ -1560,7 +1567,7 @@ function cancelCommentEdit() {
 async function saveCommentEdit(id: string) {
   commentSaving.value = true
   try {
-    const updated = await updateComment(id, commentEditDraft.value)
+    const updated = await updateComment(id, sanitizeMarkdownInput(commentEditDraft.value))
     comments.value = comments.value.map(c => (c.id === id ? updated : c))
     cancelCommentEdit()
   } catch (e) {
@@ -1716,62 +1723,9 @@ onUnmounted(() => {
   border-radius: var(--p-border-radius-md, 6px);
 }
 
-.comment-body :deep(p) {
-  margin: 0 0 0.5rem;
-}
-
-.comment-body :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
-.comment-body :deep(pre) {
-  background: var(--p-surface-100, #f1f5f9);
-  color: var(--p-text-color, #334155);
-  padding: 12px 16px;
-  border-radius: 6px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 0.85rem;
-  overflow-x: auto;
-  border: 1px solid var(--p-content-border-color, #e2e8f0);
-  margin: 0.5rem 0;
-}
-
-.comment-body :deep(pre code) {
-  background: none;
-  padding: 0;
-  border-radius: 0;
-  font-size: inherit;
-  color: inherit;
-}
-
-.comment-body :deep(code) {
-  background: var(--p-surface-100, #f1f5f9);
-  padding: 2px 5px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  color: var(--p-text-color, #334155);
-}
-
-.comment-body :deep(blockquote) {
-  border-left: 3px solid var(--p-primary-200, #bfdbfe);
-  padding-left: 1rem;
-  color: var(--p-text-muted-color, #64748b);
-  margin: 0.5em 0;
-}
-
-.comment-body :deep(ul),
-.comment-body :deep(ol) {
-  padding-left: 1.5rem;
-}
-
-.comment-body :deep(h2) {
-  font-size: 1.15rem;
-  margin: 0.5em 0 0.25em;
-}
-
-.comment-body :deep(h3) {
-  font-size: 1rem;
-  margin: 0.5em 0 0.25em;
+.description-section .prose,
+.description-section .rich-content-empty {
+  min-height: 2.5rem;
 }
 
 .label-chip {

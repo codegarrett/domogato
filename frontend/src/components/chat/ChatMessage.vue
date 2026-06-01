@@ -12,7 +12,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/richContent'
 
 const props = defineProps<{
   role: 'user' | 'assistant' | 'system'
@@ -20,13 +20,7 @@ const props = defineProps<{
   createdAt?: string
 }>()
 
-const renderedContent = computed(() => {
-  try {
-    return marked.parse(props.content, { async: false }) as string
-  } catch {
-    return props.content
-  }
-})
+const renderedContent = computed(() => renderMarkdown(props.content))
 
 const formattedTime = computed(() => {
   if (!props.createdAt) return ''

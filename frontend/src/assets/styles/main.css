@@ -1,3 +1,5 @@
+@import './prose.css';
+
 :root {
   --app-sidebar-width: 250px;
   --app-header-height: 52px;

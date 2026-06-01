@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { type KBComment } from '@/api/kb'
+import RichContent from '@/components/common/RichContent.vue'
 import Avatar from 'primevue/avatar'
 import { assetUrl } from '@/utils/assetUrl'
 
@@ -49,15 +50,10 @@ function formatDate(dateStr: string) {
       <span class="text-xs text-color-secondary">{{ formatDate(comment.created_at) }}</span>
     </div>
 
-    <!-- eslint-disable-next-line vue/no-v-html -->
-    <div
-      class="comment-body text-sm mb-1"
-      v-html="
-        comment.is_deleted
-          ? '<em class=\'text-color-secondary\'>Comment deleted</em>'
-          : comment.body
-      "
-    />
+    <p v-if="comment.is_deleted" class="text-sm text-color-secondary mb-1">
+      <em>Comment deleted</em>
+    </p>
+    <RichContent v-else :content="comment.body" compact class="mb-1" />
 
     <div v-if="!comment.is_deleted" class="comment-actions flex gap-2 mb-3">
       <button class="p-link text-xs text-color-secondary" @click="emit('reply', comment.id)">

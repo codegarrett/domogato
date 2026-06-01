@@ -13,6 +13,7 @@ from app.core.permissions import (
     resolve_effective_project_role,
 )
 from app.models.kb_comment import KBPageComment
+from app.utils.markdown_sanitize import sanitize_markdown
 from app.models.kb_page import KBPage
 from app.models.project import Project
 from app.models.user import User
@@ -152,7 +153,7 @@ async def create_comment(
         page_id=page_id,
         parent_comment_id=body.parent_comment_id,
         author_id=user.id,
-        body=body.body,
+        body=sanitize_markdown(body.body) or "",
     )
     db.add(comment)
     await db.flush()
@@ -200,7 +201,7 @@ async def update_comment(
             detail="Only the author can edit this comment",
         )
 
-    comment.body = body.body
+    comment.body = sanitize_markdown(body.body) or ""
     await db.flush()
     await db.refresh(comment)
 
