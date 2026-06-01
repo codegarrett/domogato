@@ -217,7 +217,9 @@
                   </div>
                 </div>
                 <div v-if="attachments.length === 0" class="text-color-secondary text-sm">{{ $t('attachments.noFiles') }}</div>
-                <div v-else class="flex flex-column gap-2">
+                <template v-else>
+                  <ImageAttachmentGallery class="mb-3" :attachments="attachments" />
+                  <div class="flex flex-column gap-2">
                   <div
                     v-for="att in attachments"
                     :key="att.id"
@@ -243,7 +245,8 @@
                       @click="removeAttachment(att.id)"
                     />
                   </div>
-                </div>
+                  </div>
+                </template>
               </div>
             </TabPanel>
           </TabView>
@@ -692,6 +695,7 @@ import TabView from 'primevue/tabview'
 import TabPanel from 'primevue/tabpanel'
 import Avatar from 'primevue/avatar'
 import RichTextEditor from '@/components/editor/RichTextEditor.vue'
+import ImageAttachmentGallery from '@/components/common/ImageAttachmentGallery.vue'
 import {
   getTicket,
   updateTicket,

@@ -444,6 +444,8 @@
     "count": "{n} file(s)",
     "uploading": "Uploading…",
     "downloadError": "Could not download file.",
+    "download": "Download",
+    "previewImage": "Preview {name}",
     "deleteConfirm": "Delete this attachment?",
     "fileTooLarge": "File exceeds maximum size of 100 MB.",
     "typeNotAllowed": "This file type is not allowed."

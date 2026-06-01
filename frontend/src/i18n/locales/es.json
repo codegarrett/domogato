@@ -444,6 +444,8 @@
     "count": "{n} archivo(s)",
     "uploading": "Subiendo…",
     "downloadError": "No se pudo descargar el archivo.",
+    "download": "Descargar",
+    "previewImage": "Vista previa de {name}",
     "deleteConfirm": "¿Eliminar este archivo adjunto?",
     "fileTooLarge": "El archivo excede el tamaño máximo de 100 MB.",
     "typeNotAllowed": "Este tipo de archivo no está permitido."
