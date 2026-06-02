@@ -118,6 +118,15 @@ function statusOptionsFor(ticket: Ticket) {
   return statusTransitionOptions(ticket)
 }
 
+/** Subtasks are managed on the parent ticket detail view, not in planning. */
+function isPlanningTicket(tk: Ticket): boolean {
+  return !tk.parent_ticket_id && tk.ticket_type !== 'subtask'
+}
+
+function filterPlanningTickets(tickets: Ticket[]): Ticket[] {
+  return tickets.filter(isPlanningTicket)
+}
+
 async function loadData() {
   loading.value = true
   try {
@@ -126,15 +135,15 @@ async function loadData() {
       listSprints(projectId, { limit: 100 }),
       loadMeta(),
     ])
-    backlogTickets.value = backlogRes.items
-    backlogTotal.value = backlogRes.total
+    backlogTickets.value = filterPlanningTickets(backlogRes.items)
+    backlogTotal.value = backlogTickets.value.length
     sprints.value = sprintRes.items
 
     const ticketMap: Record<string, Ticket[]> = {}
     await Promise.all(
       activeSprints.value.map(async (s) => {
         const res = await getSprintTickets(s.id, { limit: 200 })
-        ticketMap[s.id] = res.items
+        ticketMap[s.id] = filterPlanningTickets(res.items)
       }),
     )
     sprintTickets.value = ticketMap

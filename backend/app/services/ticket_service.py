@@ -205,7 +205,10 @@ async def list_tickets(
     elif has_parent is True:
         query = query.where(Ticket.parent_ticket_id.isnot(None))
     elif has_parent is False:
-        query = query.where(Ticket.parent_ticket_id.is_(None))
+        query = query.where(
+            Ticket.parent_ticket_id.is_(None),
+            Ticket.ticket_type != "subtask",
+        )
 
     if search:
         term = search.strip()

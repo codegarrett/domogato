@@ -61,9 +61,9 @@ const statusEditValue = computed({
       <i class="pi pi-bars text-color-secondary drag-handle" />
     </div>
 
-    <div class="grid-cell grid-cell--start grid-cell--clip">
+    <div class="grid-cell grid-cell--start grid-cell--key">
       <router-link :to="`/tickets/${ticket.id}`" class="ticket-key-link" @click.stop>
-        <Tag :value="ticket.ticket_key || `#${ticket.ticket_number}`" severity="info" class="text-xs" />
+        {{ ticket.ticket_key ?? `#${ticket.ticket_number}` }}
       </router-link>
     </div>
 
@@ -192,15 +192,10 @@ const statusEditValue = computed({
   opacity: 1;
 }
 
-.ticket-key-link,
 .ticket-title-link {
   text-decoration: none;
-  color: inherit;
   min-width: 0;
   max-width: 100%;
-}
-
-.ticket-title-link {
   display: block;
   font-weight: 500;
   color: var(--p-primary-color, #6366f1);

@@ -279,6 +279,7 @@ async def test_list_tickets_has_parent_filter(admin_client: AsyncClient, db_sess
     assert roots_resp.status_code == 200
     roots = roots_resp.json()["items"]
     assert all(t["parent_ticket_id"] is None for t in roots)
+    assert all(t["ticket_type"] != "subtask" for t in roots)
     assert any(t["id"] == parent["id"] for t in roots)
     assert not any(t["title"] == "Child" for t in roots)
 
@@ -327,6 +328,15 @@ async def test_backlog_excludes_subtasks(admin_client: AsyncClient, db_session: 
     items = resp.json()["items"]
     assert len(items) == 1
     assert items[0]["id"] == parent["id"]
+
+    orphan_resp = await admin_client.post(
+        f"{PROJECT_API}/{project['id']}/tickets",
+        json={"title": "Orphan", "ticket_type": "subtask"},
+    )
+    assert orphan_resp.status_code == 400
+
+    resp2 = await admin_client.get(f"{PROJECT_API}/{project['id']}/backlog")
+    assert all(t["ticket_type"] != "subtask" for t in resp2.json()["items"])
 
 
 @pytest.mark.asyncio

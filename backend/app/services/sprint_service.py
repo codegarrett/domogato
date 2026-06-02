@@ -234,6 +234,7 @@ async def get_backlog(
             Ticket.project_id == project_id,
             Ticket.sprint_id.is_(None),
             Ticket.parent_ticket_id.is_(None),
+            Ticket.ticket_type != "subtask",
             Ticket.is_deleted == False,  # noqa: E712
         )
     )
@@ -353,6 +354,7 @@ async def get_sprint_tickets(
         .where(
             Ticket.sprint_id == sprint_id,
             Ticket.parent_ticket_id.is_(None),
+            Ticket.ticket_type != "subtask",
             Ticket.is_deleted == False,  # noqa: E712
         )
     )

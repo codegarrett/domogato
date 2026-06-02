@@ -706,6 +706,10 @@ async function loadEpics() {
   }
 }
 
+function isTopLevelTicket(tk: Ticket): boolean {
+  return !tk.parent_ticket_id && tk.ticket_type !== 'subtask'
+}
+
 async function loadTickets() {
   loadingTickets.value = true
   try {
@@ -715,9 +719,11 @@ async function loadTickets() {
       ...(appliedSearch.value.trim() ? { search: appliedSearch.value.trim() } : {}),
       ...(filterTicketType.value ? { ticket_type: filterTicketType.value } : {}),
       ...(filterPriority.value ? { priority: filterPriority.value } : {}),
-      ...(!includeSubtasks.value ? { has_parent: false } : {}),
+      ...(includeSubtasks.value ? {} : { has_parent: false }),
     })
-    tickets.value = res.items
+    tickets.value = includeSubtasks.value
+      ? res.items
+      : res.items.filter(isTopLevelTicket)
     total.value = res.total
   } catch {
     tickets.value = []

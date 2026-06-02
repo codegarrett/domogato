@@ -4,7 +4,7 @@
   grid-template-columns:
     1.75rem
     1.25rem
-    5.5rem
+    8rem
     minmax(10rem, 1fr)
     5.5rem
     5.5rem
@@ -39,6 +39,24 @@
 
 .backlog-ticket-grid .grid-cell--start {
   justify-content: flex-start;
+}
+
+.backlog-ticket-grid .grid-cell--key {
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+.backlog-ticket-grid .grid-cell--key .ticket-key-link {
+  font-family: var(--p-font-family-mono, ui-monospace, monospace);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--p-primary-color, #6366f1);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.backlog-ticket-grid .grid-cell--key .ticket-key-link:hover {
+  text-decoration: underline;
 }
 
 .backlog-ticket-grid .grid-cell--title {

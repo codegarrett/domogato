@@ -83,7 +83,18 @@ export interface TicketHierarchy {
 }
 
 export async function listTickets(projectId: string, params: TicketListParams = {}) {
-  const { data } = await apiClient.get<PaginatedResponse<Ticket>>(`/projects/${projectId}/tickets`, { params })
+  const query: Record<string, string | number | boolean> = { ...params }
+  if (params.has_parent === false) {
+    query.has_parent = false
+  } else if (params.has_parent === true) {
+    query.has_parent = true
+  } else {
+    delete query.has_parent
+  }
+  const { data } = await apiClient.get<PaginatedResponse<Ticket>>(
+    `/projects/${projectId}/tickets`,
+    { params: query },
+  )
   return data
 }
 
