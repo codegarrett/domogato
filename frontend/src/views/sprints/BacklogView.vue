@@ -20,7 +20,9 @@ import {
   reorderSprintTickets,
   type Sprint,
 } from '@/api/sprints'
-import { updateTicket, type Ticket } from '@/api/tickets'
+import { deleteTicket, updateTicket, type Ticket } from '@/api/tickets'
+import TicketBulkDeleteDialog from '@/components/tickets/TicketBulkDeleteDialog.vue'
+import { useProjectAdmin } from '@/composables/useProjectAdmin'
 import {
   DEFAULT_TICKET_SORT_COLUMN,
   DEFAULT_TICKET_SORT_DIRECTION,
@@ -29,12 +31,23 @@ import {
   type TicketSortColumn,
   type SortDirection,
 } from '@/utils/ticketTableSort'
+import {
+  appendGroupToTargetList,
+  applyIntraListGroupMove,
+  dragGroupIds,
+} from '@/utils/planningMultiDrag'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const toast = useToastService()
 const projectId = route.params.projectId as string
+
+const organizationId = computed(() => project.value?.organization_id)
+const { canAdministerProject } = useProjectAdmin(() => projectId, () => organizationId.value)
+
+const deleteDialogVisible = ref(false)
+const deletingTickets = ref(false)
 
 const {
   project,
@@ -224,28 +237,57 @@ async function onBacklogDragEnd() {
   }
 }
 
-async function onSprintDragChange(sprintId: string, evt: any) {
+async function onSprintDragChange(sprintId: string, evt: { added?: { element: Ticket; newIndex: number }; moved?: { element: Ticket; newIndex: number } }) {
+  const targetList = sprintTickets.value[sprintId]
+  if (!targetList) return
+  if (!evt.added && !evt.moved) return
+
   if (evt.added) {
     const ticket = evt.added.element as Ticket
+    const ids = consumeDragGroup(ticket.id)
+    appendGroupToTargetList(targetList, ticket.id, ids, (id) => pullTicketIntoTarget(id, targetList))
     try {
-      await updateTicket(ticket.id, { sprint_id: sprintId })
-      ticket.sprint_id = sprintId
-    } catch (e) { console.error(e) }
-    await onSprintDragEnd(sprintId)
+      for (const id of ids) {
+        await updateTicket(id, { sprint_id: sprintId })
+        const t = findTicketList(id)?.find((tk) => tk.id === id)
+        if (t) t.sprint_id = sprintId
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    await syncAllPlanningOrders()
   } else if (evt.moved) {
+    const ticket = evt.moved.element as Ticket
+    const ids = consumeDragGroup(ticket.id)
+    applyIntraListGroupMove(targetList, evt.moved.newIndex, ids)
     await onSprintDragEnd(sprintId)
   }
 }
 
-async function onBacklogDragChange(evt: any) {
+async function onBacklogDragChange(evt: { added?: { element: Ticket; newIndex: number }; moved?: { element: Ticket; newIndex: number } }) {
+  if (!evt.added && !evt.moved) return
+
   if (evt.added) {
     const ticket = evt.added.element as Ticket
+    const ids = consumeDragGroup(ticket.id)
+    appendGroupToTargetList(backlogTickets.value, ticket.id, ids, (id) =>
+      pullTicketIntoTarget(id, backlogTickets.value),
+    )
     try {
-      await updateTicket(ticket.id, { sprint_id: null })
-      ticket.sprint_id = null
-    } catch (e) { console.error(e) }
-    await onBacklogDragEnd()
+      for (const id of ids) {
+        await updateTicket(id, { sprint_id: null })
+        const list = findTicketList(id)
+        const t = list?.find((tk) => tk.id === id)
+        if (t) t.sprint_id = null
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    await syncAllPlanningOrders()
   } else if (evt.moved) {
+    const ticket = evt.moved.element as Ticket
+    const ids = consumeDragGroup(ticket.id)
+    applyIntraListGroupMove(backlogTickets.value, evt.moved.newIndex, ids)
     await onBacklogDragEnd()
   }
 }
@@ -271,10 +313,92 @@ async function onMove() {
   }
 }
 
+async function submitBulkDelete() {
+  if (selectedTickets.value.length === 0) return
+  deletingTickets.value = true
+  const ids = selectedTickets.value.map((tk) => tk.id)
+  try {
+    const results = await Promise.allSettled(ids.map((id) => deleteTicket(id)))
+    const failed = results.filter((r) => r.status === 'rejected').length
+    const ok = ids.length - failed
+    if (failed === 0) {
+      toast.showSuccess(t('common.success'), t('tickets.deletedSuccess', { count: ok }))
+    } else {
+      toast.showError(t('common.error'), t('tickets.deleteFailed'))
+    }
+    deleteDialogVisible.value = false
+    selectedTickets.value = []
+    await loadData()
+  } catch {
+    toast.showError(t('common.error'), t('tickets.deleteFailed'))
+  } finally {
+    deletingTickets.value = false
+  }
+}
+
 function toggleSelect(ticket: Ticket) {
   const idx = selectedTickets.value.findIndex(tk => tk.id === ticket.id)
   if (idx >= 0) selectedTickets.value.splice(idx, 1)
   else selectedTickets.value.push(ticket)
+}
+
+function toggleSelectAllInTable(tableTickets: Ticket[]) {
+  if (tableTickets.length === 0) return
+  const allInTable = tableTickets.every((tk) => selectedTicketIds.value.has(tk.id))
+  if (allInTable) {
+    const tableIds = new Set(tableTickets.map((t) => t.id))
+    selectedTickets.value = selectedTickets.value.filter((t) => !tableIds.has(t.id))
+  } else {
+    const seen = new Set(selectedTickets.value.map((t) => t.id))
+    for (const tk of tableTickets) {
+      if (!seen.has(tk.id)) {
+        selectedTickets.value.push(tk)
+        seen.add(tk.id)
+      }
+    }
+  }
+}
+
+let pendingDragGroupIds: string[] | null = null
+let dragChangeHandled = false
+
+function onPlanningDragStart(ticket: Ticket, list: Ticket[]) {
+  pendingDragGroupIds = dragGroupIds(ticket.id, list, selectedTicketIds.value)
+}
+
+function consumeDragGroup(fallbackId: string): string[] {
+  dragChangeHandled = true
+  const ids = pendingDragGroupIds ?? [fallbackId]
+  pendingDragGroupIds = null
+  return ids
+}
+
+function onPlanningDragEnd() {
+  if (!dragChangeHandled) pendingDragGroupIds = null
+  dragChangeHandled = false
+}
+
+function pullTicketIntoTarget(id: string, targetList: Ticket[]): Ticket | undefined {
+  const inTarget = targetList.find((t) => t.id === id)
+  if (inTarget) return inTarget
+
+  const backlogIdx = backlogTickets.value.findIndex((t) => t.id === id)
+  if (backlogIdx >= 0) return backlogTickets.value.splice(backlogIdx, 1)[0]
+
+  for (const sid of Object.keys(sprintTickets.value)) {
+    const list = sprintTickets.value[sid]
+    if (!list || list === targetList) continue
+    const idx = list.findIndex((t) => t.id === id)
+    if (idx >= 0) return list.splice(idx, 1)[0]
+  }
+  return undefined
+}
+
+async function syncAllPlanningOrders() {
+  await onBacklogDragEnd()
+  for (const s of activeSprints.value) {
+    await onSprintDragEnd(s.id)
+  }
 }
 
 function goToSprints() {
@@ -298,6 +422,15 @@ onMounted(loadData)
           size="small"
           :disabled="selectedTickets.length === 0"
           @click="openMoveDialog"
+        />
+        <Button
+          v-if="canAdministerProject && selectedTickets.length > 0"
+          :label="$t('tickets.deleteSelected', { n: selectedTickets.length })"
+          icon="pi pi-trash"
+          severity="danger"
+          outlined
+          size="small"
+          @click="deleteDialogVisible = true"
         />
         <Button :label="$t('sprints.title')" icon="pi pi-calendar" severity="secondary" size="small" @click="goToSprints" />
         <Button icon="pi pi-refresh" text rounded size="small" :loading="loading" @click="loadData" />
@@ -359,6 +492,9 @@ onMounted(loadData)
             :empty-text="$t('sprints.noSprintTickets')"
             @sort="onSortColumn"
             @toggle-select="toggleSelect"
+            @toggle-select-all="toggleSelectAllInTable(getSprintTicketList(sprint.id))"
+            @drag-start="(tk) => onPlanningDragStart(tk, getSprintTicketList(sprint.id))"
+            @drag-end="onPlanningDragEnd"
             @start-edit="(tk, field, value) => startEdit(tk, field, value)"
             @commit-edit="(tk) => commitEdit(tk)"
             @commit-status="(tk) => commitStatusEdit(tk)"
@@ -403,6 +539,9 @@ onMounted(loadData)
           :ticket-key-label="ticketKeyLabel"
           @sort="onSortColumn"
           @toggle-select="toggleSelect"
+          @toggle-select-all="toggleSelectAllInTable(backlogTickets)"
+          @drag-start="(tk) => onPlanningDragStart(tk, backlogTickets)"
+          @drag-end="onPlanningDragEnd"
           @start-edit="(tk, field, value) => startEdit(tk, field, value)"
           @commit-edit="(tk) => commitEdit(tk)"
           @commit-status="(tk) => commitStatusEdit(tk)"
@@ -416,6 +555,13 @@ onMounted(loadData)
         </div>
       </div>
     </template>
+
+    <TicketBulkDeleteDialog
+      v-model:visible="deleteDialogVisible"
+      :count="selectedTickets.length"
+      :loading="deletingTickets"
+      @confirm="submitBulkDelete"
+    />
 
     <!-- Move to Sprint dialog -->
     <Dialog v-model:visible="showMoveDialog" :header="$t('sprints.moveToSprintBtn')" modal :style="{ width: '28rem', maxWidth: '95vw' }">

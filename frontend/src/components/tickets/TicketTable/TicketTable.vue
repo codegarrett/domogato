@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import ProgressSpinner from 'primevue/progressspinner'
 import TicketTableHeader from './TicketTableHeader.vue'
 import TicketTableRow from './TicketTableRow.vue'
@@ -43,6 +44,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   sort: [column: TicketSortColumn]
   toggleSelect: [ticket: Ticket]
+  toggleSelectAll: []
   startEdit: [ticket: Ticket, field: string, value: string | number | null]
   commitEdit: [ticket: Ticket]
   commitStatus: [ticket: Ticket]
@@ -56,6 +58,8 @@ function isSelected(ticket: Ticket): boolean {
   if (props.selectedIds instanceof Set) return props.selectedIds.has(ticket.id)
   return props.selectedIds.includes(ticket.id)
 }
+
+const selectionEnabled = computed(() => props.selectedIds != null)
 </script>
 
 <template>
@@ -65,7 +69,10 @@ function isSelected(ticket: Ticket): boolean {
       :columns="columns"
       :sort-column="sortColumn"
       :sort-direction="sortDirection"
+      :tickets="selectionEnabled ? tickets : undefined"
+      :selected-ids="selectionEnabled ? selectedIds : undefined"
       @sort="emit('sort', $event)"
+      @toggle-select-all="emit('toggleSelectAll')"
     />
 
     <div v-if="loading && tickets.length === 0" class="ticket-table-loading">

@@ -191,6 +191,16 @@ export const useAuthStore = defineStore('auth', () => {
     return (hierarchy[membership.role] ?? 0) >= (hierarchy[minRole] ?? 0)
   }
 
+  /** Org admin/owner, project owner, or system admin — destructive project actions. */
+  function isProjectAdmin(projectId: string, organizationId: string): boolean {
+    if (currentUser.value?.is_system_admin) return true
+    if (hasOrgRole(organizationId, 'admin')) return true
+    const membership = currentUser.value?.project_memberships.find(
+      (m) => m.project_id === projectId,
+    )
+    return membership?.role === 'owner'
+  }
+
   return {
     isAuthenticated,
     isFullyAuthenticated,
@@ -216,5 +226,6 @@ export const useAuthStore = defineStore('auth', () => {
     doCallback,
     doLogout,
     hasOrgRole,
+    isProjectAdmin,
   }
 })

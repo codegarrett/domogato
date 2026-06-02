@@ -22,6 +22,15 @@
               @click="bulkDialogVisible = true"
             />
             <Button
+              v-if="canAdministerProject && selectedTickets.length > 0"
+              :label="$t('tickets.deleteSelected', { n: selectedTickets.length })"
+              icon="pi pi-trash"
+              severity="danger"
+              outlined
+              size="small"
+              @click="deleteDialogVisible = true"
+            />
+            <Button
               :label="$t('import.title')"
               icon="pi pi-upload"
               severity="secondary"
@@ -148,6 +157,7 @@
           :format-date="formatDate"
           @sort="onSortColumn"
           @toggle-select="toggleSelect"
+          @toggle-select-all="toggleSelectAllOnPage"
           @start-edit="(tk, field, value) => startEdit(tk, field, value)"
           @commit-edit="(tk) => commitEdit(tk)"
           @commit-status="(tk) => commitStatusEdit(tk)"
@@ -297,6 +307,13 @@
       </template>
     </Dialog>
 
+    <TicketBulkDeleteDialog
+      v-model:visible="deleteDialogVisible"
+      :count="selectedTickets.length"
+      :loading="deletingTickets"
+      @confirm="submitBulkDelete"
+    />
+
     <Dialog
       v-model:visible="saveViewDialogVisible"
       :header="$t('tickets.saveView')"
@@ -320,6 +337,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
 import Paginator from 'primevue/paginator'
@@ -335,10 +353,14 @@ import {
   listTickets,
   createTicket,
   bulkUpdateTickets,
+  deleteTicket,
   exportTicketsCsv,
   type Ticket,
   type TicketCreate,
 } from '@/api/tickets'
+import TicketBulkDeleteDialog from '@/components/tickets/TicketBulkDeleteDialog.vue'
+import { useProjectAdmin } from '@/composables/useProjectAdmin'
+import { useToastService } from '@/composables/useToast'
 import { listEpics, type Epic } from '@/api/epics'
 import { listSavedViews, createSavedView, type SavedView } from '@/api/saved-views'
 import { getProject, type Project } from '@/api/projects'
@@ -358,8 +380,12 @@ import {
 } from '@/utils/ticketTableSort'
 
 const route = useRoute()
+const { t } = useI18n()
+const toast = useToastService()
 
 const projectId = computed(() => route.params.projectId as string)
+const organizationId = computed(() => project.value?.organization_id)
+const { canAdministerProject } = useProjectAdmin(projectId, organizationId)
 
 const project = ref<Project | null>(null)
 const loadingProject = ref(true)
@@ -428,6 +454,46 @@ function toggleSelect(ticket: Ticket) {
   else selectedTickets.value.push(ticket)
 }
 
+async function submitBulkDelete() {
+  if (selectedTickets.value.length === 0) return
+  deletingTickets.value = true
+  const ids = selectedTickets.value.map((t) => t.id)
+  try {
+    const results = await Promise.allSettled(ids.map((id) => deleteTicket(id)))
+    const failed = results.filter((r) => r.status === 'rejected').length
+    const ok = ids.length - failed
+    if (failed === 0) {
+      toast.showSuccess(t('common.success'), t('tickets.deletedSuccess', { count: ok }))
+    } else {
+      toast.showError(t('common.error'), t('tickets.deleteFailed'))
+    }
+    deleteDialogVisible.value = false
+    selectedTickets.value = []
+    await loadTickets()
+  } catch {
+    toast.showError(t('common.error'), t('tickets.deleteFailed'))
+  } finally {
+    deletingTickets.value = false
+  }
+}
+
+function toggleSelectAllOnPage() {
+  if (tickets.value.length === 0) return
+  const allOnPage = tickets.value.every((t) => selectedTicketIds.value.has(t.id))
+  if (allOnPage) {
+    const pageIds = new Set(tickets.value.map((t) => t.id))
+    selectedTickets.value = selectedTickets.value.filter((t) => !pageIds.has(t.id))
+  } else {
+    const seen = new Set(selectedTickets.value.map((t) => t.id))
+    for (const tk of tickets.value) {
+      if (!seen.has(tk.id)) {
+        selectedTickets.value.push(tk)
+        seen.add(tk.id)
+      }
+    }
+  }
+}
+
 function onSortColumn(column: TicketSortColumn) {
   const next = toggleTicketSort(column, sortColumn.value, sortDirection.value)
   sortColumn.value = next.column
@@ -436,6 +502,8 @@ function onSortColumn(column: TicketSortColumn) {
   loadTickets()
 }
 const bulkDialogVisible = ref(false)
+const deleteDialogVisible = ref(false)
+const deletingTickets = ref(false)
 const bulkPriority = ref<string | null>(null)
 const bulkType = ref<string | null>(null)
 const bulkSaving = ref(false)

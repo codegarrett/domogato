@@ -10,6 +10,7 @@ from app.core import events
 from app.core.permissions import (
     PROJECT_ROLE_HIERARCHY,
     ProjectRole,
+    assert_user_can_administer_project,
     resolve_effective_project_role,
 )
 from app.models.user import User
@@ -337,7 +338,7 @@ async def delete_ticket(
     ticket = await ticket_service.get_ticket(db, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    await _require_project_role(db, ticket.project_id, user, ProjectRole.MAINTAINER)
+    await assert_user_can_administer_project(db, user, ticket.project_id)
     await ticket_service.soft_delete_ticket(db, ticket_id)
 
     await events.publish(

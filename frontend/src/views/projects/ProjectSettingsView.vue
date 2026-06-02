@@ -73,8 +73,8 @@
           />
         </div>
       </div>
-      <!-- Danger Zone: Purge Project Data (system admin only) -->
-      <div v-if="authStore.isSystemAdmin" class="settings-card danger-card">
+      <!-- Danger Zone: Purge Project Data (org/project admin only) -->
+      <div v-if="canAdministerProject" class="settings-card danger-card">
         <div class="font-semibold mb-1" style="color: var(--p-red-500)">{{ t('projects.dangerZone') }}</div>
         <p class="text-sm text-color-secondary mt-0 mb-3">{{ t('projects.purgeDesc') }}</p>
 
@@ -111,6 +111,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import ToggleSwitch from 'primevue/toggleswitch'
 import {
+  getProject,
   getProjectSettings,
   updateProjectSettings,
   generateProjectApiKey,
@@ -119,13 +120,17 @@ import {
   type ProjectSettings,
 } from '@/api/projects'
 import { useToastService } from '@/composables/useToast'
-import { useAuthStore } from '@/stores/auth'
+import { useProjectAdmin } from '@/composables/useProjectAdmin'
 
 const { t } = useI18n()
 const toast = useToastService()
 const route = useRoute()
-const authStore = useAuthStore()
 const projectId = route.params.projectId as string
+const organizationId = ref<string | undefined>(undefined)
+const { canAdministerProject } = useProjectAdmin(
+  () => projectId,
+  () => organizationId.value,
+)
 
 const loading = ref(true)
 const settings = ref<ProjectSettings>({ auto_add_org_members: false, api_key: null })
@@ -144,7 +149,12 @@ const maskedKey = computed(() => {
 
 onMounted(async () => {
   try {
-    settings.value = await getProjectSettings(projectId)
+    const [settingsRes, project] = await Promise.all([
+      getProjectSettings(projectId),
+      getProject(projectId),
+    ])
+    settings.value = settingsRes
+    organizationId.value = project.organization_id
   } finally {
     loading.value = false
   }

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.models.user import User
 
 
 class OrgRole(str, enum.Enum):
@@ -102,6 +103,53 @@ async def resolve_effective_project_role(
         return None
 
     return max(roles, key=lambda r: PROJECT_ROLE_HIERARCHY[r])
+
+
+async def assert_user_can_administer_project(
+    db: AsyncSession,
+    user: User,
+    project_id: UUID,
+) -> None:
+    """Org admin/owner, project owner, or system admin — destructive project actions."""
+    from app.models.membership import OrgMembership
+    from app.models.project import Project
+
+    if user.is_system_admin:
+        return
+
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    result = await db.execute(
+        select(OrgMembership.role).where(
+            OrgMembership.user_id == user.id,
+            OrgMembership.organization_id == project.organization_id,
+        )
+    )
+    org_role_str = result.scalar_one_or_none()
+    if org_role_str and OrgRole(org_role_str) in (OrgRole.ADMIN, OrgRole.OWNER):
+        return
+
+    effective_role = await resolve_effective_project_role(
+        user_id=user.id,
+        project_id=project_id,
+        organization_id=project.organization_id,
+        project_visibility=project.visibility,
+        is_system_admin=user.is_system_admin,
+        db=db,
+    )
+    if effective_role == ProjectRole.OWNER:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin access required",
+    )
 
 
 def require_system_admin():

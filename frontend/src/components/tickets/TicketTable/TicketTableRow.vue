@@ -32,6 +32,11 @@ const props = defineProps<{
   prioritySeverity: (p: string) => 'success' | 'info' | 'warn' | 'danger' | 'secondary'
   storyPointsModel: number | null
   formatDate?: (iso: string) => string
+  /** Part of a multi-ticket drag (planning). */
+  multiDragInGroup?: boolean
+  /** Row currently under the pointer for multi-drag. */
+  multiDragPrimary?: boolean
+  multiDragCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -82,7 +87,24 @@ watch(
 </script>
 
 <template>
-  <div class="ticket-table-grid ticket-row" :class="[presetClass, { 'ticket-selected': selected }]">
+  <div
+    class="ticket-table-grid ticket-row"
+    :class="[
+      presetClass,
+      {
+        'ticket-selected': selected,
+        'ticket-row--multi-drag-peer': multiDragInGroup && !multiDragPrimary,
+        'ticket-row--multi-drag-primary': multiDragPrimary && (multiDragCount ?? 0) > 1,
+      },
+    ]"
+  >
+    <div
+      v-if="multiDragPrimary && (multiDragCount ?? 0) > 1"
+      class="multi-drag-badge"
+      aria-hidden="true"
+    >
+      {{ $t('sprints.movingTickets', { count: multiDragCount }) }}
+    </div>
     <template v-for="col in columns" :key="col">
       <div v-if="col === 'select'" class="grid-cell">
         <input type="checkbox" :checked="selected" @click.stop="emit('toggleSelect')" />
@@ -228,8 +250,41 @@ watch(
   border-bottom: none;
 }
 
+.ticket-row {
+  position: relative;
+}
+
 .ticket-row:hover {
   background: var(--p-content-hover-background, var(--p-surface-50));
+}
+
+.ticket-row--multi-drag-peer {
+  opacity: 0.5;
+  background: color-mix(in srgb, var(--p-primary-color, #6366f1) 10%, transparent);
+  outline: 1px dashed var(--p-primary-300, #a5b4fc);
+  outline-offset: -1px;
+}
+
+.ticket-row--multi-drag-primary.drag-active,
+.ticket-row--multi-drag-primary.sortable-drag {
+  z-index: 2;
+}
+
+.multi-drag-badge {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.5rem;
+  z-index: 3;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+  background: var(--p-primary-color, #6366f1);
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .ticket-selected {

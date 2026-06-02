@@ -11,6 +11,7 @@ from app.core.permissions import (
     ORG_ROLE_HIERARCHY,
     ProjectRole,
     PROJECT_ROLE_HIERARCHY,
+    assert_user_can_administer_project,
     require_system_admin,
     resolve_effective_project_role,
 )
@@ -345,13 +346,14 @@ async def revoke_api_key(
 @router.post("/projects/{project_id}/purge")
 async def purge_project_data(
     project_id: UUID,
-    user: User = require_system_admin(),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Hard-delete all tickets, issue reports, epics, and satellite data for a project.
 
-    Resets the ticket sequence to 0.  System admin only.
+    Resets the ticket sequence to 0. Org admin/owner, project owner, or system admin only.
     """
+    await assert_user_can_administer_project(db, user, project_id)
     project = await project_service.get_project(db, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
