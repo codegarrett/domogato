@@ -6,8 +6,9 @@ import draggable from 'vuedraggable'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Select from 'primevue/select'
-import InputNumber from 'primevue/inputnumber'
 import Dialog from 'primevue/dialog'
+import BacklogTicketRow from '@/components/backlog/BacklogTicketRow.vue'
+import { useProjectTicketMeta } from '@/composables/useProjectTicketMeta'
 import { useToastService } from '@/composables/useToast'
 import {
   getBacklog,
@@ -18,13 +19,22 @@ import {
   reorderSprintTickets,
   type Sprint,
 } from '@/api/sprints'
-import { updateTicket, type Ticket, type TicketUpdate } from '@/api/tickets'
+import { updateTicket, transitionStatus, type Ticket, type TicketUpdate } from '@/api/tickets'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const toast = useToastService()
 const projectId = route.params.projectId as string
+
+const {
+  assigneeOptions,
+  resolveAssigneeName,
+  resolveStatusName,
+  resolveStatusStyle,
+  statusTransitionOptions,
+  loadMeta,
+} = useProjectTicketMeta(() => projectId)
 
 const backlogTickets = ref<Ticket[]>([])
 const sprints = ref<Sprint[]>([])
@@ -103,12 +113,17 @@ function toggleCollapse(sprintId: string) {
   collapsed.value[sprintId] = !collapsed.value[sprintId]
 }
 
+function statusOptionsFor(ticket: Ticket) {
+  return statusTransitionOptions(ticket)
+}
+
 async function loadData() {
   loading.value = true
   try {
     const [backlogRes, sprintRes] = await Promise.all([
       getBacklog(projectId, { limit: 200 }),
       listSprints(projectId, { limit: 100 }),
+      loadMeta(),
     ])
     backlogTickets.value = backlogRes.items
     backlogTotal.value = backlogRes.total
@@ -131,10 +146,6 @@ function startEdit(row: Ticket, field: string, currentValue: string | number | n
   editingCell.value = { id: row.id, field, value: currentValue }
 }
 function cancelEdit() { editingCell.value = null }
-function isEditing(rowId: string, field: string): boolean {
-  return editingCell.value?.id === rowId && editingCell.value?.field === field
-}
-
 function findTicketList(ticketId: string): { list: Ticket[]; key: string } | null {
   if (backlogTickets.value.find(tk => tk.id === ticketId)) {
     return { list: backlogTickets.value, key: 'backlog' }
@@ -162,6 +173,12 @@ async function commitEdit(row: Ticket) {
   } else if (cell.field === 'story_points') {
     const n = (newVal as number | null) ?? null
     if (n !== (row.story_points ?? null)) { payload.story_points = n; changed = true }
+  } else if (cell.field === 'assignee_id') {
+    const next = (newVal as string | null) ?? null
+    if (next !== row.assignee_id) {
+      payload.assignee_id = next
+      changed = true
+    }
   }
 
   if (changed) {
@@ -175,6 +192,29 @@ async function commitEdit(row: Ticket) {
     } catch (e) { console.error(e) }
   }
   cancelEdit()
+}
+
+async function commitStatusEdit(row: Ticket) {
+  const cell = editingCell.value
+  if (!cell || cell.field !== 'workflow_status_id') return
+  const newStatusId = cell.value as string
+  if (newStatusId === row.workflow_status_id) {
+    cancelEdit()
+    return
+  }
+  try {
+    const updated = await transitionStatus(row.id, { workflow_status_id: newStatusId })
+    const found = findTicketList(row.id)
+    if (found) {
+      const idx = found.list.findIndex(tk => tk.id === row.id)
+      if (idx >= 0) found.list[idx] = updated
+    }
+  } catch (e) { console.error(e) }
+  cancelEdit()
+}
+
+function onEditValueUpdate(v: string | number | null) {
+  if (editingCell.value) editingCell.value.value = v
 }
 
 async function onSprintDragEnd(sprintId: string) {
@@ -317,32 +357,30 @@ onMounted(loadData)
             @change="(evt: any) => onSprintDragChange(sprint.id, evt)"
           >
             <template #item="{ element: tk }">
-              <div class="ticket-row flex align-items-center gap-2 px-3 py-2" :class="{ 'ticket-selected': isSelected(tk) }">
-                <input type="checkbox" :checked="isSelected(tk)" class="mr-1" @click.stop="toggleSelect(tk)" />
-                <i class="pi pi-bars text-color-secondary drag-handle" style="cursor: grab;" />
-                <router-link :to="`/tickets/${tk.id}`" class="no-underline flex align-items-center gap-2 flex-1 min-w-0" @click.stop>
-                  <Tag :value="tk.ticket_key || `#${tk.ticket_number}`" severity="info" class="text-xs flex-shrink-0" />
-                  <span class="font-medium text-primary hover:underline text-overflow-ellipsis overflow-hidden white-space-nowrap">{{ tk.title }}</span>
-                </router-link>
-                <div class="flex align-items-center gap-2 flex-shrink-0">
-                  <div v-if="isEditing(tk.id, 'ticket_type')" @click.stop>
-                    <Select v-model="editingCell!.value" :options="typeOptions" option-label="label" option-value="value" class="p-inputtext-sm" style="width: 7rem;" @update:model-value="commitEdit(tk)" />
-                  </div>
-                  <Tag v-else :value="formatLabel(tk.ticket_type)" severity="secondary" class="text-xs cursor-pointer inline-editable-tag" @click.stop="startEdit(tk, 'ticket_type', tk.ticket_type)" />
-
-                  <div v-if="isEditing(tk.id, 'priority')" @click.stop>
-                    <Select v-model="editingCell!.value" :options="priorityOptions" option-label="label" option-value="value" class="p-inputtext-sm" style="width: 7rem;" @update:model-value="commitEdit(tk)" />
-                  </div>
-                  <Tag v-else :value="formatLabel(tk.priority)" :severity="prioritySeverity(tk.priority)" class="text-xs cursor-pointer inline-editable-tag" @click.stop="startEdit(tk, 'priority', tk.priority)" />
-
-                  <div v-if="isEditing(tk.id, 'story_points')" @click.stop>
-                    <InputNumber v-model="storyPointsEditModel" :min="0" :max="999" class="p-inputtext-sm" input-class="w-3rem" @keydown.enter.prevent="commitEdit(tk)" @keydown.escape="cancelEdit" @blur="commitEdit(tk)" />
-                  </div>
-                  <span v-else class="inline-editable text-xs w-2rem text-center" @click.stop="startEdit(tk, 'story_points', tk.story_points ?? null)">
-                    {{ tk.story_points != null ? tk.story_points : '—' }}
-                  </span>
-                </div>
-              </div>
+              <BacklogTicketRow
+                :ticket="tk"
+                :selected="isSelected(tk)"
+                :editing-id="editingCell?.id ?? null"
+                :editing-field="editingCell?.field ?? null"
+                :edit-value="editingCell?.value ?? null"
+                :type-options="typeOptions"
+                :priority-options="priorityOptions"
+                :assignee-options="assigneeOptions"
+                :status-options="statusOptionsFor(tk)"
+                :resolve-assignee-name="resolveAssigneeName"
+                :resolve-status-name="resolveStatusName"
+                :resolve-status-style="resolveStatusStyle"
+                :format-label="formatLabel"
+                :priority-severity="prioritySeverity"
+                :story-points-model="storyPointsEditModel"
+                @toggle-select="toggleSelect(tk)"
+                @start-edit="(field, value) => startEdit(tk, field, value)"
+                @commit-edit="commitEdit(tk)"
+                @commit-status="commitStatusEdit(tk)"
+                @cancel-edit="cancelEdit"
+                @update:edit-value="onEditValueUpdate"
+                @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
+              />
             </template>
           </draggable>
           <div v-if="!(sprintTickets[sprint.id] || []).length" class="p-3 text-center text-color-secondary text-sm">
@@ -373,32 +411,30 @@ onMounted(loadData)
           @change="onBacklogDragChange"
         >
           <template #item="{ element: tk }">
-            <div class="ticket-row flex align-items-center gap-2 px-3 py-2" :class="{ 'ticket-selected': isSelected(tk) }">
-              <input type="checkbox" :checked="isSelected(tk)" class="mr-1" @click.stop="toggleSelect(tk)" />
-              <i class="pi pi-bars text-color-secondary drag-handle" style="cursor: grab;" />
-              <router-link :to="`/tickets/${tk.id}`" class="no-underline flex align-items-center gap-2 flex-1 min-w-0" @click.stop>
-                <Tag :value="tk.ticket_key || `#${tk.ticket_number}`" severity="info" class="text-xs flex-shrink-0" />
-                <span class="font-medium text-primary hover:underline text-overflow-ellipsis overflow-hidden white-space-nowrap">{{ tk.title }}</span>
-              </router-link>
-              <div class="flex align-items-center gap-2 flex-shrink-0">
-                <div v-if="isEditing(tk.id, 'ticket_type')" @click.stop>
-                  <Select v-model="editingCell!.value" :options="typeOptions" option-label="label" option-value="value" class="p-inputtext-sm" style="width: 7rem;" @update:model-value="commitEdit(tk)" />
-                </div>
-                <Tag v-else :value="formatLabel(tk.ticket_type)" severity="secondary" class="text-xs cursor-pointer inline-editable-tag" @click.stop="startEdit(tk, 'ticket_type', tk.ticket_type)" />
-
-                <div v-if="isEditing(tk.id, 'priority')" @click.stop>
-                  <Select v-model="editingCell!.value" :options="priorityOptions" option-label="label" option-value="value" class="p-inputtext-sm" style="width: 7rem;" @update:model-value="commitEdit(tk)" />
-                </div>
-                <Tag v-else :value="formatLabel(tk.priority)" :severity="prioritySeverity(tk.priority)" class="text-xs cursor-pointer inline-editable-tag" @click.stop="startEdit(tk, 'priority', tk.priority)" />
-
-                <div v-if="isEditing(tk.id, 'story_points')" @click.stop>
-                  <InputNumber v-model="storyPointsEditModel" :min="0" :max="999" class="p-inputtext-sm" input-class="w-3rem" @keydown.enter.prevent="commitEdit(tk)" @keydown.escape="cancelEdit" @blur="commitEdit(tk)" />
-                </div>
-                <span v-else class="inline-editable text-xs w-2rem text-center" @click.stop="startEdit(tk, 'story_points', tk.story_points ?? null)">
-                  {{ tk.story_points != null ? tk.story_points : '—' }}
-                </span>
-              </div>
-            </div>
+            <BacklogTicketRow
+              :ticket="tk"
+              :selected="isSelected(tk)"
+              :editing-id="editingCell?.id ?? null"
+              :editing-field="editingCell?.field ?? null"
+              :edit-value="editingCell?.value ?? null"
+              :type-options="typeOptions"
+              :priority-options="priorityOptions"
+              :assignee-options="assigneeOptions"
+              :status-options="statusOptionsFor(tk)"
+              :resolve-assignee-name="resolveAssigneeName"
+              :resolve-status-name="resolveStatusName"
+              :resolve-status-style="resolveStatusStyle"
+              :format-label="formatLabel"
+              :priority-severity="prioritySeverity"
+              :story-points-model="storyPointsEditModel"
+              @toggle-select="toggleSelect(tk)"
+              @start-edit="(field, value) => startEdit(tk, field, value)"
+              @commit-edit="commitEdit(tk)"
+              @commit-status="commitStatusEdit(tk)"
+              @cancel-edit="cancelEdit"
+              @update:edit-value="onEditValueUpdate"
+              @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
+            />
           </template>
         </draggable>
         <div v-if="!backlogTickets.length && !loading" class="p-4 text-center text-color-secondary text-sm">

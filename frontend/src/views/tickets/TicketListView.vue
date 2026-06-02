@@ -231,52 +231,29 @@
 
           <Column field="assignee_id" :header="$t('tickets.assignee')" style="width: 12rem">
             <template #body="{ data }">
-              <div
-                v-if="editingCell?.id === data.id && editingCell?.field === 'assignee_id'"
-                @click.stop
-              >
-                <Select
-                  v-model="editingCell.value"
-                  :options="assigneeOptions"
-                  option-label="label"
-                  option-value="value"
-                  :placeholder="$t('tickets.unassigned')"
-                  class="w-full p-inputtext-sm"
-                  show-clear
-                  @update:model-value="commitInlineEdit(data)"
-                />
-              </div>
-              <span
-                v-else
-                class="text-sm inline-editable"
-                @click.stop="startInlineEdit(data, 'assignee_id', data.assignee_id)"
-              >
-                {{ resolveAssigneeName(data.assignee_id) }}
-              </span>
+              <TicketInlineAssigneeCell
+                :ticket="data"
+                :editing="editingCell?.id === data.id && editingCell?.field === 'assignee_id'"
+                v-model:edit-value="inlineEditValue"
+                :assignee-options="assigneeOptions"
+                :resolve-assignee-name="resolveAssigneeName"
+                @start="startInlineEdit(data, 'assignee_id', data.assignee_id)"
+                @commit="commitInlineEdit(data)"
+              />
             </template>
           </Column>
 
           <Column field="workflow_status_id" :header="$t('common.status')" style="width: 12rem">
             <template #body="{ data }">
-              <div
-                v-if="editingCell?.id === data.id && editingCell?.field === 'workflow_status_id'"
-                @click.stop
-              >
-                <Select
-                  v-model="editingCell.value"
-                  :options="statusTransitionOptions(data)"
-                  option-label="label"
-                  option-value="value"
-                  class="w-full p-inputtext-sm"
-                  @update:model-value="commitStatusTransition(data)"
-                />
-              </div>
-              <Tag
-                v-else
-                :value="resolveStatusName(data.workflow_status_id)"
-                :style="resolveStatusStyle(data.workflow_status_id)"
-                class="cursor-pointer inline-editable-tag"
-                @click.stop="startInlineEdit(data, 'workflow_status_id', data.workflow_status_id)"
+              <TicketInlineStatusCell
+                :ticket="data"
+                :editing="editingCell?.id === data.id && editingCell?.field === 'workflow_status_id'"
+                v-model:edit-value="inlineEditValue"
+                :status-options="statusTransitionOptions(data)"
+                :resolve-status-name="resolveStatusName"
+                :resolve-status-style="resolveStatusStyle"
+                @start="startInlineEdit(data, 'workflow_status_id', data.workflow_status_id)"
+                @commit="commitStatusTransition(data)"
               />
             </template>
           </Column>
@@ -424,7 +401,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
@@ -447,11 +423,12 @@ import {
 } from '@/api/tickets'
 import { listEpics, type Epic } from '@/api/epics'
 import { listSavedViews, createSavedView, type SavedView } from '@/api/saved-views'
-import { getProject, listProjectMembers, type Project, type ProjectMember } from '@/api/projects'
-import { listWorkflows, type Workflow, type WorkflowStatus } from '@/api/workflows'
+import { getProject, type Project } from '@/api/projects'
+import { useProjectTicketMeta } from '@/composables/useProjectTicketMeta'
 import { useWebSocket } from '@/composables/useWebSocket'
+import TicketInlineAssigneeCell from '@/components/tickets/TicketInlineAssigneeCell.vue'
+import TicketInlineStatusCell from '@/components/tickets/TicketInlineStatusCell.vue'
 
-const { t } = useI18n()
 const route = useRoute()
 
 const projectId = computed(() => route.params.projectId as string)
@@ -473,8 +450,15 @@ const filterPriority = ref<string | null>(null)
 const epics = ref<Epic[]>([])
 const loadingEpics = ref(false)
 
-const members = ref<ProjectMember[]>([])
-const workflows = ref<Workflow[]>([])
+const {
+  assigneeOptions,
+  resolveAssigneeName,
+  resolveStatusName,
+  resolveStatusStyle,
+  statusTransitionOptions,
+  loadMembers,
+  loadWorkflows,
+} = useProjectTicketMeta(() => projectId.value, project)
 
 const createVisible = ref(false)
 const creating = ref(false)
@@ -550,6 +534,15 @@ interface InlineEdit {
 const editingCell = ref<InlineEdit | null>(null)
 const inlineTitleRef = ref<InstanceType<typeof InputText> | null>(null)
 
+const inlineEditValue = computed({
+  get(): string | null {
+    return editingCell.value?.value ?? null
+  },
+  set(v: string | null) {
+    if (editingCell.value) editingCell.value.value = v
+  },
+})
+
 const TICKET_TYPES = ['task', 'bug', 'story', 'epic', 'subtask'] as const
 const PRIORITIES = ['highest', 'high', 'medium', 'low', 'lowest'] as const
 
@@ -565,46 +558,6 @@ const priorityFormOptions = priorityFilterOptions
 const epicOptions = computed(() =>
   epics.value.map((e) => ({ label: e.title, value: e.id })),
 )
-
-const assigneeOptions = computed(() => [
-  ...members.value.map((m) => ({
-    label: m.display_name || m.email,
-    value: m.user_id,
-  })),
-])
-
-const memberMap = computed(() => {
-  const map = new Map<string, string>()
-  for (const m of members.value) {
-    map.set(m.user_id, m.display_name || m.email)
-  }
-  return map
-})
-
-const statusMap = computed(() => {
-  const map = new Map<string, WorkflowStatus>()
-  for (const wf of workflows.value) {
-    for (const s of wf.statuses) {
-      map.set(s.id, s)
-    }
-  }
-  return map
-})
-
-function resolveAssigneeName(id: string | null): string {
-  if (!id) return '—'
-  return memberMap.value.get(id) ?? '—'
-}
-
-function resolveStatusName(id: string): string {
-  return statusMap.value.get(id)?.name ?? '—'
-}
-
-function resolveStatusStyle(id: string): Record<string, string> {
-  const s = statusMap.value.get(id)
-  if (!s?.color) return {}
-  return { background: s.color, color: '#fff', borderColor: s.color }
-}
 
 function formatLabel(s: string) {
   if (!s) return ''
@@ -720,29 +673,6 @@ async function commitStatusTransition(row: Ticket) {
   cancelInlineEdit()
 }
 
-function statusTransitionOptions(row: Ticket): { label: string; value: string }[] {
-  const currentStatus = statusMap.value.get(row.workflow_status_id)
-  const opts: { label: string; value: string }[] = []
-
-  if (currentStatus) {
-    opts.push({ label: `${currentStatus.name} (${t('common.current')})`, value: currentStatus.id })
-  }
-
-  for (const wf of workflows.value) {
-    const hasStatus = wf.statuses.some(s => s.id === row.workflow_status_id)
-    if (!hasStatus) continue
-    for (const tr of wf.transitions) {
-      if (tr.from_status_id !== row.workflow_status_id) continue
-      const target = statusMap.value.get(tr.to_status_id)
-      if (target) {
-        opts.push({ label: target.name, value: target.id })
-      }
-    }
-  }
-
-  return opts
-}
-
 function applyTicketPatch(ticketId: string, updated: Ticket) {
   tickets.value = tickets.value.map(t => t.id === ticketId ? updated : t)
 }
@@ -767,25 +697,6 @@ async function loadEpics() {
     epics.value = []
   } finally {
     loadingEpics.value = false
-  }
-}
-
-async function loadMembers() {
-  try {
-    const res = await listProjectMembers(projectId.value, 0, 200)
-    members.value = res.items
-  } catch {
-    members.value = []
-  }
-}
-
-async function loadWorkflows() {
-  if (!project.value) return
-  try {
-    const res = await listWorkflows(project.value.organization_id, 0, 100)
-    workflows.value = res.items
-  } catch {
-    workflows.value = []
   }
 }
 
@@ -912,8 +823,6 @@ watch(
       tickets.value = []
       total.value = 0
       epics.value = []
-      members.value = []
-      workflows.value = []
     }
   },
 )
