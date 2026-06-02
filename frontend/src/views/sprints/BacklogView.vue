@@ -2,13 +2,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import draggable from 'vuedraggable'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
-import BacklogTicketRow from '@/components/backlog/BacklogTicketRow.vue'
-import BacklogTicketTableHeader from '@/components/backlog/BacklogTicketTableHeader.vue'
+import TicketTablePlanningSection from '@/components/tickets/TicketTable/TicketTablePlanningSection.vue'
+import { useTicketTableInlineEdit } from '@/composables/useTicketTableInlineEdit'
+import { displayTicketKey } from '@/utils/displayTicketKey'
 import { useProjectTicketMeta } from '@/composables/useProjectTicketMeta'
 import { useToastService } from '@/composables/useToast'
 import {
@@ -20,7 +20,15 @@ import {
   reorderSprintTickets,
   type Sprint,
 } from '@/api/sprints'
-import { updateTicket, transitionStatus, type Ticket, type TicketUpdate } from '@/api/tickets'
+import { updateTicket, type Ticket } from '@/api/tickets'
+import {
+  DEFAULT_TICKET_SORT_COLUMN,
+  DEFAULT_TICKET_SORT_DIRECTION,
+  sortTicketsInPlace,
+  toggleTicketSort,
+  type TicketSortColumn,
+  type SortDirection,
+} from '@/utils/ticketTableSort'
 
 const route = useRoute()
 const router = useRouter()
@@ -37,13 +45,6 @@ const {
   statusTransitionOptions,
   loadMeta,
 } = useProjectTicketMeta(() => projectId)
-
-function displayTicketKey(tk: Ticket): string {
-  if (tk.ticket_key) return tk.ticket_key
-  const key = project.value?.key
-  if (key) return `${key}-${tk.ticket_number}`
-  return `#${tk.ticket_number}`
-}
 
 const backlogTickets = ref<Ticket[]>([])
 const sprints = ref<Sprint[]>([])
@@ -74,23 +75,68 @@ const availableSprintOptions = computed(() =>
   })),
 )
 
-interface InlineEdit {
-  id: string
-  field: string
-  value: string | number | null
-}
-const editingCell = ref<InlineEdit | null>(null)
+const selectedTicketIds = computed(() => new Set(selectedTickets.value.map((t) => t.id)))
 
-const storyPointsEditModel = computed({
-  get(): number | null {
-    const c = editingCell.value
-    if (!c || c.field !== 'story_points') return null
-    return c.value == null ? null : Number(c.value)
-  },
-  set(next: number | null) {
-    if (editingCell.value?.field === 'story_points') editingCell.value.value = next
+const sortColumn = ref<TicketSortColumn>(DEFAULT_TICKET_SORT_COLUMN)
+const sortDirection = ref<SortDirection>(DEFAULT_TICKET_SORT_DIRECTION)
+
+const sortContext = computed(() => ({
+  resolveAssigneeName,
+  resolveStatusName,
+}))
+
+function applyPlanningSort() {
+  sortTicketsInPlace(backlogTickets.value, sortColumn.value, sortDirection.value, sortContext.value)
+  for (const sid of Object.keys(sprintTickets.value)) {
+    const list = sprintTickets.value[sid]
+    if (list) sortTicketsInPlace(list, sortColumn.value, sortDirection.value, sortContext.value)
+  }
+}
+
+function onSortColumn(column: TicketSortColumn) {
+  const next = toggleTicketSort(column, sortColumn.value, sortDirection.value)
+  sortColumn.value = next.column
+  sortDirection.value = next.direction
+  applyPlanningSort()
+}
+
+function findTicketList(ticketId: string): Ticket[] | null {
+  if (backlogTickets.value.some((tk) => tk.id === ticketId)) return backlogTickets.value
+  for (const sid of Object.keys(sprintTickets.value)) {
+    const list = sprintTickets.value[sid]
+    if (list?.some((tk) => tk.id === ticketId)) return list
+  }
+  return null
+}
+
+const {
+  editingCell,
+  storyPointsEditModel,
+  startEdit,
+  cancelEdit,
+  onEditValueUpdate,
+  commitEdit,
+  commitStatusEdit,
+} = useTicketTableInlineEdit({
+  onTicketUpdated: (updated) => {
+    const list = findTicketList(updated.id)
+    if (!list) return
+    const idx = list.findIndex((tk) => tk.id === updated.id)
+    if (idx >= 0) list[idx] = updated
   },
 })
+
+function ticketKeyLabel(tk: Ticket): string {
+  return displayTicketKey(tk, project.value?.key)
+}
+
+function getSprintTicketList(sprintId: string): Ticket[] {
+  return sprintTickets.value[sprintId] ?? []
+}
+
+function setSprintTicketList(sprintId: string, tickets: Ticket[]) {
+  sprintTickets.value[sprintId] = tickets
+}
 
 function formatLabel(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
@@ -148,6 +194,9 @@ async function loadData() {
     sprints.value = sprintRes.items
 
     const ticketMap: Record<string, Ticket[]> = {}
+    for (const s of activeSprints.value) {
+      ticketMap[s.id] = []
+    }
     await Promise.all(
       activeSprints.value.map(async (s) => {
         const res = await getSprintTickets(s.id, { limit: 200 })
@@ -155,84 +204,10 @@ async function loadData() {
       }),
     )
     sprintTickets.value = ticketMap
+    applyPlanningSort()
   } finally {
     loading.value = false
   }
-}
-
-function startEdit(row: Ticket, field: string, currentValue: string | number | null) {
-  editingCell.value = { id: row.id, field, value: currentValue }
-}
-function cancelEdit() { editingCell.value = null }
-function findTicketList(ticketId: string): { list: Ticket[]; key: string } | null {
-  if (backlogTickets.value.find(tk => tk.id === ticketId)) {
-    return { list: backlogTickets.value, key: 'backlog' }
-  }
-  for (const sid of Object.keys(sprintTickets.value)) {
-    const tickets = sprintTickets.value[sid]
-    if (tickets?.find(tk => tk.id === ticketId)) {
-      return { list: tickets, key: sid }
-    }
-  }
-  return null
-}
-
-async function commitEdit(row: Ticket) {
-  const cell = editingCell.value
-  if (!cell) return
-  const newVal = cell.value
-  const payload: TicketUpdate = {}
-  let changed = false
-
-  if (cell.field === 'ticket_type' && newVal !== row.ticket_type) {
-    payload.ticket_type = newVal as string; changed = true
-  } else if (cell.field === 'priority' && newVal !== row.priority) {
-    payload.priority = newVal as string; changed = true
-  } else if (cell.field === 'story_points') {
-    const n = (newVal as number | null) ?? null
-    if (n !== (row.story_points ?? null)) { payload.story_points = n; changed = true }
-  } else if (cell.field === 'assignee_id') {
-    const next = (newVal as string | null) ?? null
-    if (next !== row.assignee_id) {
-      payload.assignee_id = next
-      changed = true
-    }
-  }
-
-  if (changed) {
-    try {
-      const updated = await updateTicket(row.id, payload)
-      const found = findTicketList(row.id)
-      if (found) {
-        const idx = found.list.findIndex(tk => tk.id === row.id)
-        if (idx >= 0) found.list[idx] = updated
-      }
-    } catch (e) { console.error(e) }
-  }
-  cancelEdit()
-}
-
-async function commitStatusEdit(row: Ticket) {
-  const cell = editingCell.value
-  if (!cell || cell.field !== 'workflow_status_id') return
-  const newStatusId = cell.value as string
-  if (newStatusId === row.workflow_status_id) {
-    cancelEdit()
-    return
-  }
-  try {
-    const updated = await transitionStatus(row.id, { workflow_status_id: newStatusId })
-    const found = findTicketList(row.id)
-    if (found) {
-      const idx = found.list.findIndex(tk => tk.id === row.id)
-      if (idx >= 0) found.list[idx] = updated
-    }
-  } catch (e) { console.error(e) }
-  cancelEdit()
-}
-
-function onEditValueUpdate(v: string | number | null) {
-  if (editingCell.value) editingCell.value.value = v
 }
 
 async function onSprintDragEnd(sprintId: string) {
@@ -302,10 +277,6 @@ function toggleSelect(ticket: Ticket) {
   else selectedTickets.value.push(ticket)
 }
 
-function isSelected(ticket: Ticket): boolean {
-  return selectedTickets.value.some(tk => tk.id === ticket.id)
-}
-
 function goToSprints() {
   router.push(`/projects/${projectId}/sprints`)
 }
@@ -363,49 +334,39 @@ onMounted(loadData)
           </span>
         </div>
 
-        <div v-show="!collapsed[sprint.id]" class="sprint-body backlog-ticket-table-wrap">
-          <BacklogTicketTableHeader />
-          <draggable
-            v-model="sprintTickets[sprint.id]"
-            group="tickets"
-            item-key="id"
-            :animation="150"
-            ghost-class="drag-ghost"
-            drag-class="drag-active"
-            class="ticket-list"
-            @change="(evt: any) => onSprintDragChange(sprint.id, evt)"
-          >
-            <template #item="{ element: tk }">
-              <BacklogTicketRow
-                :ticket="tk"
-                :ticket-key-label="displayTicketKey(tk)"
-                :selected="isSelected(tk)"
-                :editing-id="editingCell?.id ?? null"
-                :editing-field="editingCell?.field ?? null"
-                :edit-value="editingCell?.value ?? null"
-                :type-options="typeOptions"
-                :priority-options="priorityOptions"
-                :assignee-options="assigneeOptions"
-                :status-options="statusOptionsFor(tk)"
-                :resolve-assignee-name="resolveAssigneeName"
-                :resolve-status-name="resolveStatusName"
-                :resolve-status-style="resolveStatusStyle"
-                :format-label="formatLabel"
-                :priority-severity="prioritySeverity"
-                :story-points-model="storyPointsEditModel"
-                @toggle-select="toggleSelect(tk)"
-                @start-edit="(field, value) => startEdit(tk, field, value)"
-                @commit-edit="commitEdit(tk)"
-                @commit-status="commitStatusEdit(tk)"
-                @cancel-edit="cancelEdit"
-                @update:edit-value="onEditValueUpdate"
-                @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
-              />
-            </template>
-          </draggable>
-          <div v-if="!(sprintTickets[sprint.id] || []).length" class="p-3 text-center text-color-secondary text-sm">
-            {{ $t('sprints.noSprintTickets') }}
-          </div>
+        <div v-show="!collapsed[sprint.id]" class="sprint-body">
+          <TicketTablePlanningSection
+            :model-value="getSprintTicketList(sprint.id)"
+            @update:model-value="setSprintTicketList(sprint.id, $event)"
+            :project-id="projectId"
+            :sort-column="sortColumn"
+            :sort-direction="sortDirection"
+            :selected-ids="selectedTicketIds"
+            :editing-id="editingCell?.id ?? null"
+            :editing-field="editingCell?.field ?? null"
+            :edit-value="editingCell?.value ?? null"
+            :type-options="typeOptions"
+            :priority-options="priorityOptions"
+            :assignee-options="assigneeOptions"
+            :status-options-for="statusOptionsFor"
+            :resolve-assignee-name="resolveAssigneeName"
+            :resolve-status-name="resolveStatusName"
+            :resolve-status-style="resolveStatusStyle"
+            :format-label="formatLabel"
+            :priority-severity="prioritySeverity"
+            :story-points-model="storyPointsEditModel"
+            :ticket-key-label="ticketKeyLabel"
+            :empty-text="$t('sprints.noSprintTickets')"
+            @sort="onSortColumn"
+            @toggle-select="toggleSelect"
+            @start-edit="(tk, field, value) => startEdit(tk, field, value)"
+            @commit-edit="(tk) => commitEdit(tk)"
+            @commit-status="(tk) => commitStatusEdit(tk)"
+            @cancel-edit="cancelEdit"
+            @update:edit-value="onEditValueUpdate"
+            @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
+            @drag-change="(evt) => onSprintDragChange(sprint.id, evt)"
+          />
         </div>
       </div>
 
@@ -420,47 +381,36 @@ onMounted(loadData)
           </span>
         </div>
 
-        <div class="backlog-ticket-table-wrap">
-          <BacklogTicketTableHeader />
-          <draggable
-            v-model="backlogTickets"
-            group="tickets"
-            item-key="id"
-            :animation="150"
-            ghost-class="drag-ghost"
-            drag-class="drag-active"
-            class="ticket-list"
-            @change="onBacklogDragChange"
-          >
-          <template #item="{ element: tk }">
-            <BacklogTicketRow
-              :ticket="tk"
-              :ticket-key-label="displayTicketKey(tk)"
-              :selected="isSelected(tk)"
-              :editing-id="editingCell?.id ?? null"
-              :editing-field="editingCell?.field ?? null"
-              :edit-value="editingCell?.value ?? null"
-              :type-options="typeOptions"
-              :priority-options="priorityOptions"
-              :assignee-options="assigneeOptions"
-              :status-options="statusOptionsFor(tk)"
-              :resolve-assignee-name="resolveAssigneeName"
-              :resolve-status-name="resolveStatusName"
-              :resolve-status-style="resolveStatusStyle"
-              :format-label="formatLabel"
-              :priority-severity="prioritySeverity"
-              :story-points-model="storyPointsEditModel"
-              @toggle-select="toggleSelect(tk)"
-              @start-edit="(field, value) => startEdit(tk, field, value)"
-              @commit-edit="commitEdit(tk)"
-              @commit-status="commitStatusEdit(tk)"
-              @cancel-edit="cancelEdit"
-              @update:edit-value="onEditValueUpdate"
-              @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
-            />
-          </template>
-        </draggable>
-        </div>
+        <TicketTablePlanningSection
+          v-model="backlogTickets"
+          :project-id="projectId"
+          :sort-column="sortColumn"
+          :sort-direction="sortDirection"
+          :selected-ids="selectedTicketIds"
+          :editing-id="editingCell?.id ?? null"
+          :editing-field="editingCell?.field ?? null"
+          :edit-value="editingCell?.value ?? null"
+          :type-options="typeOptions"
+          :priority-options="priorityOptions"
+          :assignee-options="assigneeOptions"
+          :status-options-for="statusOptionsFor"
+          :resolve-assignee-name="resolveAssigneeName"
+          :resolve-status-name="resolveStatusName"
+          :resolve-status-style="resolveStatusStyle"
+          :format-label="formatLabel"
+          :priority-severity="prioritySeverity"
+          :story-points-model="storyPointsEditModel"
+          :ticket-key-label="ticketKeyLabel"
+          @sort="onSortColumn"
+          @toggle-select="toggleSelect"
+          @start-edit="(tk, field, value) => startEdit(tk, field, value)"
+          @commit-edit="(tk) => commitEdit(tk)"
+          @commit-status="(tk) => commitStatusEdit(tk)"
+          @cancel-edit="cancelEdit"
+          @update:edit-value="onEditValueUpdate"
+          @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
+          @drag-change="onBacklogDragChange"
+        />
         <div v-if="!backlogTickets.length && !loading" class="p-4 text-center text-color-secondary text-sm">
           {{ $t('sprints.emptyBacklog') }}
         </div>
@@ -508,17 +458,4 @@ onMounted(loadData)
   background: var(--p-content-hover-background, var(--p-surface-50));
 }
 
-.ticket-list {
-  min-height: 2.5rem;
-}
-
-.drag-ghost {
-  opacity: 0.4;
-  background: var(--p-primary-50, #eef2ff);
-}
-
-.drag-active {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-radius: 6px;
-}
 </style>

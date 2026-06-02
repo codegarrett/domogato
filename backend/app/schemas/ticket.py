@@ -111,5 +111,8 @@ class TicketListParams(BaseModel):
     sprint_id: UUID | None = None
     workflow_status_id: UUID | None = None
     is_deleted: bool = False
-    sort_by: str = Field("created_at", pattern=r"^(created_at|updated_at|priority|ticket_number|due_date)$")
-    sort_dir: str = Field("desc", pattern=r"^(asc|desc)$")
+    sort_by: str = Field(
+        "priority",
+        pattern=r"^(created_at|updated_at|priority|ticket_number|due_date|title|story_points|ticket_type|assignee_id|workflow_status_id)$",
+    )
+    sort_dir: str = Field("asc", pattern=r"^(asc|desc)$")

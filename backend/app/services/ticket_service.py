@@ -4,11 +4,12 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import case, func, nulls_last, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.project import Project
 from app.models.ticket import Ticket
+from app.models.user import User
 from app.utils.markdown_sanitize import sanitize_markdown
 from app.models.workflow import Workflow, WorkflowStatus, WorkflowTransition
 
@@ -232,8 +233,8 @@ async def list_tickets(
     parent_ticket_id: UUID | None = None,
     has_parent: bool | None = None,
     is_deleted: bool = False,
-    sort_by: str = "created_at",
-    sort_dir: str = "desc",
+    sort_by: str = "priority",
+    sort_dir: str = "asc",
 ) -> tuple[list[Ticket], int]:
     query = select(Ticket).where(
         Ticket.project_id == project_id,
@@ -274,9 +275,38 @@ async def list_tickets(
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()
 
-    sort_column = getattr(Ticket, sort_by, Ticket.created_at)
-    order = sort_column.desc() if sort_dir == "desc" else sort_column.asc()
-    query = query.order_by(order).offset(offset).limit(limit)
+    priority_rank = case(
+        (Ticket.priority == "highest", 0),
+        (Ticket.priority == "high", 1),
+        (Ticket.priority == "medium", 2),
+        (Ticket.priority == "low", 3),
+        (Ticket.priority == "lowest", 4),
+        else_=99,
+    )
+
+    if sort_by == "priority":
+        sort_expr = priority_rank
+    elif sort_by == "assignee_id":
+        query = query.outerjoin(User, Ticket.assignee_id == User.id)
+        sort_expr = User.display_name
+    elif sort_by == "workflow_status_id":
+        query = query.outerjoin(
+            WorkflowStatus, Ticket.workflow_status_id == WorkflowStatus.id
+        )
+        sort_expr = WorkflowStatus.name
+    else:
+        sort_column = getattr(Ticket, sort_by, Ticket.created_at)
+        sort_expr = sort_column
+
+    if sort_dir == "desc":
+        order_clause = sort_expr.desc()
+    else:
+        order_clause = sort_expr.asc()
+
+    if sort_by in ("assignee_id", "story_points"):
+        order_clause = nulls_last(order_clause)
+
+    query = query.order_by(order_clause).offset(offset).limit(limit)
     result = await db.execute(query)
     tickets = list(result.scalars().all())
 

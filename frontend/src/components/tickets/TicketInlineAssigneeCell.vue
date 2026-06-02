@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import Select from 'primevue/select'
+import { computed } from 'vue'
 import type { Ticket } from '@/api/tickets'
+import TicketInlinePicker from '@/components/tickets/TicketInlinePicker.vue'
 
-defineProps<{
+const props = defineProps<{
   ticket: Ticket
   editing: boolean
   assigneeOptions: { label: string; value: string }[]
@@ -15,46 +16,41 @@ const editValue = defineModel<string | null>('editValue')
 const emit = defineEmits<{
   start: []
   commit: []
+  cancel: []
 }>()
+
+const displayAssigneeId = computed(() =>
+  props.editing ? (editValue.value ?? props.ticket.assignee_id) : props.ticket.assignee_id,
+)
 </script>
 
 <template>
-  <div v-if="editing" class="inline-cell-root" @click.stop>
-    <Select
-      v-model="editValue"
-      :options="assigneeOptions"
-      option-label="label"
-      option-value="value"
-      :placeholder="$t('tickets.unassigned')"
-      class="p-inputtext-sm w-full"
-      show-clear
-      @update:model-value="emit('commit')"
-    />
-  </div>
-  <span
-    v-else
-    class="inline-editable"
-    :class="compact ? 'text-xs inline-cell-root' : 'text-sm'"
-    @click.stop="emit('start')"
+  <TicketInlinePicker
+    :editing="editing"
+    v-model="editValue"
+    :options="assigneeOptions"
+    allow-clear
+    @start="emit('start')"
+    @commit="emit('commit')"
+    @cancel="emit('cancel')"
   >
-    {{ resolveAssigneeName(ticket.assignee_id) }}
-  </span>
+    <span
+      class="inline-editable"
+      :class="compact ? 'text-xs' : 'text-sm'"
+    >
+      {{ props.resolveAssigneeName(displayAssigneeId) }}
+    </span>
+  </TicketInlinePicker>
 </template>
 
 <style scoped>
-.inline-cell-root {
-  width: 100%;
-  min-width: 0;
-}
-
 .inline-editable {
-  display: block;
-  width: 100%;
+  display: inline-block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-  cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
   transition: background 0.15s;

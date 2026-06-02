@@ -44,8 +44,18 @@ export interface TicketListParams {
   parent_ticket_id?: string
   has_parent?: boolean
   is_deleted?: boolean
-  sort_by?: string
-  sort_dir?: string
+  sort_by?:
+    | 'created_at'
+    | 'updated_at'
+    | 'priority'
+    | 'ticket_number'
+    | 'due_date'
+    | 'title'
+    | 'story_points'
+    | 'ticket_type'
+    | 'assignee_id'
+    | 'workflow_status_id'
+  sort_dir?: 'asc' | 'desc'
 }
 
 export interface TicketCreate {

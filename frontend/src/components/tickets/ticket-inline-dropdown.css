@@ -1,0 +1,62 @@
+/* Anchored inline dropdown shell (teleported). Caret lives on the shell so it is not clipped by panel border-radius. */
+.ticket-inline-dropdown-shell {
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.ticket-inline-dropdown-shell::before,
+.ticket-inline-dropdown-shell::after {
+  content: '';
+  position: absolute;
+  left: var(--inline-dropdown-arrow-x, 50%);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ticket-inline-dropdown-shell[data-placement='below']::before {
+  top: 0;
+  transform: translate(-50%, -100%);
+  border-width: 0 var(--inline-dropdown-arrow-size, 7px) var(--inline-dropdown-arrow-size, 7px)
+    var(--inline-dropdown-arrow-size, 7px);
+  border-style: solid;
+  border-color: transparent transparent var(--p-content-border-color, #e2e8f0) transparent;
+}
+
+.ticket-inline-dropdown-shell[data-placement='below']::after {
+  top: 0;
+  transform: translate(-50%, -100%);
+  border-width: 0 calc(var(--inline-dropdown-arrow-size, 7px) - 1px)
+    calc(var(--inline-dropdown-arrow-size, 7px) - 1px) calc(var(--inline-dropdown-arrow-size, 7px) - 1px);
+  border-style: solid;
+  border-color: transparent transparent var(--p-content-background, #fff) transparent;
+}
+
+.ticket-inline-dropdown-shell[data-placement='above']::before {
+  bottom: 0;
+  transform: translate(-50%, 100%);
+  border-width: var(--inline-dropdown-arrow-size, 7px) var(--inline-dropdown-arrow-size, 7px) 0
+    var(--inline-dropdown-arrow-size, 7px);
+  border-style: solid;
+  border-color: var(--p-content-border-color, #e2e8f0) transparent transparent transparent;
+}
+
+.ticket-inline-dropdown-shell[data-placement='above']::after {
+  bottom: 0;
+  transform: translate(-50%, 100%);
+  border-width: calc(var(--inline-dropdown-arrow-size, 7px) - 1px)
+    calc(var(--inline-dropdown-arrow-size, 7px) - 1px) 0
+    calc(var(--inline-dropdown-arrow-size, 7px) - 1px);
+  border-style: solid;
+  border-color: var(--p-content-background, #fff) transparent transparent transparent;
+}
+
+.ticket-inline-dropdown-panel {
+  background: var(--p-content-background, #fff);
+  color: var(--p-content-color, inherit);
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
+  border-radius: var(--p-border-radius-md, 6px);
+  box-shadow: var(--p-overlay-popover-shadow, 0 4px 6px -1px rgb(0 0 0 / 0.1));
+  overflow: visible;
+}

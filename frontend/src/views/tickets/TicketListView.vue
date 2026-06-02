@@ -121,153 +121,50 @@
           </label>
         </div>
 
-        <DataTable
-          v-model:selection="selectedTickets"
-          :value="tickets"
+        <TicketTable
+          :tickets="tickets"
+          :columns="LIST_COLUMNS"
+          :project-id="projectId"
           :loading="loadingTickets"
-          lazy
-          paginator
-          :rows="rows"
+          :empty-text="$t('tickets.noTickets')"
+          :sort-column="sortColumn"
+          :sort-direction="sortDirection"
+          :selected-ids="selectedTicketIds"
+          editable-title
+          :editing-id="editingCell?.id ?? null"
+          :editing-field="editingCell?.field ?? null"
+          :edit-value="editingCell?.value ?? null"
+          :type-options="ticketTypeFormOptions"
+          :priority-options="priorityFormOptions"
+          :assignee-options="assigneeOptions"
+          :status-options-for="statusTransitionOptions"
+          :resolve-assignee-name="resolveAssigneeName"
+          :resolve-status-name="resolveStatusName"
+          :resolve-status-style="resolveStatusStyle"
+          :format-label="formatLabel"
+          :priority-severity="prioritySeverity"
+          :story-points-model="storyPointsEditModel"
+          :ticket-key-label="(tk) => displayTicketKey(tk, project?.key)"
+          :format-date="formatDate"
+          @sort="onSortColumn"
+          @toggle-select="toggleSelect"
+          @start-edit="(tk, field, value) => startEdit(tk, field, value)"
+          @commit-edit="(tk) => commitEdit(tk)"
+          @commit-status="(tk) => commitStatusEdit(tk)"
+          @cancel-edit="cancelEdit"
+          @update:edit-value="onEditValueUpdate"
+          @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
+        />
+
+        <Paginator
+          v-if="total > 0"
+          class="mt-3"
           :first="first"
+          :rows="rows"
           :total-records="total"
-          data-key="id"
-          striped-rows
-          scrollable
-          scroll-height="65vh"
-          class="p-datatable-sm"
           :rows-per-page-options="[25, 50, 100]"
           @page="onPage"
-        >
-          <template #loading>
-            <div class="flex justify-content-center p-5">
-              <ProgressSpinner style="width: 2.5rem; height: 2.5rem" strokeWidth="4" />
-            </div>
-          </template>
-          <Column selection-mode="multiple" style="width: 3rem" />
-          <Column field="ticket_key" :header="$t('projects.key')" style="width: 8rem">
-            <template #body="{ data }">
-              <router-link
-                :to="ticketDetailPath(projectId, data)"
-                class="font-mono text-sm text-primary no-underline hover:underline"
-                @click.stop
-              >
-                {{ data.ticket_key ?? '—' }}
-              </router-link>
-            </template>
-          </Column>
-
-          <Column field="title" :header="$t('tickets.title')">
-            <template #body="{ data }">
-              <div
-                v-if="editingCell?.id === data.id && editingCell?.field === 'title'"
-                class="flex align-items-center gap-2"
-                @click.stop
-              >
-                <InputText
-                  ref="inlineTitleRef"
-                  v-model="editingCell.value"
-                  class="w-full p-inputtext-sm"
-                  @keydown.enter.prevent="commitInlineEdit(data)"
-                  @keydown.escape="cancelInlineEdit"
-                />
-                <Button icon="pi pi-check" size="small" text rounded @click="commitInlineEdit(data)" />
-                <Button icon="pi pi-times" size="small" text rounded severity="secondary" @click="cancelInlineEdit" />
-              </div>
-              <span
-                v-else
-                class="inline-editable"
-                @click.stop="startInlineEdit(data, 'title', data.title)"
-              >
-                {{ data.title }}
-              </span>
-            </template>
-          </Column>
-
-          <Column field="ticket_type" :header="$t('tickets.type')" style="width: 8rem">
-            <template #body="{ data }">
-              <div
-                v-if="editingCell?.id === data.id && editingCell?.field === 'ticket_type'"
-                @click.stop
-              >
-                <Select
-                  v-model="editingCell.value"
-                  :options="ticketTypeFormOptions"
-                  option-label="label"
-                  option-value="value"
-                  class="w-full p-inputtext-sm"
-                  @update:model-value="commitInlineEdit(data)"
-                />
-              </div>
-              <Tag
-                v-else
-                :value="formatLabel(data.ticket_type)"
-                severity="secondary"
-                class="cursor-pointer inline-editable-tag"
-                @click.stop="startInlineEdit(data, 'ticket_type', data.ticket_type)"
-              />
-            </template>
-          </Column>
-
-          <Column field="priority" :header="$t('tickets.priority')" style="width: 8rem">
-            <template #body="{ data }">
-              <div
-                v-if="editingCell?.id === data.id && editingCell?.field === 'priority'"
-                @click.stop
-              >
-                <Select
-                  v-model="editingCell.value"
-                  :options="priorityFormOptions"
-                  option-label="label"
-                  option-value="value"
-                  class="w-full p-inputtext-sm"
-                  @update:model-value="commitInlineEdit(data)"
-                />
-              </div>
-              <Tag
-                v-else
-                :value="formatLabel(data.priority)"
-                :severity="prioritySeverity(data.priority)"
-                class="cursor-pointer inline-editable-tag"
-                @click.stop="startInlineEdit(data, 'priority', data.priority)"
-              />
-            </template>
-          </Column>
-
-          <Column field="assignee_id" :header="$t('tickets.assignee')" style="width: 12rem">
-            <template #body="{ data }">
-              <TicketInlineAssigneeCell
-                :ticket="data"
-                :editing="editingCell?.id === data.id && editingCell?.field === 'assignee_id'"
-                v-model:edit-value="inlineEditValue"
-                :assignee-options="assigneeOptions"
-                :resolve-assignee-name="resolveAssigneeName"
-                @start="startInlineEdit(data, 'assignee_id', data.assignee_id)"
-                @commit="commitInlineEdit(data)"
-              />
-            </template>
-          </Column>
-
-          <Column field="workflow_status_id" :header="$t('common.status')" style="width: 12rem">
-            <template #body="{ data }">
-              <TicketInlineStatusCell
-                :ticket="data"
-                :editing="editingCell?.id === data.id && editingCell?.field === 'workflow_status_id'"
-                v-model:edit-value="inlineEditValue"
-                :status-options="statusTransitionOptions(data)"
-                :resolve-status-name="resolveStatusName"
-                :resolve-status-style="resolveStatusStyle"
-                @start="startInlineEdit(data, 'workflow_status_id', data.workflow_status_id)"
-                @commit="commitStatusTransition(data)"
-              />
-            </template>
-          </Column>
-
-          <Column field="created_at" :header="$t('common.created')" style="width: 11rem">
-            <template #body="{ data }">
-              <span class="text-sm">{{ formatDate(data.created_at) }}</span>
-            </template>
-          </Column>
-        </DataTable>
+        />
       </div>
     </template>
 
@@ -421,13 +318,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ticketDetailPath } from '@/utils/ticketUrls'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import Button from 'primevue/button'
+import Paginator from 'primevue/paginator'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
@@ -439,8 +334,6 @@ import Checkbox from 'primevue/checkbox'
 import {
   listTickets,
   createTicket,
-  updateTicket,
-  transitionStatus,
   bulkUpdateTickets,
   exportTicketsCsv,
   type Ticket,
@@ -451,8 +344,18 @@ import { listSavedViews, createSavedView, type SavedView } from '@/api/saved-vie
 import { getProject, type Project } from '@/api/projects'
 import { useProjectTicketMeta } from '@/composables/useProjectTicketMeta'
 import { useWebSocket } from '@/composables/useWebSocket'
-import TicketInlineAssigneeCell from '@/components/tickets/TicketInlineAssigneeCell.vue'
-import TicketInlineStatusCell from '@/components/tickets/TicketInlineStatusCell.vue'
+import { useTicketTableInlineEdit } from '@/composables/useTicketTableInlineEdit'
+import TicketTable from '@/components/tickets/TicketTable/TicketTable.vue'
+import { LIST_COLUMNS } from '@/components/tickets/TicketTable/types'
+import { displayTicketKey } from '@/utils/displayTicketKey'
+import {
+  DEFAULT_TICKET_SORT_COLUMN,
+  DEFAULT_TICKET_SORT_DIRECTION,
+  sortColumnToApiParams,
+  toggleTicketSort,
+  type TicketSortColumn,
+  type SortDirection,
+} from '@/utils/ticketTableSort'
 
 const route = useRoute()
 
@@ -500,6 +403,38 @@ const createForm = ref({
 })
 
 const selectedTickets = ref<Ticket[]>([])
+const selectedTicketIds = computed(() => new Set(selectedTickets.value.map((t) => t.id)))
+
+const sortColumn = ref<TicketSortColumn>(DEFAULT_TICKET_SORT_COLUMN)
+const sortDirection = ref<SortDirection>(DEFAULT_TICKET_SORT_DIRECTION)
+
+const {
+  editingCell,
+  storyPointsEditModel,
+  startEdit,
+  cancelEdit,
+  onEditValueUpdate,
+  commitEdit,
+  commitStatusEdit,
+} = useTicketTableInlineEdit({
+  onTicketUpdated: (updated) => {
+    tickets.value = tickets.value.map((t) => (t.id === updated.id ? updated : t))
+  },
+})
+
+function toggleSelect(ticket: Ticket) {
+  const idx = selectedTickets.value.findIndex((t) => t.id === ticket.id)
+  if (idx >= 0) selectedTickets.value.splice(idx, 1)
+  else selectedTickets.value.push(ticket)
+}
+
+function onSortColumn(column: TicketSortColumn) {
+  const next = toggleTicketSort(column, sortColumn.value, sortDirection.value)
+  sortColumn.value = next.column
+  sortDirection.value = next.direction
+  first.value = 0
+  loadTickets()
+}
 const bulkDialogVisible = ref(false)
 const bulkPriority = ref<string | null>(null)
 const bulkType = ref<string | null>(null)
@@ -553,23 +488,6 @@ async function doSaveView() {
   }
 }
 
-interface InlineEdit {
-  id: string
-  field: string
-  value: string | null
-}
-const editingCell = ref<InlineEdit | null>(null)
-const inlineTitleRef = ref<InstanceType<typeof InputText> | null>(null)
-
-const inlineEditValue = computed({
-  get(): string | null {
-    return editingCell.value?.value ?? null
-  },
-  set(v: string | null) {
-    if (editingCell.value) editingCell.value.value = v
-  },
-})
-
 const TICKET_TYPES = ['task', 'bug', 'story', 'epic', 'subtask'] as const
 const PRIORITIES = ['highest', 'high', 'medium', 'low', 'lowest'] as const
 
@@ -591,12 +509,12 @@ function formatLabel(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function prioritySeverity(priority: string): 'danger' | 'warning' | 'info' | 'success' | 'secondary' {
+function prioritySeverity(priority: string): 'danger' | 'warn' | 'info' | 'success' | 'secondary' {
   switch (priority) {
     case 'highest':
       return 'danger'
     case 'high':
-      return 'warning'
+      return 'warn'
     case 'medium':
       return 'info'
     case 'low':
@@ -617,91 +535,6 @@ function formatDate(iso: string) {
   } catch {
     return iso
   }
-}
-
-function startInlineEdit(row: Ticket, field: string, currentValue: string | null) {
-  editingCell.value = { id: row.id, field, value: currentValue }
-  if (field === 'title') {
-    void nextTick(() => {
-      const root = inlineTitleRef.value as { $el?: HTMLElement } | null
-      const el = root?.$el
-      const input = (el?.tagName === 'INPUT' ? el : el?.querySelector?.('input')) as HTMLInputElement | null
-      input?.focus()
-      input?.select()
-    })
-  }
-}
-
-function cancelInlineEdit() {
-  editingCell.value = null
-}
-
-async function commitInlineEdit(row: Ticket) {
-  const cell = editingCell.value
-  if (!cell) return
-  const newVal = cell.value
-
-  if (cell.field === 'title') {
-    const trimmed = (newVal as string).trim()
-    if (!trimmed || trimmed === row.title) {
-      cancelInlineEdit()
-      return
-    }
-    try {
-      const updated = await updateTicket(row.id, { title: trimmed })
-      applyTicketPatch(row.id, updated)
-    } catch (e) {
-      console.error(e)
-    }
-  } else if (cell.field === 'ticket_type') {
-    if (newVal === row.ticket_type) { cancelInlineEdit(); return }
-    try {
-      const updated = await updateTicket(row.id, { ticket_type: newVal as string })
-      applyTicketPatch(row.id, updated)
-    } catch (e) {
-      console.error(e)
-    }
-  } else if (cell.field === 'priority') {
-    if (newVal === row.priority) { cancelInlineEdit(); return }
-    try {
-      const updated = await updateTicket(row.id, { priority: newVal as string })
-      applyTicketPatch(row.id, updated)
-    } catch (e) {
-      console.error(e)
-    }
-  } else if (cell.field === 'assignee_id') {
-    const next = (newVal as string | null) ?? null
-    if (next === row.assignee_id) { cancelInlineEdit(); return }
-    try {
-      const updated = await updateTicket(row.id, { assignee_id: next })
-      applyTicketPatch(row.id, updated)
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  cancelInlineEdit()
-}
-
-async function commitStatusTransition(row: Ticket) {
-  const cell = editingCell.value
-  if (!cell) return
-  const newStatusId = cell.value as string
-  if (newStatusId === row.workflow_status_id) {
-    cancelInlineEdit()
-    return
-  }
-  try {
-    const updated = await transitionStatus(row.id, { workflow_status_id: newStatusId })
-    applyTicketPatch(row.id, updated)
-  } catch (e) {
-    console.error(e)
-  }
-  cancelInlineEdit()
-}
-
-function applyTicketPatch(ticketId: string, updated: Ticket) {
-  tickets.value = tickets.value.map(t => t.id === ticketId ? updated : t)
 }
 
 async function loadProject() {
@@ -734,9 +567,11 @@ function isTopLevelTicket(tk: Ticket): boolean {
 async function loadTickets() {
   loadingTickets.value = true
   try {
+    const sortParams = sortColumnToApiParams(sortColumn.value, sortDirection.value)
     const res = await listTickets(projectId.value, {
       offset: first.value,
       limit: rows.value,
+      ...sortParams,
       ...(appliedSearch.value.trim() ? { search: appliedSearch.value.trim() } : {}),
       ...(filterTicketType.value ? { ticket_type: filterTicketType.value } : {}),
       ...(filterPriority.value ? { priority: filterPriority.value } : {}),
@@ -757,7 +592,7 @@ async function loadTickets() {
 function onPage(e: { first: number; rows: number }) {
   first.value = e.first
   rows.value = e.rows
-  loadTickets()
+  void loadTickets()
 }
 
 function applyFilters() {

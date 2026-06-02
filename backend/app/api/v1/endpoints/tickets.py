@@ -125,8 +125,8 @@ async def list_tickets(
     parent_ticket_id: UUID | None = None,
     has_parent: bool | None = None,
     is_deleted: bool = False,
-    sort_by: str = "created_at",
-    sort_dir: str = "desc",
+    sort_by: str = "priority",
+    sort_dir: str = "asc",
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

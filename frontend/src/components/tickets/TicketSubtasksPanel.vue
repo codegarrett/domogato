@@ -231,6 +231,7 @@ onMounted(async () => {
             compact
             @start="startEdit(child, 'assignee_id', child.assignee_id)"
             @commit="commitAssignee(child)"
+            @cancel="cancelEdit"
           />
         </span>
         <span class="subtask-cell" @click.stop>
@@ -244,6 +245,7 @@ onMounted(async () => {
             compact
             @start="startEdit(child, 'workflow_status_id', child.workflow_status_id)"
             @commit="commitStatus(child)"
+            @cancel="cancelEdit"
           />
         </span>
         <span class="subtask-points text-center font-bold">

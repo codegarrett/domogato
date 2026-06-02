@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import Select from 'primevue/select'
+import { computed } from 'vue'
 import Tag from 'primevue/tag'
 import type { Ticket } from '@/api/tickets'
+import TicketInlinePicker from '@/components/tickets/TicketInlinePicker.vue'
 
-defineProps<{
+const props = defineProps<{
   ticket: Ticket
   editing: boolean
   statusOptions: { label: string; value: string }[]
@@ -17,45 +18,36 @@ const editValue = defineModel<string | null>('editValue')
 const emit = defineEmits<{
   start: []
   commit: []
+  cancel: []
 }>()
+
+const displayStatusId = computed(() =>
+  props.editing && editValue.value ? editValue.value : props.ticket.workflow_status_id,
+)
 </script>
 
 <template>
-  <div v-if="editing" class="inline-cell-root" @click.stop>
-    <Select
-      v-model="editValue"
-      :options="statusOptions"
-      option-label="label"
-      option-value="value"
-      class="p-inputtext-sm w-full"
-      @update:model-value="emit('commit')"
+  <TicketInlinePicker
+    :editing="editing"
+    v-model="editValue"
+    :options="statusOptions"
+    @start="emit('start')"
+    @commit="emit('commit')"
+    @cancel="emit('cancel')"
+  >
+    <Tag
+      :value="resolveStatusName(displayStatusId)"
+      :style="resolveStatusStyle(displayStatusId)"
+      class="inline-editable-tag"
+      :class="{ 'text-xs': compact }"
     />
-  </div>
-  <Tag
-    v-else
-    :value="resolveStatusName(ticket.workflow_status_id)"
-    :style="resolveStatusStyle(ticket.workflow_status_id)"
-    class="cursor-pointer inline-editable-tag inline-cell-root"
-    :class="{ 'text-xs': compact }"
-    @click.stop="emit('start')"
-  />
+  </TicketInlinePicker>
 </template>
 
 <style scoped>
-.inline-cell-root {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-}
-
 .inline-editable-tag {
   max-width: 100%;
-  transition: opacity 0.15s, box-shadow 0.15s;
-}
-
-.inline-editable-tag:hover {
-  opacity: 0.85;
-  box-shadow: 0 0 0 2px var(--p-primary-200, #bfdbfe);
+  cursor: pointer;
 }
 
 .inline-editable-tag :deep(.p-tag-value) {

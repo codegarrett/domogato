@@ -480,3 +480,39 @@ async def test_ticket_auto_numbering(admin_client: AsyncClient, db_session: Asyn
         numbers.append(ticket["ticket_number"])
 
     assert numbers == [1, 2, 3, 4, 5]
+
+
+@pytest.mark.asyncio
+async def test_list_tickets_sort_by_ticket_number(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="sort-num-tkt-org",
+    )
+    for i in range(1, 4):
+        await _create_ticket(admin_client, project["id"], title=f"Ticket {i}")
+
+    resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets",
+        params={"sort_by": "ticket_number", "sort_dir": "asc", "limit": 50},
+    )
+    assert resp.status_code == 200
+    numbers = [t["ticket_number"] for t in resp.json()["items"]]
+    assert numbers == sorted(numbers)
+    assert numbers == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_list_tickets_sort_by_priority_rank(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="sort-pri-tkt-org",
+    )
+    await _create_ticket(admin_client, project["id"], title="Low", priority="low")
+    await _create_ticket(admin_client, project["id"], title="High", priority="high")
+    await _create_ticket(admin_client, project["id"], title="Highest", priority="highest")
+
+    resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets",
+        params={"sort_by": "priority", "sort_dir": "asc", "limit": 50},
+    )
+    assert resp.status_code == 200
+    priorities = [t["priority"] for t in resp.json()["items"]]
+    assert priorities == ["highest", "high", "low"]
