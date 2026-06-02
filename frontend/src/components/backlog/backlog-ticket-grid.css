@@ -1,0 +1,103 @@
+/* Shared column layout for planning table header + rows */
+.backlog-ticket-grid {
+  display: grid;
+  grid-template-columns:
+    1.75rem
+    1.25rem
+    5.5rem
+    minmax(10rem, 1fr)
+    5.5rem
+    5.5rem
+    8.5rem
+    7.5rem
+    3.25rem;
+  align-items: center;
+  column-gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  min-width: 52rem;
+}
+
+.backlog-ticket-grid--header {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--p-text-muted-color, #64748b);
+  border-bottom: 1px solid var(--p-content-border-color);
+  background: var(--p-surface-50, #f8fafc);
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  user-select: none;
+}
+
+.backlog-ticket-grid .grid-cell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.backlog-ticket-grid .grid-cell--start {
+  justify-content: flex-start;
+}
+
+.backlog-ticket-grid .grid-cell--title {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.backlog-ticket-grid .grid-cell--clip {
+  overflow: hidden;
+}
+
+.backlog-ticket-grid .grid-cell--clip > * {
+  max-width: 100%;
+}
+
+.backlog-ticket-grid .grid-cell--clip :deep(.p-tag) {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlog-ticket-grid .grid-cell--clip :deep(.p-tag-value) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.backlog-ticket-grid .grid-cell--clip .inline-editable {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.backlog-ticket-grid .grid-cell--clip :deep(.p-select) {
+  width: 100%;
+}
+
+.backlog-ticket-grid .story-points-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  width: 100%;
+  text-align: center;
+}
+
+.backlog-ticket-grid .story-points-input {
+  width: 100%;
+}
+
+.backlog-ticket-grid .story-points-input :deep(.p-inputnumber-input) {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  text-align: center;
+  width: 100%;
+}
+
+.backlog-ticket-table-wrap {
+  overflow-x: auto;
+}

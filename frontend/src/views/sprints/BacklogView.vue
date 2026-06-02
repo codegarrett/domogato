@@ -8,6 +8,7 @@ import Tag from 'primevue/tag'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import BacklogTicketRow from '@/components/backlog/BacklogTicketRow.vue'
+import BacklogTicketTableHeader from '@/components/backlog/BacklogTicketTableHeader.vue'
 import { useProjectTicketMeta } from '@/composables/useProjectTicketMeta'
 import { useToastService } from '@/composables/useToast'
 import {
@@ -345,7 +346,8 @@ onMounted(loadData)
           </span>
         </div>
 
-        <div v-show="!collapsed[sprint.id]" class="sprint-body">
+        <div v-show="!collapsed[sprint.id]" class="sprint-body backlog-ticket-table-wrap">
+          <BacklogTicketTableHeader />
           <draggable
             v-model="sprintTickets[sprint.id]"
             group="tickets"
@@ -400,16 +402,18 @@ onMounted(loadData)
           </span>
         </div>
 
-        <draggable
-          v-model="backlogTickets"
-          group="tickets"
-          item-key="id"
-          :animation="150"
-          ghost-class="drag-ghost"
-          drag-class="drag-active"
-          class="ticket-list"
-          @change="onBacklogDragChange"
-        >
+        <div class="backlog-ticket-table-wrap">
+          <BacklogTicketTableHeader />
+          <draggable
+            v-model="backlogTickets"
+            group="tickets"
+            item-key="id"
+            :animation="150"
+            ghost-class="drag-ghost"
+            drag-class="drag-active"
+            class="ticket-list"
+            @change="onBacklogDragChange"
+          >
           <template #item="{ element: tk }">
             <BacklogTicketRow
               :ticket="tk"
@@ -437,6 +441,7 @@ onMounted(loadData)
             />
           </template>
         </draggable>
+        </div>
         <div v-if="!backlogTickets.length && !loading" class="p-4 text-center text-color-secondary text-sm">
           {{ $t('sprints.emptyBacklog') }}
         </div>
@@ -488,23 +493,6 @@ onMounted(loadData)
   min-height: 2.5rem;
 }
 
-.ticket-row {
-  border-bottom: 1px solid var(--p-content-border-color);
-  transition: background 0.12s;
-}
-
-.ticket-row:last-child {
-  border-bottom: none;
-}
-
-.ticket-row:hover {
-  background: var(--p-content-hover-background, var(--p-surface-50));
-}
-
-.ticket-selected {
-  background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
-}
-
 .drag-ghost {
   opacity: 0.4;
   background: var(--p-primary-50, #eef2ff);
@@ -513,34 +501,5 @@ onMounted(loadData)
 .drag-active {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 6px;
-}
-
-.drag-handle {
-  opacity: 0.4;
-  transition: opacity 0.15s;
-}
-
-.ticket-row:hover .drag-handle {
-  opacity: 1;
-}
-
-.inline-editable {
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  transition: background 0.15s;
-}
-
-.inline-editable:hover {
-  background: var(--p-surface-100, #f1f5f9);
-}
-
-.inline-editable-tag {
-  transition: opacity 0.15s, box-shadow 0.15s;
-}
-
-.inline-editable-tag:hover {
-  opacity: 0.85;
-  box-shadow: 0 0 0 2px var(--p-primary-200, #bfdbfe);
 }
 </style>

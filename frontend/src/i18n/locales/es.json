@@ -298,6 +298,7 @@
     "selectSprint": "Seleccionar un sprint…",
     "tickets": "Tickets",
     "storyPoints": "Puntos de Historia",
+    "pointsCol": "Pts",
     "items": "elementos",
     "dragHint": "Arrastra tickets para reordenar o mover entre sprints",
     "sprintTickets": "{count} tickets",

@@ -19,25 +19,22 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-if="editing" @click.stop>
+  <div v-if="editing" class="inline-cell-root" @click.stop>
     <Select
       v-model="editValue"
       :options="assigneeOptions"
       option-label="label"
       option-value="value"
       :placeholder="$t('tickets.unassigned')"
-      class="p-inputtext-sm"
-      :class="compact ? '' : 'w-full'"
-      :style="compact ? { width: '9rem' } : undefined"
+      class="p-inputtext-sm w-full"
       show-clear
       @update:model-value="emit('commit')"
     />
   </div>
   <span
     v-else
-    class="text-sm inline-editable"
-    :class="{ 'text-xs': compact }"
-    :style="compact ? { minWidth: '5rem', maxWidth: '9rem' } : undefined"
+    class="inline-editable"
+    :class="compact ? 'text-xs inline-cell-root' : 'text-sm'"
     @click.stop="emit('start')"
   >
     {{ resolveAssigneeName(ticket.assignee_id) }}
@@ -45,7 +42,18 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
+.inline-cell-root {
+  width: 100%;
+  min-width: 0;
+}
+
 .inline-editable {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
