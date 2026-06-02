@@ -166,15 +166,42 @@ export async function searchTickets(projectId: string, q: string, offset = 0, li
   return data
 }
 
-export async function exportTicketsCsv(projectId: string): Promise<void> {
+export interface TicketExportParams {
+  ticketIds?: string[]
+  workflowStatusIds?: string[]
+  format?: 'csv' | 'json'
+}
+
+export async function exportTickets(
+  projectId: string,
+  params: TicketExportParams = {},
+): Promise<void> {
+  const query: Record<string, string | string[]> = {
+    format: params.format ?? 'csv',
+  }
+  if (params.ticketIds?.length) {
+    query.ticket_ids = params.ticketIds
+  }
+  if (params.workflowStatusIds?.length) {
+    query.workflow_status_ids = params.workflowStatusIds
+  }
+
   const response = await apiClient.get(`/projects/${projectId}/tickets/export`, {
+    params: query,
+    paramsSerializer: {
+      indexes: null,
+    },
     responseType: 'blob',
   })
-  const blob = new Blob([response.data as BlobPart], { type: 'text/csv' })
+
+  const format = params.format ?? 'csv'
+  const mime = format === 'json' ? 'application/json' : 'text/csv'
+  const ext = format === 'json' ? 'json' : 'csv'
+  const blob = new Blob([response.data as BlobPart], { type: mime })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `tickets_${projectId}.csv`
+  a.download = `tickets_${projectId}.${ext}`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

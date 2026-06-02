@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import case, func, nulls_last, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.project import Project
+from app.models.sprint import Sprint
 from app.models.ticket import Ticket
 from app.models.user import User
+from app.models.workflow import WorkflowStatus
 from app.utils.markdown_sanitize import sanitize_markdown
 from app.models.workflow import Workflow, WorkflowStatus, WorkflowTransition
 
@@ -527,33 +530,154 @@ async def bulk_update_tickets(
     return result.rowcount
 
 
-async def export_tickets_csv(
+# Import-compatible column order (matches import_service.KNOWN_COLUMN_MAPPINGS headers).
+EXPORT_TICKET_FIELDNAMES: list[str] = [
+    "Issue Key",
+    "Summary",
+    "Issue Type",
+    "Priority",
+    "Status",
+    "Description",
+    "Assignee",
+    "Reporter",
+    "Labels",
+    "Sprint",
+    "Story Points",
+    "Start Date",
+    "Due Date",
+    "Parent Key",
+    "Resolution",
+    "Resolved",
+    "Created",
+    "Updated",
+    "Ticket Number",
+    "Original Estimate Seconds",
+    "Remaining Estimate Seconds",
+]
+
+
+def _export_format_date(value: date | None) -> str:
+    return value.isoformat() if value else ""
+
+
+def _export_format_datetime(value: datetime | None) -> str:
+    if not value:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
+async def export_tickets(
     db: AsyncSession,
     project_id: UUID,
-) -> list[dict[str, Any]]:
-    """Export all active tickets for a project as a list of dicts (for CSV generation)."""
-    result = await db.execute(
+    *,
+    ticket_ids: list[UUID] | None = None,
+    workflow_status_ids: list[UUID] | None = None,
+) -> list[dict[str, str]]:
+    """Export tickets using headers compatible with ticket import."""
+    project = (
+        await db.execute(select(Project).where(Project.id == project_id))
+    ).scalar_one_or_none()
+    if project is None:
+        return []
+
+    project_key = project.key
+    key_rows = await db.execute(
+        select(Ticket.id, Ticket.ticket_number).where(
+            Ticket.project_id == project_id,
+            Ticket.is_deleted == False,  # noqa: E712
+        )
+    )
+    issue_key_by_id = {
+        row.id: f"{project_key}-{row.ticket_number}" for row in key_rows.all()
+    }
+
+    query = (
         select(Ticket)
         .where(Ticket.project_id == project_id, Ticket.is_deleted == False)  # noqa: E712
+        .options(selectinload(Ticket.labels))
         .order_by(Ticket.ticket_number.asc())
     )
-    tickets = result.scalars().all()
-    rows = []
+    if ticket_ids:
+        query = query.where(Ticket.id.in_(ticket_ids))
+    if workflow_status_ids:
+        query = query.where(Ticket.workflow_status_id.in_(workflow_status_ids))
+
+    tickets = list((await db.execute(query)).scalars().all())
+    if not tickets:
+        return []
+
+    status_ids = {t.workflow_status_id for t in tickets}
+    user_ids: set[UUID] = set()
+    sprint_ids: set[UUID] = set()
     for t in tickets:
+        if t.assignee_id:
+            user_ids.add(t.assignee_id)
+        if t.reporter_id:
+            user_ids.add(t.reporter_id)
+        if t.sprint_id:
+            sprint_ids.add(t.sprint_id)
+
+    status_map: dict[UUID, str] = {}
+    if status_ids:
+        statuses = (
+            await db.execute(select(WorkflowStatus).where(WorkflowStatus.id.in_(status_ids)))
+        ).scalars().all()
+        status_map = {s.id: s.name for s in statuses}
+
+    user_map: dict[UUID, str] = {}
+    if user_ids:
+        users = (
+            await db.execute(select(User).where(User.id.in_(user_ids)))
+        ).scalars().all()
+        user_map = {u.id: u.display_name for u in users}
+
+    sprint_map: dict[UUID, str] = {}
+    if sprint_ids:
+        sprints = (
+            await db.execute(select(Sprint).where(Sprint.id.in_(sprint_ids)))
+        ).scalars().all()
+        sprint_map = {s.id: s.name for s in sprints}
+
+    rows: list[dict[str, str]] = []
+    for t in tickets:
+        issue_key = issue_key_by_id.get(t.id, f"{project_key}-{t.ticket_number}")
+        parent_key = ""
+        if t.parent_ticket_id:
+            parent_key = issue_key_by_id.get(t.parent_ticket_id, "")
+        labels = ", ".join(sorted(lbl.name for lbl in t.labels)) if t.labels else ""
+
         rows.append({
-            "ticket_number": t.ticket_number,
-            "title": t.title,
-            "type": t.ticket_type,
-            "priority": t.priority,
-            "status_id": str(t.workflow_status_id),
-            "assignee_id": str(t.assignee_id) if t.assignee_id else "",
-            "reporter_id": str(t.reporter_id) if t.reporter_id else "",
-            "story_points": t.story_points or "",
-            "start_date": str(t.start_date) if t.start_date else "",
-            "due_date": str(t.due_date) if t.due_date else "",
-            "resolution": t.resolution or "",
-            "created_at": t.created_at.isoformat() if t.created_at else "",
-            "updated_at": t.updated_at.isoformat() if t.updated_at else "",
+            "Issue Key": issue_key,
+            "Summary": t.title,
+            "Issue Type": t.ticket_type,
+            "Priority": t.priority,
+            "Status": status_map.get(t.workflow_status_id, ""),
+            "Description": t.description or "",
+            "Assignee": user_map.get(t.assignee_id, "") if t.assignee_id else "",
+            "Reporter": user_map.get(t.reporter_id, "") if t.reporter_id else "",
+            "Labels": labels,
+            "Sprint": sprint_map.get(t.sprint_id, "") if t.sprint_id else "",
+            "Story Points": str(t.story_points) if t.story_points is not None else "",
+            "Start Date": _export_format_date(t.start_date),
+            "Due Date": _export_format_date(t.due_date),
+            "Parent Key": parent_key,
+            "Resolution": t.resolution or "",
+            "Resolved": _export_format_datetime(t.resolved_at),
+            "Created": _export_format_datetime(t.created_at),
+            "Updated": _export_format_datetime(t.updated_at),
+            "Ticket Number": str(t.ticket_number),
+            "Original Estimate Seconds": (
+                str(t.original_estimate_seconds)
+                if t.original_estimate_seconds is not None
+                else ""
+            ),
+            "Remaining Estimate Seconds": (
+                str(t.remaining_estimate_seconds)
+                if t.remaining_estimate_seconds is not None
+                else ""
+            ),
         })
     return rows
 

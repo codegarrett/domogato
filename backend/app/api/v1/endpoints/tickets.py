@@ -391,33 +391,49 @@ async def bulk_update_tickets(
 
 
 @router.get("/projects/{project_id}/tickets/export")
-async def export_tickets_csv(
+async def export_tickets(
     project_id: UUID,
+    ticket_ids: list[UUID] | None = Query(None),
+    workflow_status_ids: list[UUID] | None = Query(None),
+    format: str = Query("csv", pattern=r"^(csv|json)$"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     import csv
     import io
+    import json
 
-    from starlette.responses import StreamingResponse
+    from starlette.responses import Response, StreamingResponse
 
     await _require_project_role(db, project_id, user, ProjectRole.GUEST)
 
-    rows = await ticket_service.export_tickets_csv(db, project_id)
-    if not rows:
-        return StreamingResponse(
-            iter(["No tickets found"]),
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=tickets.csv"},
+    rows = await ticket_service.export_tickets(
+        db,
+        project_id,
+        ticket_ids=ticket_ids or None,
+        workflow_status_ids=workflow_status_ids or None,
+    )
+    filename_base = f"tickets_{project_id}"
+
+    if format == "json":
+        body = json.dumps(rows, indent=2)
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename_base}.json"},
         )
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))
+    writer = csv.DictWriter(
+        output,
+        fieldnames=ticket_service.EXPORT_TICKET_FIELDNAMES,
+        extrasaction="ignore",
+    )
     writer.writeheader()
     writer.writerows(rows)
 
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=tickets_{project_id}.csv"},
+        headers={"Content-Disposition": f"attachment; filename={filename_base}.csv"},
     )

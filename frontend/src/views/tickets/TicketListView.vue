@@ -44,8 +44,7 @@
               severity="secondary"
               outlined
               size="small"
-              :loading="exporting"
-              @click="exportCsv"
+              @click="exportDialogVisible = true"
             />
             <Button :label="$t('tickets.createTicket')" icon="pi pi-plus" @click="openCreateDialog" />
           </div>
@@ -314,6 +313,14 @@
       @confirm="submitBulkDelete"
     />
 
+    <TicketExportDialog
+      v-model:visible="exportDialogVisible"
+      :selected-tickets="selectedTickets"
+      :status-options="exportStatusOptions"
+      :loading="exporting"
+      @confirm="submitExport"
+    />
+
     <Dialog
       v-model:visible="saveViewDialogVisible"
       :header="$t('tickets.saveView')"
@@ -354,11 +361,12 @@ import {
   createTicket,
   bulkUpdateTickets,
   deleteTicket,
-  exportTicketsCsv,
+  exportTickets,
   type Ticket,
   type TicketCreate,
 } from '@/api/tickets'
 import TicketBulkDeleteDialog from '@/components/tickets/TicketBulkDeleteDialog.vue'
+import TicketExportDialog from '@/components/tickets/TicketExportDialog.vue'
 import { useProjectAdmin } from '@/composables/useProjectAdmin'
 import { useToastService } from '@/composables/useToast'
 import { orderedDeleteIds } from '@/utils/collectTicketsForDelete'
@@ -407,6 +415,7 @@ const epics = ref<Epic[]>([])
 const loadingEpics = ref(false)
 
 const {
+  workflows,
   assigneeOptions,
   resolveAssigneeName,
   resolveStatusName,
@@ -415,6 +424,20 @@ const {
   loadMembers,
   loadWorkflows,
 } = useProjectTicketMeta(() => projectId.value, project)
+
+const exportStatusOptions = computed(() => {
+  const seen = new Set<string>()
+  const opts: { id: string; name: string }[] = []
+  for (const wf of workflows.value) {
+    for (const s of wf.statuses) {
+      if (!seen.has(s.id)) {
+        seen.add(s.id)
+        opts.push({ id: s.id, name: s.name })
+      }
+    }
+  }
+  return opts.sort((a, b) => a.name.localeCompare(b.name))
+})
 
 const createVisible = ref(false)
 const creating = ref(false)
@@ -508,6 +531,7 @@ const deletingTickets = ref(false)
 const bulkPriority = ref<string | null>(null)
 const bulkType = ref<string | null>(null)
 const bulkSaving = ref(false)
+const exportDialogVisible = ref(false)
 const exporting = ref(false)
 
 const savedViews = ref<SavedView[]>([])
@@ -740,10 +764,19 @@ async function submitBulkUpdate() {
   }
 }
 
-async function exportCsv() {
+async function submitExport(payload: {
+  ticketIds?: string[]
+  workflowStatusIds?: string[]
+}) {
   exporting.value = true
   try {
-    await exportTicketsCsv(projectId.value)
+    await exportTickets(projectId.value, {
+      ticketIds: payload.ticketIds,
+      workflowStatusIds: payload.workflowStatusIds,
+    })
+    exportDialogVisible.value = false
+  } catch {
+    toast.showError(t('common.error'), t('tickets.exportFailed'))
   } finally {
     exporting.value = false
   }

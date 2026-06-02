@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 
 import pytest
@@ -561,3 +563,96 @@ async def test_list_tickets_sort_by_priority_rank(admin_client: AsyncClient, db_
     assert resp.status_code == 200
     priorities = [t["priority"] for t in resp.json()["items"]]
     assert priorities == ["highest", "high", "low"]
+
+
+@pytest.mark.asyncio
+async def test_export_tickets_full_columns(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, initial_status = await _setup_project_with_workflow(
+        admin_client, db_session, slug="export-tkt-org",
+    )
+    parent = await _create_ticket(
+        admin_client,
+        project["id"],
+        title="Parent task",
+        description="Parent body",
+        priority="high",
+    )
+    child = await _create_ticket(
+        admin_client,
+        project["id"],
+        title="Child task",
+        parent_ticket_id=parent["id"],
+        ticket_type="subtask",
+    )
+
+    resp = await admin_client.get(f"{PROJECT_API}/{project['id']}/tickets/export")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers.get("content-type", "")
+
+    reader = csv.DictReader(io.StringIO(resp.text))
+    rows = list(reader)
+    assert len(rows) >= 2
+
+    expected_headers = {
+        "Issue Key",
+        "Summary",
+        "Issue Type",
+        "Priority",
+        "Status",
+        "Description",
+        "Parent Key",
+        "Ticket Number",
+    }
+    assert expected_headers.issubset(set(reader.fieldnames or []))
+
+    by_key = {r["Issue Key"]: r for r in rows}
+    parent_key = f"{project['key']}-{parent['ticket_number']}"
+    child_key = f"{project['key']}-{child['ticket_number']}"
+    assert parent_key in by_key
+    assert child_key in by_key
+    assert by_key[parent_key]["Summary"] == "Parent task"
+    assert by_key[parent_key]["Description"] == "Parent body"
+    assert by_key[parent_key]["Priority"] == "high"
+    assert by_key[parent_key]["Status"] == initial_status["name"]
+    assert by_key[child_key]["Parent Key"] == parent_key
+
+
+@pytest.mark.asyncio
+async def test_export_tickets_filter_by_ids_and_status(
+    admin_client: AsyncClient, db_session: AsyncSession,
+):
+    _, project, workflow, initial_status = await _setup_project_with_workflow(
+        admin_client, db_session, slug="export-filter-org",
+    )
+    in_progress = next(
+        s for s in workflow["statuses"]
+        if not s["is_initial"] and not s.get("is_terminal", False)
+    )
+    open_ticket = await _create_ticket(admin_client, project["id"], title="Open one")
+    moved_ticket = await _create_ticket(admin_client, project["id"], title="In progress one")
+    trans = await admin_client.post(
+        f"{TICKET_API}/{moved_ticket['id']}/transition",
+        json={"workflow_status_id": in_progress["id"]},
+    )
+    assert trans.status_code == 200
+
+    # Export only selected ticket
+    sel_resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets/export",
+        params={"ticket_ids": [open_ticket["id"]]},
+    )
+    assert sel_resp.status_code == 200
+    sel_rows = list(csv.DictReader(io.StringIO(sel_resp.text)))
+    assert len(sel_rows) == 1
+    assert sel_rows[0]["Summary"] == "Open one"
+
+    # Export only tickets in initial status
+    status_resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets/export",
+        params={"workflow_status_ids": [initial_status["id"]]},
+    )
+    assert status_resp.status_code == 200
+    status_rows = list(csv.DictReader(io.StringIO(status_resp.text)))
+    summaries = {r["Summary"] for r in status_rows}
+    assert "Open one" in summaries
+    assert "In progress one" not in summaries

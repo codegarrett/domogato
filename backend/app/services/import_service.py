@@ -50,6 +50,9 @@ KNOWN_COLUMN_MAPPINGS: dict[str, str] = {
     "story point estimate": "story_points",
     "start date": "start_date",
     "parent": "parent_key",
+    "ticket number": "ticket_number",
+    "original estimate seconds": "original_estimate_seconds",
+    "remaining estimate seconds": "remaining_estimate_seconds",
 }
 
 TARGET_FIELDS = [
@@ -225,6 +228,18 @@ def _parse_story_points(value: Any) -> int | None:
         return None
 
 
+def _split_label_names(value: Any) -> list[str]:
+    """Split label cell values; supports comma-separated round-trip from export."""
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if v and str(v).strip()]
+    s = str(value).strip()
+    if not s:
+        return []
+    if "," in s:
+        return [part.strip() for part in s.split(",") if part.strip()]
+    return [s]
+
+
 def _parse_ticket_number(value: Any) -> int | None:
     """Parse a ticket number from a raw value.
 
@@ -396,12 +411,8 @@ async def execute_import(
 
         labels_val = mapped.get("labels")
         if labels_val:
-            if isinstance(labels_val, list):
-                for lbl in labels_val:
-                    if lbl:
-                        label_names.add(str(lbl))
-            elif labels_val:
-                label_names.add(str(labels_val))
+            for lbl in _split_label_names(labels_val):
+                label_names.add(lbl)
 
         sprint_val = mapped.get("sprint")
         if sprint_val:
@@ -570,6 +581,19 @@ async def execute_import(
             start_date_val = _parse_date_only(str(data["start_date"])) if data.get("start_date") else None
             resolution = data.get("resolution") if data.get("resolution") else None
 
+            original_estimate = None
+            if data.get("original_estimate_seconds") not in (None, ""):
+                try:
+                    original_estimate = int(data["original_estimate_seconds"])
+                except (TypeError, ValueError):
+                    pass
+            remaining_estimate = None
+            if data.get("remaining_estimate_seconds") not in (None, ""):
+                try:
+                    remaining_estimate = int(data["remaining_estimate_seconds"])
+                except (TypeError, ValueError):
+                    pass
+
             resolved_at = None
             if data.get("resolved_at"):
                 resolved_at = _parse_jira_date(str(data["resolved_at"]))
@@ -620,6 +644,8 @@ async def execute_import(
                 resolution=resolution,
                 resolved_at=resolved_at,
                 sprint_id=sprint_id,
+                original_estimate_seconds=original_estimate,
+                remaining_estimate_seconds=remaining_estimate,
                 custom_field_values=custom_field_values,
             )
             db.add(ticket)
@@ -637,8 +663,7 @@ async def execute_import(
 
             labels_val = data.get("labels")
             if labels_val:
-                lbl_names = labels_val if isinstance(labels_val, list) else [labels_val]
-                for lbl_name in lbl_names:
+                for lbl_name in _split_label_names(labels_val):
                     lbl_id = label_id_map.get(str(lbl_name).lower())
                     if lbl_id:
                         await db.execute(
