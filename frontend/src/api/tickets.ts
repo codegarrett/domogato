@@ -41,6 +41,8 @@ export interface TicketListParams {
   epic_id?: string
   sprint_id?: string
   workflow_status_id?: string
+  parent_ticket_id?: string
+  has_parent?: boolean
   is_deleted?: boolean
   sort_by?: string
   sort_dir?: string
@@ -67,10 +69,17 @@ export interface TicketUpdate {
   assignee_id?: string | null
   epic_id?: string | null
   sprint_id?: string | null
+  parent_ticket_id?: string | null
   story_points?: number | null
   due_date?: string | null
   start_date?: string | null
   resolution?: string | null
+}
+
+export interface TicketHierarchy {
+  ticket: Ticket
+  ancestors: Ticket[]
+  children: Ticket[]
 }
 
 export async function listTickets(projectId: string, params: TicketListParams = {}) {
@@ -104,6 +113,16 @@ export async function transitionStatus(ticketId: string, payload: { workflow_sta
 
 export async function getTicketChildren(ticketId: string) {
   const { data } = await apiClient.get<Ticket[]>(`/tickets/${ticketId}/children`)
+  return data
+}
+
+export async function getTicketAncestors(ticketId: string) {
+  const { data } = await apiClient.get<Ticket[]>(`/tickets/${ticketId}/ancestors`)
+  return data
+}
+
+export async function getTicketHierarchy(ticketId: string) {
+  const { data } = await apiClient.get<TicketHierarchy>(`/tickets/${ticketId}/hierarchy`)
   return data
 }
 

@@ -14,10 +14,23 @@ from app.core.permissions import (
 )
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
-from app.schemas.ticket import TicketBulkUpdate, TicketCreate, TicketRead, TicketStatusTransition, TicketUpdate
+from app.schemas.ticket import (
+    TicketBulkUpdate,
+    TicketCreate,
+    TicketHierarchyRead,
+    TicketRead,
+    TicketStatusTransition,
+    TicketUpdate,
+)
 from app.services import activity_service, project_service, ticket_service, watcher_service
 
 router = APIRouter(tags=["tickets"])
+
+
+def _enrich_ticket_read(ticket, project_key: str | None) -> TicketRead:
+    result = TicketRead.model_validate(ticket)
+    result.project_key = project_key
+    return result
 
 
 async def _require_project_role(
@@ -109,6 +122,8 @@ async def list_tickets(
     epic_id: UUID | None = None,
     sprint_id: UUID | None = None,
     workflow_status_id: UUID | None = None,
+    parent_ticket_id: UUID | None = None,
+    has_parent: bool | None = None,
     is_deleted: bool = False,
     sort_by: str = "created_at",
     sort_dir: str = "desc",
@@ -124,13 +139,11 @@ async def list_tickets(
         ticket_type=ticket_type, priority=priority,
         assignee_id=assignee_id, epic_id=epic_id,
         sprint_id=sprint_id, workflow_status_id=workflow_status_id,
+        parent_ticket_id=parent_ticket_id,
+        has_parent=has_parent,
         is_deleted=is_deleted, sort_by=sort_by, sort_dir=sort_dir,
     )
-    items = []
-    for t in tickets:
-        r = TicketRead.model_validate(t)
-        r.project_key = project.key
-        items.append(r)
+    items = [_enrich_ticket_read(t, project.key) for t in tickets]
     return PaginatedResponse(items=items, total=total, offset=offset, limit=limit)
 
 
@@ -145,9 +158,65 @@ async def get_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
     await _require_project_role(db, ticket.project_id, user, ProjectRole.GUEST)
     project = await project_service.get_project(db, ticket.project_id)
-    result = TicketRead.model_validate(ticket)
-    result.project_key = project.key
-    return result
+    return _enrich_ticket_read(ticket, project.key)
+
+
+@router.get("/tickets/{ticket_id}/children", response_model=list[TicketRead])
+async def get_ticket_children(
+    ticket_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ticket = await ticket_service.get_ticket(db, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    await _require_project_role(db, ticket.project_id, user, ProjectRole.GUEST)
+    project = await project_service.get_project(db, ticket.project_id)
+    try:
+        children = await ticket_service.get_ticket_children(db, ticket_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return [_enrich_ticket_read(c, project.key) for c in children]
+
+
+@router.get("/tickets/{ticket_id}/ancestors", response_model=list[TicketRead])
+async def get_ticket_ancestors(
+    ticket_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ticket = await ticket_service.get_ticket(db, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    await _require_project_role(db, ticket.project_id, user, ProjectRole.GUEST)
+    project = await project_service.get_project(db, ticket.project_id)
+    try:
+        ancestors = await ticket_service.get_ticket_ancestors(db, ticket_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return [_enrich_ticket_read(a, project.key) for a in ancestors]
+
+
+@router.get("/tickets/{ticket_id}/hierarchy", response_model=TicketHierarchyRead)
+async def get_ticket_hierarchy(
+    ticket_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ticket = await ticket_service.get_ticket(db, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    await _require_project_role(db, ticket.project_id, user, ProjectRole.GUEST)
+    project = await project_service.get_project(db, ticket.project_id)
+    try:
+        tree = await ticket_service.get_ticket_tree(db, ticket_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return TicketHierarchyRead(
+        ticket=_enrich_ticket_read(tree["ticket"], project.key),
+        ancestors=[_enrich_ticket_read(a, project.key) for a in tree["ancestors"]],
+        children=[_enrich_ticket_read(c, project.key) for c in tree["children"]],
+    )
 
 
 @router.patch("/tickets/{ticket_id}", response_model=TicketRead)
@@ -165,7 +234,10 @@ async def update_ticket(
 
     old_data = {k: getattr(ticket, k, None) for k in update_data}
 
-    updated = await ticket_service.update_ticket(db, ticket_id, **update_data)
+    try:
+        updated = await ticket_service.update_ticket(db, ticket_id, **update_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     new_data = {k: getattr(updated, k, None) for k in update_data}
     await activity_service.log_ticket_changes(

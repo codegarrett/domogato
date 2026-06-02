@@ -12,6 +12,21 @@ from app.models.ticket import Ticket
 from app.utils.markdown_sanitize import sanitize_markdown
 from app.models.workflow import Workflow, WorkflowStatus, WorkflowTransition
 
+_MAX_PARENT_WALK = 64
+_NULLABLE_UPDATE_FIELDS = frozenset({
+    "parent_ticket_id",
+    "assignee_id",
+    "epic_id",
+    "sprint_id",
+    "description",
+    "story_points",
+    "due_date",
+    "start_date",
+    "resolution",
+    "original_estimate_seconds",
+    "remaining_estimate_seconds",
+})
+
 
 async def _get_initial_status(db: AsyncSession, project_id: UUID) -> WorkflowStatus:
     project = (
@@ -35,6 +50,57 @@ async def _get_initial_status(db: AsyncSession, project_id: UUID) -> WorkflowSta
     return status
 
 
+async def validate_parent_link(
+    db: AsyncSession,
+    *,
+    child_id: UUID | None,
+    child_project_id: UUID,
+    child_ticket_type: str,
+    parent_ticket_id: UUID | None,
+) -> Ticket | None:
+    """Validate parent/child rules. Returns parent ticket when parent_ticket_id is set."""
+    if parent_ticket_id is None:
+        if child_ticket_type == "subtask":
+            raise ValueError("Subtasks must have a parent ticket")
+        return None
+
+    if child_id is not None and parent_ticket_id == child_id:
+        raise ValueError("A ticket cannot be its own parent")
+
+    parent = await get_ticket(db, parent_ticket_id)
+    if parent is None or parent.is_deleted:
+        raise ValueError("Parent ticket not found")
+    if parent.project_id != child_project_id:
+        raise ValueError("Parent ticket must belong to the same project")
+    if parent.ticket_type == "subtask":
+        raise ValueError("Subtasks cannot have subtasks")
+
+    if child_id is not None:
+        walk_id: UUID | None = parent.parent_ticket_id
+        depth = 0
+        while walk_id is not None and depth < _MAX_PARENT_WALK:
+            if walk_id == child_id:
+                raise ValueError("Cannot set parent: would create a circular hierarchy")
+            ancestor = await get_ticket(db, walk_id)
+            if ancestor is None:
+                break
+            walk_id = ancestor.parent_ticket_id
+            depth += 1
+
+    return parent
+
+
+def _apply_parent_inheritance(
+    *,
+    parent: Ticket,
+    epic_id: UUID | None,
+    sprint_id: UUID | None,
+) -> tuple[UUID | None, UUID | None]:
+    next_epic = epic_id if epic_id is not None else parent.epic_id
+    next_sprint = sprint_id if sprint_id is not None else parent.sprint_id
+    return next_epic, next_sprint
+
+
 async def create_ticket(
     db: AsyncSession,
     *,
@@ -50,7 +116,25 @@ async def create_ticket(
     due_date: Any | None = None,
     start_date: Any | None = None,
     parent_ticket_id: UUID | None = None,
+    sprint_id: UUID | None = None,
 ) -> Ticket:
+    effective_type = ticket_type
+    if parent_ticket_id is not None:
+        effective_type = "subtask"
+
+    parent = await validate_parent_link(
+        db,
+        child_id=None,
+        child_project_id=project_id,
+        child_ticket_type=effective_type,
+        parent_ticket_id=parent_ticket_id,
+    )
+    effective_epic, effective_sprint = _apply_parent_inheritance(
+        parent=parent,
+        epic_id=epic_id,
+        sprint_id=sprint_id,
+    ) if parent else (epic_id, sprint_id)
+
     initial_status = await _get_initial_status(db, project_id)
 
     result = await db.execute(
@@ -67,12 +151,13 @@ async def create_ticket(
         ticket_number=ticket_number,
         title=title,
         description=sanitize_markdown(description) if description is not None else None,
-        ticket_type=ticket_type,
+        ticket_type=effective_type,
         priority=priority,
         workflow_status_id=initial_status.id,
         assignee_id=assignee_id,
         reporter_id=reporter_id,
-        epic_id=epic_id,
+        epic_id=effective_epic,
+        sprint_id=effective_sprint,
         story_points=story_points,
         due_date=due_date,
         start_date=start_date,
@@ -104,6 +189,8 @@ async def list_tickets(
     epic_id: UUID | None = None,
     sprint_id: UUID | None = None,
     workflow_status_id: UUID | None = None,
+    parent_ticket_id: UUID | None = None,
+    has_parent: bool | None = None,
     is_deleted: bool = False,
     sort_by: str = "created_at",
     sort_dir: str = "desc",
@@ -112,6 +199,13 @@ async def list_tickets(
         Ticket.project_id == project_id,
         Ticket.is_deleted == is_deleted,
     )
+
+    if parent_ticket_id is not None:
+        query = query.where(Ticket.parent_ticket_id == parent_ticket_id)
+    elif has_parent is True:
+        query = query.where(Ticket.parent_ticket_id.isnot(None))
+    elif has_parent is False:
+        query = query.where(Ticket.parent_ticket_id.is_(None))
 
     if search:
         term = search.strip()
@@ -153,12 +247,32 @@ async def update_ticket(
     if ticket is None:
         return None
 
+    if "parent_ticket_id" in kwargs or "ticket_type" in kwargs:
+        next_parent = (
+            kwargs["parent_ticket_id"]
+            if "parent_ticket_id" in kwargs
+            else ticket.parent_ticket_id
+        )
+        next_type = kwargs.get("ticket_type", ticket.ticket_type)
+        parent = await validate_parent_link(
+            db,
+            child_id=ticket_id,
+            child_project_id=ticket.project_id,
+            child_ticket_type=next_type,
+            parent_ticket_id=next_parent,
+        )
+        if parent is not None and "parent_ticket_id" in kwargs:
+            if "epic_id" not in kwargs and ticket.epic_id is None and parent.epic_id is not None:
+                kwargs["epic_id"] = parent.epic_id
+            if "sprint_id" not in kwargs and ticket.sprint_id is None and parent.sprint_id is not None:
+                kwargs["sprint_id"] = parent.sprint_id
+
     for key, value in kwargs.items():
         if not hasattr(ticket, key):
             continue
         if key == "description" and isinstance(value, str):
             value = sanitize_markdown(value)
-        if value is not None:
+        if value is not None or key in _NULLABLE_UPDATE_FIELDS:
             setattr(ticket, key, value)
     await db.flush()
     await db.refresh(ticket)
@@ -242,6 +356,43 @@ async def bulk_update(
     return list(result.scalars().all())
 
 
+async def get_ticket_children(
+    db: AsyncSession, ticket_id: UUID
+) -> list[Ticket]:
+    ticket = await get_ticket(db, ticket_id)
+    if ticket is None:
+        raise ValueError("Ticket not found")
+
+    result = await db.execute(
+        select(Ticket)
+        .where(
+            Ticket.parent_ticket_id == ticket_id,
+            Ticket.is_deleted == False,  # noqa: E712
+        )
+        .order_by(Ticket.ticket_number.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_ticket_ancestors(db: AsyncSession, ticket_id: UUID) -> list[Ticket]:
+    ticket = await get_ticket(db, ticket_id)
+    if ticket is None:
+        raise ValueError("Ticket not found")
+
+    ancestors: list[Ticket] = []
+    current = ticket
+    depth = 0
+    while current.parent_ticket_id is not None and depth < _MAX_PARENT_WALK:
+        parent = await get_ticket(db, current.parent_ticket_id)
+        if parent is None or parent.is_deleted:
+            break
+        ancestors.append(parent)
+        current = parent
+        depth += 1
+
+    return list(reversed(ancestors))
+
+
 async def get_ticket_tree(
     db: AsyncSession, ticket_id: UUID
 ) -> dict[str, Any]:
@@ -249,27 +400,13 @@ async def get_ticket_tree(
     if ticket is None:
         raise ValueError("Ticket not found")
 
-    children_result = await db.execute(
-        select(Ticket).where(
-            Ticket.parent_ticket_id == ticket_id,
-            Ticket.is_deleted == False,  # noqa: E712
-        )
-    )
-    children = list(children_result.scalars().all())
-
-    ancestors: list[Ticket] = []
-    current = ticket
-    while current.parent_ticket_id is not None:
-        parent = await get_ticket(db, current.parent_ticket_id)
-        if parent is None:
-            break
-        ancestors.append(parent)
-        current = parent
+    children = await get_ticket_children(db, ticket_id)
+    ancestors = await get_ticket_ancestors(db, ticket_id)
 
     return {
         "ticket": ticket,
         "children": children,
-        "ancestors": list(reversed(ancestors)),
+        "ancestors": ancestors,
     }
 
 

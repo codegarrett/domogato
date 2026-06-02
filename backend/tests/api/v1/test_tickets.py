@@ -192,10 +192,141 @@ async def test_nested_tickets(admin_client: AsyncClient, db_session: AsyncSessio
     )
 
     assert child["parent_ticket_id"] == parent["id"]
+    assert child["ticket_type"] == "subtask"
 
     resp = await admin_client.get(f"{TICKET_API}/{child['id']}")
     assert resp.status_code == 200
     assert resp.json()["parent_ticket_id"] == parent["id"]
+
+
+@pytest.mark.asyncio
+async def test_ticket_children_and_ancestors(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="hierarchy-tkt-org",
+    )
+    parent = await _create_ticket(
+        admin_client, project["id"], title="Parent", ticket_type="story",
+    )
+    child = await _create_ticket(
+        admin_client, project["id"],
+        title="Child", parent_ticket_id=parent["id"],
+    )
+
+    children_resp = await admin_client.get(f"{TICKET_API}/{parent['id']}/children")
+    assert children_resp.status_code == 200
+    children = children_resp.json()
+    assert len(children) == 1
+    assert children[0]["id"] == child["id"]
+
+    ancestors_resp = await admin_client.get(f"{TICKET_API}/{child['id']}/ancestors")
+    assert ancestors_resp.status_code == 200
+    ancestors = ancestors_resp.json()
+    assert len(ancestors) == 1
+    assert ancestors[0]["id"] == parent["id"]
+
+    hierarchy_resp = await admin_client.get(f"{TICKET_API}/{parent['id']}/hierarchy")
+    assert hierarchy_resp.status_code == 200
+    body = hierarchy_resp.json()
+    assert body["ticket"]["id"] == parent["id"]
+    assert len(body["children"]) == 1
+    assert body["ancestors"] == []
+
+
+@pytest.mark.asyncio
+async def test_subtask_requires_parent(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="subtask-req-org",
+    )
+    resp = await admin_client.post(
+        f"{PROJECT_API}/{project['id']}/tickets",
+        json={"title": "Orphan subtask", "ticket_type": "subtask"},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_subtask_cannot_be_parent(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="subtask-parent-org",
+    )
+    parent = await _create_ticket(admin_client, project["id"], title="Parent", ticket_type="story")
+    subtask = await _create_ticket(
+        admin_client, project["id"],
+        title="Subtask", parent_ticket_id=parent["id"],
+    )
+    resp = await admin_client.post(
+        f"{PROJECT_API}/{project['id']}/tickets",
+        json={"title": "Nested subtask", "parent_ticket_id": subtask["id"]},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_list_tickets_has_parent_filter(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="has-parent-org",
+    )
+    parent = await _create_ticket(admin_client, project["id"], title="Parent")
+    await _create_ticket(
+        admin_client, project["id"],
+        title="Child", parent_ticket_id=parent["id"],
+    )
+
+    roots_resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets",
+        params={"has_parent": "false", "limit": 100},
+    )
+    assert roots_resp.status_code == 200
+    roots = roots_resp.json()["items"]
+    assert all(t["parent_ticket_id"] is None for t in roots)
+    assert any(t["id"] == parent["id"] for t in roots)
+    assert not any(t["title"] == "Child" for t in roots)
+
+    subtasks_resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets",
+        params={"has_parent": "true", "limit": 100},
+    )
+    assert subtasks_resp.status_code == 200
+    subtasks = subtasks_resp.json()["items"]
+    assert len(subtasks) == 1
+    assert subtasks[0]["title"] == "Child"
+
+
+@pytest.mark.asyncio
+async def test_patch_clear_parent(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="clear-parent-org",
+    )
+    parent = await _create_ticket(admin_client, project["id"], title="Parent")
+    child = await _create_ticket(
+        admin_client, project["id"],
+        title="Child", parent_ticket_id=parent["id"],
+    )
+
+    resp = await admin_client.patch(
+        f"{TICKET_API}/{child['id']}",
+        json={"parent_ticket_id": None, "ticket_type": "task"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["parent_ticket_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_backlog_excludes_subtasks(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="backlog-sub-org",
+    )
+    parent = await _create_ticket(admin_client, project["id"], title="Parent")
+    await _create_ticket(
+        admin_client, project["id"],
+        title="Subtask", parent_ticket_id=parent["id"],
+    )
+
+    resp = await admin_client.get(f"{PROJECT_API}/{project['id']}/backlog")
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) == 1
+    assert items[0]["id"] == parent["id"]
 
 
 @pytest.mark.asyncio

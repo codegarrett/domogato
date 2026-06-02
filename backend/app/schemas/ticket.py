@@ -30,6 +30,7 @@ class TicketUpdate(BaseModel):
     assignee_id: UUID | None = None
     epic_id: UUID | None = None
     sprint_id: UUID | None = None
+    parent_ticket_id: UUID | None = None
     story_points: int | None = Field(None, ge=0)
     due_date: date | None = None
     start_date: date | None = None
@@ -76,6 +77,12 @@ class TicketRead(BaseModel):
         return None
 
     model_config = {"from_attributes": True}
+
+
+class TicketHierarchyRead(BaseModel):
+    ticket: TicketRead
+    ancestors: list[TicketRead] = []
+    children: list[TicketRead] = []
 
 
 class TicketStatusTransition(BaseModel):

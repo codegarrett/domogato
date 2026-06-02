@@ -11,6 +11,17 @@
   <div v-else class="ticket-detail">
     <div class="grid">
       <div class="col-12 lg:col-8">
+        <div v-if="parentTicket" class="mb-2">
+          <router-link
+            :to="`/tickets/${parentTicket.id}`"
+            class="text-sm text-color-secondary no-underline hover:text-primary flex align-items-center gap-1"
+          >
+            <i class="pi pi-sitemap text-xs" />
+            <span>{{ $t('tickets.subtaskOf') }}</span>
+            <Tag :value="parentTicket.ticket_key || `#${parentTicket.ticket_number}`" severity="info" class="text-xs" />
+            <span class="text-primary font-medium">{{ parentTicket.title }}</span>
+          </router-link>
+        </div>
         <div class="flex flex-wrap align-items-center gap-2 mb-3">
           <Tag v-if="ticket.ticket_key" :value="ticket.ticket_key" severity="info" class="font-semibold" />
           <Tag v-else :value="`#${ticket.ticket_number}`" severity="secondary" />
@@ -90,6 +101,13 @@
             />
           </div>
         </div>
+
+        <TicketSubtasksPanel
+          v-if="ticket.ticket_type !== 'subtask'"
+          :parent-ticket="ticket"
+          :project-id="ticket.project_id"
+          @updated="loadTicketPage"
+        />
 
         <div class="surface-card p-0 border-round shadow-1 overflow-hidden">
           <TabView>
@@ -703,6 +721,7 @@ import Avatar from 'primevue/avatar'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import RichContent from '@/components/common/RichContent.vue'
 import ImageAttachmentGallery from '@/components/common/ImageAttachmentGallery.vue'
+import TicketSubtasksPanel from '@/components/tickets/TicketSubtasksPanel.vue'
 import { sanitizeMarkdownInput } from '@/utils/richContent'
 import {
   getTicket,
@@ -776,6 +795,7 @@ const { currentUser } = storeToRefs(authStore)
 const ticketId = computed(() => route.params.ticketId as string)
 
 const ticket = ref<Ticket | null>(null)
+const parentTicket = ref<Ticket | null>(null)
 const loadError = ref<string | null>(null)
 const comments = ref<Comment[]>([])
 const allProjectLabels = ref<Label[]>([])
@@ -1230,12 +1250,22 @@ async function loadTicketPage() {
   }
   if (ticket.value?.id !== id) {
     ticket.value = null
+    parentTicket.value = null
     workflow.value = null
     epic.value = null
   }
   try {
     const tk = await getTicket(id)
     ticket.value = tk
+    if (tk.parent_ticket_id) {
+      try {
+        parentTicket.value = await getTicket(tk.parent_ticket_id)
+      } catch {
+        parentTicket.value = null
+      }
+    } else {
+      parentTicket.value = null
+    }
     descDraft.value = tk.description ?? ''
     const proj = await getProject(tk.project_id)
     activityLoading.value = true

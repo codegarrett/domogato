@@ -115,6 +115,10 @@
           <span class="text-color-secondary text-sm">
             {{ total === 0 ? $t('tickets.noTickets') : $t('tickets.showing', { from: first + 1, to: Math.min(first + rows, total), total }) }}
           </span>
+          <label class="flex align-items-center gap-2 text-sm cursor-pointer">
+            <Checkbox v-model="includeSubtasks" binary />
+            <span>{{ $t('tickets.includeSubtasks') }}</span>
+          </label>
         </div>
 
         <DataTable
@@ -411,6 +415,7 @@ import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
 import ProgressSpinner from 'primevue/progressspinner'
+import Checkbox from 'primevue/checkbox'
 import {
   listTickets,
   createTicket,
@@ -446,6 +451,7 @@ const searchInput = ref('')
 const appliedSearch = ref('')
 const filterTicketType = ref<string | null>(null)
 const filterPriority = ref<string | null>(null)
+const includeSubtasks = ref(false)
 
 const epics = ref<Epic[]>([])
 const loadingEpics = ref(false)
@@ -709,6 +715,7 @@ async function loadTickets() {
       ...(appliedSearch.value.trim() ? { search: appliedSearch.value.trim() } : {}),
       ...(filterTicketType.value ? { ticket_type: filterTicketType.value } : {}),
       ...(filterPriority.value ? { priority: filterPriority.value } : {}),
+      ...(!includeSubtasks.value ? { has_parent: false } : {}),
     })
     tickets.value = res.items
     total.value = res.total
@@ -737,6 +744,7 @@ function clearFilters() {
   appliedSearch.value = ''
   filterTicketType.value = null
   filterPriority.value = null
+  includeSubtasks.value = false
   first.value = 0
   loadTickets()
 }
@@ -827,7 +835,7 @@ watch(
   },
 )
 
-watch([filterTicketType, filterPriority], () => {
+watch([filterTicketType, filterPriority, includeSubtasks], () => {
   if (!project.value) return
   first.value = 0
   loadTickets()
