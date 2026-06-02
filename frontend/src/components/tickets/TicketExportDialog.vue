@@ -6,8 +6,11 @@ import Checkbox from 'primevue/checkbox'
 import type { Ticket } from '@/api/tickets'
 
 export interface ExportStatusOption {
-  id: string
+  /** Stable key for UI (normalized status name). */
+  key: string
   name: string
+  /** All workflow_status_ids that share this display name. */
+  ids: string[]
 }
 
 const props = defineProps<{
@@ -26,12 +29,18 @@ const selectedStatusIds = ref<string[]>([])
 
 const exportSelected = computed(() => props.selectedTickets.length > 0)
 
+function isOptionSelected(option: ExportStatusOption): boolean {
+  return option.ids.every((id) => selectedStatusIds.value.includes(id))
+}
+
 const allStatusesSelected = computed({
   get: () =>
     props.statusOptions.length > 0 &&
-    selectedStatusIds.value.length === props.statusOptions.length,
+    props.statusOptions.every((opt) => isOptionSelected(opt)),
   set: (checked: boolean) => {
-    selectedStatusIds.value = checked ? props.statusOptions.map((s) => s.id) : []
+    selectedStatusIds.value = checked
+      ? props.statusOptions.flatMap((s) => s.ids)
+      : []
   },
 })
 
@@ -46,17 +55,18 @@ watch(visible, (open) => {
     return
   }
   if (!exportSelected.value) {
-    selectedStatusIds.value = props.statusOptions.map((s) => s.id)
+    selectedStatusIds.value = props.statusOptions.flatMap((s) => s.ids)
   }
 })
 
-function toggleStatus(id: string, checked: boolean) {
+function toggleStatus(option: ExportStatusOption, checked: boolean) {
   if (checked) {
-    if (!selectedStatusIds.value.includes(id)) {
-      selectedStatusIds.value = [...selectedStatusIds.value, id]
-    }
+    const next = new Set(selectedStatusIds.value)
+    for (const id of option.ids) next.add(id)
+    selectedStatusIds.value = [...next]
   } else {
-    selectedStatusIds.value = selectedStatusIds.value.filter((sid) => sid !== id)
+    const remove = new Set(option.ids)
+    selectedStatusIds.value = selectedStatusIds.value.filter((id) => !remove.has(id))
   }
 }
 
@@ -100,14 +110,14 @@ function submit() {
       >
         <label
           v-for="status in statusOptions"
-          :key="status.id"
+          :key="status.key"
           class="flex align-items-center gap-2 text-sm cursor-pointer"
         >
           <Checkbox
-            :model-value="selectedStatusIds.includes(status.id)"
+            :model-value="isOptionSelected(status)"
             binary
             :disabled="loading"
-            @update:model-value="(v: boolean) => toggleStatus(status.id, v)"
+            @update:model-value="(v: boolean) => toggleStatus(status, v)"
           />
           <span>{{ status.name }}</span>
         </label>

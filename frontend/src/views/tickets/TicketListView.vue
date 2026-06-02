@@ -426,17 +426,23 @@ const {
 } = useProjectTicketMeta(() => projectId.value, project)
 
 const exportStatusOptions = computed(() => {
-  const seen = new Set<string>()
-  const opts: { id: string; name: string }[] = []
+  const byName = new Map<string, { name: string; ids: string[] }>()
   for (const wf of workflows.value) {
     for (const s of wf.statuses) {
-      if (!seen.has(s.id)) {
-        seen.add(s.id)
-        opts.push({ id: s.id, name: s.name })
+      const key = s.name.trim().toLowerCase()
+      const existing = byName.get(key)
+      if (existing) {
+        if (!existing.ids.includes(s.id)) {
+          existing.ids.push(s.id)
+        }
+      } else {
+        byName.set(key, { name: s.name, ids: [s.id] })
       }
     }
   }
-  return opts.sort((a, b) => a.name.localeCompare(b.name))
+  return [...byName.entries()]
+    .map(([key, { name, ids }]) => ({ key, name, ids }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 })
 
 const createVisible = ref(false)

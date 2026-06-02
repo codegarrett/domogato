@@ -148,6 +148,55 @@ async def list_tickets(
     return PaginatedResponse(items=items, total=total, offset=offset, limit=limit)
 
 
+@router.get("/projects/{project_id}/tickets/export")
+async def export_tickets(
+    project_id: UUID,
+    ticket_ids: list[UUID] | None = Query(None),
+    workflow_status_ids: list[UUID] | None = Query(None),
+    format: str = Query("csv", pattern=r"^(csv|json)$"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    import csv
+    import io
+    import json
+
+    from starlette.responses import Response, StreamingResponse
+
+    await _require_project_role(db, project_id, user, ProjectRole.GUEST)
+
+    rows = await ticket_service.export_tickets(
+        db,
+        project_id,
+        ticket_ids=ticket_ids or None,
+        workflow_status_ids=workflow_status_ids or None,
+    )
+    filename_base = f"tickets_{project_id}"
+
+    if format == "json":
+        body = json.dumps(rows, indent=2)
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename_base}.json"},
+        )
+
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=ticket_service.EXPORT_TICKET_FIELDNAMES,
+        extrasaction="ignore",
+    )
+    writer.writeheader()
+    writer.writerows(rows)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename_base}.csv"},
+    )
+
+
 @router.get(
     "/projects/{project_id}/tickets/{ticket_ref}",
     response_model=TicketRead,
@@ -388,52 +437,3 @@ async def bulk_update_tickets(
         )
 
     return {"updated": count}
-
-
-@router.get("/projects/{project_id}/tickets/export")
-async def export_tickets(
-    project_id: UUID,
-    ticket_ids: list[UUID] | None = Query(None),
-    workflow_status_ids: list[UUID] | None = Query(None),
-    format: str = Query("csv", pattern=r"^(csv|json)$"),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    import csv
-    import io
-    import json
-
-    from starlette.responses import Response, StreamingResponse
-
-    await _require_project_role(db, project_id, user, ProjectRole.GUEST)
-
-    rows = await ticket_service.export_tickets(
-        db,
-        project_id,
-        ticket_ids=ticket_ids or None,
-        workflow_status_ids=workflow_status_ids or None,
-    )
-    filename_base = f"tickets_{project_id}"
-
-    if format == "json":
-        body = json.dumps(rows, indent=2)
-        return Response(
-            content=body,
-            media_type="application/json",
-            headers={"Content-Disposition": f"attachment; filename={filename_base}.json"},
-        )
-
-    output = io.StringIO()
-    writer = csv.DictWriter(
-        output,
-        fieldnames=ticket_service.EXPORT_TICKET_FIELDNAMES,
-        extrasaction="ignore",
-    )
-    writer.writeheader()
-    writer.writerows(rows)
-
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename_base}.csv"},
-    )
