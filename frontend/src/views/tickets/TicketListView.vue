@@ -277,7 +277,7 @@
       v-model:visible="createVisible"
       :header="$t('tickets.createTicket')"
       modal
-      :style="{ width: '32rem', maxWidth: '95vw' }"
+      :style="{ width: '36rem', maxWidth: '95vw' }"
       :dismissable-mask="true"
       @hide="resetCreateForm"
     >
@@ -288,7 +288,12 @@
         </div>
         <div>
           <label for="create-desc" class="block text-sm mb-2">{{ $t('common.description') }}</label>
-          <Textarea id="create-desc" v-model="createForm.description" class="w-full" rows="4" auto-resize />
+          <MarkdownEditor
+            id="create-desc"
+            v-model="createForm.description"
+            :rows="8"
+            :placeholder="$t('tickets.descriptionPlaceholder')"
+          />
         </div>
         <div>
           <label for="create-type" class="block text-sm mb-2">{{ $t('tickets.type') }}</label>
@@ -312,6 +317,19 @@
             option-value="value"
             class="w-full"
             :placeholder="$t('tickets.selectPriority')"
+          />
+        </div>
+        <div>
+          <label for="create-assignee" class="block text-sm mb-2">{{ $t('tickets.assignee') }}</label>
+          <Select
+            id="create-assignee"
+            v-model="createForm.assignee_id"
+            :options="assigneeOptions"
+            option-label="label"
+            option-value="value"
+            class="w-full"
+            :placeholder="$t('tickets.unassigned')"
+            show-clear
           />
         </div>
         <div>
@@ -414,8 +432,9 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
-import Textarea from 'primevue/textarea'
 import ProgressSpinner from 'primevue/progressspinner'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import { sanitizeMarkdownInput } from '@/utils/richContent'
 import Checkbox from 'primevue/checkbox'
 import {
   listTickets,
@@ -475,6 +494,7 @@ const createForm = ref({
   description: '',
   ticket_type: 'task',
   priority: 'medium',
+  assignee_id: null as string | null,
   epic_id: null as string | null,
   story_points: null as number | null,
 })
@@ -768,6 +788,7 @@ function resetCreateForm() {
     description: '',
     ticket_type: 'task',
     priority: 'medium',
+    assignee_id: null,
     epic_id: null,
     story_points: null,
   }
@@ -780,9 +801,10 @@ async function submitCreate() {
   try {
     const payload: TicketCreate = {
       title: createForm.value.title.trim(),
-      description: createForm.value.description.trim() || null,
+      description: sanitizeMarkdownInput(createForm.value.description).trim() || null,
       ticket_type: createForm.value.ticket_type,
       priority: createForm.value.priority,
+      assignee_id: createForm.value.assignee_id,
       epic_id: createForm.value.epic_id,
       story_points: createForm.value.story_points,
     }

@@ -722,6 +722,12 @@
   },
   "editor": {
     "placeholder": "Escribe algo...",
+    "write": "Escribir",
+    "preview": "Vista previa",
+    "previewEmpty": "Aún no hay contenido para previsualizar.",
+    "visual": "Visual",
+    "markdownSource": "Markdown",
+    "insertImage": "Insertar imagen",
     "bold": "Negrita",
     "italic": "Cursiva",
     "underline": "Subrayado",

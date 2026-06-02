@@ -722,6 +722,12 @@
   },
   "editor": {
     "placeholder": "Write something...",
+    "write": "Write",
+    "preview": "Preview",
+    "previewEmpty": "Nothing to preview yet.",
+    "visual": "Visual",
+    "markdownSource": "Markdown",
+    "insertImage": "Insert image",
     "bold": "Bold",
     "italic": "Italic",
     "underline": "Underline",
