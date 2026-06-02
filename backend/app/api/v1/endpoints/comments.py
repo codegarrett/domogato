@@ -67,11 +67,16 @@ async def create_comment(
     ticket = await ticket_service.get_ticket(db, ticket_id)
 
     if ticket and body.body:
+        project = await project_service.get_project(db, ticket.project_id)
+        project_key = project.key if project else ""
         await mention_service.process_mentions(
             db,
             body=body.body,
             ticket_id=ticket_id,
             ticket_title=ticket.title,
+            project_id=ticket.project_id,
+            project_key=project_key,
+            ticket_number=ticket.ticket_number,
             author_id=user.id,
             author_name=user.display_name,
         )

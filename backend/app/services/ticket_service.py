@@ -176,6 +176,46 @@ async def get_ticket(db: AsyncSession, ticket_id: UUID) -> Ticket | None:
     return result.scalar_one_or_none()
 
 
+def parse_ticket_ref(ticket_ref: str) -> int:
+    """Parse a ticket key slug (e.g. orbis-10 or ORBIS-10) into ticket_number."""
+    parts = ticket_ref.rsplit("-", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Invalid ticket reference: {ticket_ref}")
+    return int(parts[1])
+
+
+async def get_ticket_by_ref(
+    db: AsyncSession,
+    project_id: UUID,
+    ticket_ref: str,
+) -> Ticket | None:
+    """Resolve a ticket by project-scoped key slug or UUID."""
+    try:
+        ticket_id = UUID(ticket_ref)
+    except ValueError:
+        ticket_id = None
+
+    if ticket_id is not None:
+        ticket = await get_ticket(db, ticket_id)
+        if ticket is None or ticket.project_id != project_id or ticket.is_deleted:
+            return None
+        return ticket
+
+    try:
+        ticket_number = parse_ticket_ref(ticket_ref)
+    except ValueError:
+        return None
+
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.project_id == project_id,
+            Ticket.ticket_number == ticket_number,
+            Ticket.is_deleted == False,  # noqa: E712
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_tickets(
     db: AsyncSession,
     project_id: UUID,

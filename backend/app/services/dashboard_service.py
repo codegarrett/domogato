@@ -43,6 +43,7 @@ async def get_dashboard_data(
             Ticket.priority,
             Ticket.due_date,
             Ticket.updated_at,
+            Ticket.project_id,
             Project.key.label("project_key"),
             Project.name.label("project_name"),
             WorkflowStatus.name.label("status_name"),
@@ -73,6 +74,7 @@ async def get_dashboard_data(
             "id": str(r.id),
             "title": r.title,
             "ticket_key": f"{r.project_key}-{r.ticket_number}",
+            "project_id": str(r.project_id),
             "priority": r.priority,
             "due_date": r.due_date.isoformat() if r.due_date else None,
             "status_name": r.status_name,
@@ -98,6 +100,7 @@ async def get_dashboard_data(
             Ticket.title,
             Ticket.ticket_number,
             Ticket.updated_at,
+            Ticket.project_id,
             Project.key.label("project_key"),
         )
         .join(TicketWatcher, TicketWatcher.ticket_id == Ticket.id)
@@ -115,6 +118,7 @@ async def get_dashboard_data(
             "id": str(r.id),
             "title": r.title,
             "ticket_key": f"{r.project_key}-{r.ticket_number}",
+            "project_id": str(r.project_id),
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         }
         for r in watched_rows

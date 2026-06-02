@@ -8,6 +8,7 @@ import Avatar from 'primevue/avatar'
 import Select from 'primevue/select'
 import { useToastService } from '@/composables/useToast'
 import { assetUrl } from '@/utils/assetUrl'
+import { ticketDetailPathFromRef } from '@/utils/ticketUrls'
 import { useWebSocket } from '@/composables/useWebSocket'
 import {
   listBoards,
@@ -299,8 +300,8 @@ async function onDrop(statusId: string, event: DragEvent) {
   } catch { /* global interceptor */ }
 }
 
-function goToTicket(ticketId: string) {
-  router.push(`/tickets/${ticketId}`)
+function goToTicket(ticket: BoardTicket) {
+  router.push(ticketDetailPathFromRef(route.params.projectId as string, ticket.ticket_key))
 }
 
 function priorityClass(p: string): string {
@@ -481,7 +482,7 @@ onUnmounted(() => {
                 class="ticket-card surface-card border-round shadow-1 p-3 mb-2 cursor-pointer"
                 draggable="true"
                 @dragstart="onDragStart(ticket, $event)"
-                @click="goToTicket(ticket.id)"
+                @click="goToTicket(ticket)"
               >
                 <div class="flex align-items-center gap-2 mb-1">
                   <Tag :value="ticket.ticket_key" severity="info" class="text-xs" />

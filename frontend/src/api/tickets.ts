@@ -103,6 +103,13 @@ export async function getTicket(ticketId: string) {
   return data
 }
 
+export async function getTicketByRef(projectId: string, ticketRef: string) {
+  const { data } = await apiClient.get<Ticket>(
+    `/projects/${projectId}/tickets/${encodeURIComponent(ticketRef)}`,
+  )
+  return data
+}
+
 export async function createTicket(projectId: string, payload: TicketCreate) {
   const { data } = await apiClient.post<Ticket>(`/projects/${projectId}/tickets`, payload)
   return data

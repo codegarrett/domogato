@@ -29,6 +29,7 @@ const toast = useToastService()
 const projectId = route.params.projectId as string
 
 const {
+  project,
   assigneeOptions,
   resolveAssigneeName,
   resolveStatusName,
@@ -36,6 +37,13 @@ const {
   statusTransitionOptions,
   loadMeta,
 } = useProjectTicketMeta(() => projectId)
+
+function displayTicketKey(tk: Ticket): string {
+  if (tk.ticket_key) return tk.ticket_key
+  const key = project.value?.key
+  if (key) return `${key}-${tk.ticket_number}`
+  return `#${tk.ticket_number}`
+}
 
 const backlogTickets = ref<Ticket[]>([])
 const sprints = ref<Sprint[]>([])
@@ -370,6 +378,7 @@ onMounted(loadData)
             <template #item="{ element: tk }">
               <BacklogTicketRow
                 :ticket="tk"
+                :ticket-key-label="displayTicketKey(tk)"
                 :selected="isSelected(tk)"
                 :editing-id="editingCell?.id ?? null"
                 :editing-field="editingCell?.field ?? null"
@@ -426,6 +435,7 @@ onMounted(loadData)
           <template #item="{ element: tk }">
             <BacklogTicketRow
               :ticket="tk"
+              :ticket-key-label="displayTicketKey(tk)"
               :selected="isSelected(tk)"
               :editing-id="editingCell?.id ?? null"
               :editing-field="editingCell?.field ?? null"

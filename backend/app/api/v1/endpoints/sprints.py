@@ -19,9 +19,18 @@ from app.schemas.sprint import (
     SprintUpdate,
 )
 from app.schemas.ticket import TicketRead
-from app.services import sprint_service
+from app.services import project_service, sprint_service
 
 router = APIRouter(tags=["sprints"])
+
+
+def _enrich_ticket_reads(tickets, project_key: str | None) -> list[TicketRead]:
+    items: list[TicketRead] = []
+    for t in tickets:
+        r = TicketRead.model_validate(t)
+        r.project_key = project_key
+        items.append(r)
+    return items
 
 
 @router.get(
@@ -191,8 +200,10 @@ async def get_sprint_tickets(
     tickets, total = await sprint_service.get_sprint_tickets(
         db, sprint_id, offset=offset, limit=limit,
     )
+    project = await project_service.get_project(db, sprint.project_id)
+    project_key = project.key if project else None
     return {
-        "items": [TicketRead.model_validate(t) for t in tickets],
+        "items": _enrich_ticket_reads(tickets, project_key),
         "total": total,
         "offset": offset,
         "limit": limit,
@@ -233,8 +244,10 @@ async def get_backlog(
     tickets, total = await sprint_service.get_backlog(
         db, project_id, offset=offset, limit=limit,
     )
+    project = await project_service.get_project(db, project_id)
+    project_key = project.key if project else None
     return {
-        "items": [TicketRead.model_validate(t) for t in tickets],
+        "items": _enrich_ticket_reads(tickets, project_key),
         "total": total,
         "offset": offset,
         "limit": limit,

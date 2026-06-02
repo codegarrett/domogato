@@ -10,5 +10,5 @@
 {% if description %}
 <p class="meta">{{ description[:200] }}{% if description|length > 200 %}…{% endif %}</p>
 {% endif %}
-<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/tickets/{{ ticket_id }}">View Ticket</a></p>
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/projects/{{ project_id }}/tickets/{{ ticket_ref }}">View Ticket</a></p>
 {% endblock %}

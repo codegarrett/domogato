@@ -13,7 +13,7 @@
       <div class="col-12 lg:col-8">
         <div v-if="parentTicket" class="mb-2">
           <router-link
-            :to="`/tickets/${parentTicket.id}`"
+            :to="ticketDetailPath(parentTicket.project_id, parentTicket)"
             class="text-sm text-color-secondary no-underline hover:text-primary flex align-items-center gap-1"
           >
             <i class="pi pi-sitemap text-xs" />
@@ -467,7 +467,7 @@
                     class="text-xs flex-shrink-0"
                   />
                   <router-link
-                    :to="`/tickets/${depTargetId(dep)}`"
+                    :to="depTargetPath(dep)"
                     class="text-sm text-primary no-underline hover:underline flex-1 min-w-0 overflow-hidden text-overflow-ellipsis white-space-nowrap"
                   >
                     {{ depTargetKey(dep) }} {{ depTargetTitle(dep) }}
@@ -704,7 +704,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import Tag from 'primevue/tag'
@@ -725,11 +725,13 @@ import TicketSubtasksPanel from '@/components/tickets/TicketSubtasksPanel.vue'
 import { sanitizeMarkdownInput } from '@/utils/richContent'
 import {
   getTicket,
+  getTicketByRef,
   updateTicket,
   transitionStatus,
   type Ticket,
   type TicketUpdate,
 } from '@/api/tickets'
+import { ticketRef, ticketDetailPath, ticketDetailPathFromRef } from '@/utils/ticketUrls'
 import {
   listComments,
   createComment,
@@ -788,11 +790,13 @@ import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const ws = useWebSocket()
 const { currentUser } = storeToRefs(authStore)
 
-const ticketId = computed(() => route.params.ticketId as string)
+const routeProjectId = computed(() => route.params.projectId as string)
+const routeTicketKey = computed(() => route.params.ticketKey as string)
 
 const ticket = ref<Ticket | null>(null)
 const parentTicket = ref<Ticket | null>(null)
@@ -1135,6 +1139,15 @@ function depTargetTitle(dep: Dependency): string {
   return (dep.blocking_ticket_id === tid ? dep.blocked_ticket_title : dep.blocking_ticket_title) || ''
 }
 
+function depTargetPath(dep: Dependency): string {
+  const pid = ticket.value?.project_id ?? routeProjectId.value
+  const key = depTargetKey(dep)
+  if (key) {
+    return ticketDetailPathFromRef(pid, key)
+  }
+  return `/tickets/${depTargetId(dep)}`
+}
+
 async function loadDependencies() {
   if (!ticket.value) return
   try {
@@ -1242,21 +1255,29 @@ async function removeAttachment(attId: string) {
 
 async function loadTicketPage() {
   loadError.value = null
-  const id = ticketId.value
-  if (!id) {
+  const projectId = routeProjectId.value
+  const ticketKey = routeTicketKey.value
+  if (!projectId || !ticketKey) {
     loadError.value = t('tickets.missingId')
     ticket.value = null
     return
   }
-  if (ticket.value?.id !== id) {
-    ticket.value = null
-    parentTicket.value = null
-    workflow.value = null
-    epic.value = null
-  }
   try {
-    const tk = await getTicket(id)
+    const tk = await getTicketByRef(projectId, ticketKey)
+    if (ticket.value?.id !== tk.id) {
+      ticket.value = null
+      parentTicket.value = null
+      workflow.value = null
+      epic.value = null
+    }
     ticket.value = tk
+    const canonical = ticketRef(tk)
+    if (ticketKey.toLowerCase() !== canonical) {
+      await router.replace({
+        name: 'ticket-detail',
+        params: { projectId, ticketKey: canonical },
+      })
+    }
     if (tk.parent_ticket_id) {
       try {
         parentTicket.value = await getTicket(tk.parent_ticket_id)
@@ -1675,7 +1696,7 @@ async function onCustomFieldChange(fieldId: string, value: unknown) {
   }
 }
 
-watch(ticketId, () => {
+watch([routeProjectId, routeTicketKey], () => {
   void loadTicketPage()
   subscribeWs()
 })
@@ -1713,7 +1734,7 @@ function onWsTicketEvent(data: Record<string, unknown>) {
 let currentWsChannel: string | null = null
 
 function subscribeWs() {
-  const tid = ticketId.value
+  const tid = ticket.value?.id
   if (!tid) return
   const ch = `ticket:${tid}`
   if (currentWsChannel === ch) return

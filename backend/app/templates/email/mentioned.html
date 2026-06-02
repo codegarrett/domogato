@@ -8,5 +8,5 @@
   {{ body[:300] }}{% if body|length > 300 %}…{% endif %}
 </blockquote>
 {% endif %}
-<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/tickets/{{ ticket_id }}">View Ticket</a></p>
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/projects/{{ project_id }}/tickets/{{ ticket_ref }}">View Ticket</a></p>
 {% endblock %}

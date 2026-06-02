@@ -93,6 +93,7 @@ import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { createTicketFromReports, type IssueReport } from '@/api/issue-reports'
 import { useToastService } from '@/composables/useToast'
+import { ticketDetailPath } from '@/utils/ticketUrls'
 
 const props = defineProps<{
   visible: boolean
@@ -149,7 +150,7 @@ async function submit() {
     emit('created')
 
     if (result?.ticket?.id) {
-      router.push(`/tickets/${result.ticket.id}`)
+      router.push(ticketDetailPath(props.projectId, result.ticket))
     }
   } catch {
     toast.showError(t('common.error'), '')

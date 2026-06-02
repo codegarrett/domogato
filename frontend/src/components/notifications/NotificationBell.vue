@@ -12,6 +12,7 @@ import {
   markAllRead,
   type Notification,
 } from '@/api/notifications'
+import { ticketDetailPathFromRef } from '@/utils/ticketUrls'
 import { useWebSocket } from '@/composables/useWebSocket'
 
 const { t } = useI18n()
@@ -56,7 +57,13 @@ async function onClickNotification(n: Notification) {
   }
   panelRef.value?.hide()
   if (n.entity_type === 'ticket' && n.entity_id) {
-    router.push(`/tickets/${n.entity_id}`)
+    const projectId = n.data?.project_id as string | undefined
+    const ticketRef = n.data?.ticket_ref as string | undefined
+    if (projectId && ticketRef) {
+      router.push(ticketDetailPathFromRef(projectId, ticketRef))
+    } else {
+      router.push(`/tickets/${n.entity_id}`)
+    }
   }
 }
 

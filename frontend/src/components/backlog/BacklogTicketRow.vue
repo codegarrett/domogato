@@ -6,10 +6,12 @@ import InputNumber from 'primevue/inputnumber'
 import TicketInlineAssigneeCell from '@/components/tickets/TicketInlineAssigneeCell.vue'
 import TicketInlineStatusCell from '@/components/tickets/TicketInlineStatusCell.vue'
 import type { Ticket } from '@/api/tickets'
+import { ticketDetailPath } from '@/utils/ticketUrls'
 import './backlog-ticket-grid.css'
 
 const props = defineProps<{
   ticket: Ticket
+  ticketKeyLabel: string
   selected: boolean
   editingId: string | null
   editingField: string | null
@@ -62,13 +64,13 @@ const statusEditValue = computed({
     </div>
 
     <div class="grid-cell grid-cell--start grid-cell--key">
-      <router-link :to="`/tickets/${ticket.id}`" class="ticket-key-link" @click.stop>
-        {{ ticket.ticket_key ?? `#${ticket.ticket_number}` }}
+      <router-link :to="ticketDetailPath(ticket.project_id, ticket)" class="ticket-key-link" @click.stop>
+        {{ ticketKeyLabel }}
       </router-link>
     </div>
 
     <div class="grid-cell grid-cell--title">
-      <router-link :to="`/tickets/${ticket.id}`" class="ticket-title-link" @click.stop>
+      <router-link :to="ticketDetailPath(ticket.project_id, ticket)" class="ticket-title-link" @click.stop>
         {{ ticket.title }}
       </router-link>
     </div>

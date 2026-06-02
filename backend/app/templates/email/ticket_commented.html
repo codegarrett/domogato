@@ -6,5 +6,5 @@
 <blockquote style="border-left: 3px solid #c7d2fe; padding: 8px 16px; margin: 16px 0; color: #4b5563; background: #f9fafb; border-radius: 4px;">
   {{ comment_body[:300] }}{% if comment_body|length > 300 %}…{% endif %}
 </blockquote>
-<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/tickets/{{ ticket_id }}">View Ticket</a></p>
+<p style="margin-top: 20px;"><a class="btn" href="{{ app_base_url }}/projects/{{ project_id }}/tickets/{{ ticket_ref }}">View Ticket</a></p>
 {% endblock %}

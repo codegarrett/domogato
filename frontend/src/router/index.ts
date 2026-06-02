@@ -95,14 +95,19 @@ const router = createRouter({
           component: () => import('@/views/tickets/TicketListView.vue'),
         },
         {
+          path: 'projects/:projectId/tickets/:ticketKey',
+          name: 'ticket-detail',
+          component: () => import('@/views/tickets/TicketDetailView.vue'),
+        },
+        {
           path: 'projects/:projectId/import',
           name: 'import-tickets',
           component: () => import('@/views/tickets/ImportTicketsView.vue'),
         },
         {
           path: 'tickets/:ticketId',
-          name: 'ticket-detail',
-          component: () => import('@/views/tickets/TicketDetailView.vue'),
+          name: 'ticket-legacy-redirect',
+          component: () => import('@/views/tickets/TicketLegacyRedirect.vue'),
         },
         {
           path: 'projects/:projectId/timeline',

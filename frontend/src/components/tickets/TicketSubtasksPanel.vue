@@ -17,6 +17,7 @@ import {
   transitionStatus,
   type Ticket,
 } from '@/api/tickets'
+import { ticketDetailPath } from '@/utils/ticketUrls'
 
 const props = defineProps<{
   parentTicket: Ticket
@@ -156,8 +157,8 @@ async function submitCreate() {
   }
 }
 
-function goToTicket(id: string) {
-  router.push(`/tickets/${id}`)
+function goToTicket(child: Ticket) {
+  router.push(ticketDetailPath(props.projectId, child))
 }
 
 watch(() => props.parentTicket.id, loadChildren)
@@ -214,7 +215,7 @@ onMounted(async () => {
         v-for="child in children"
         :key="child.id"
         class="subtasks-row"
-        @click="goToTicket(child.id)"
+        @click="goToTicket(child)"
       >
         <span class="subtask-key" @click.stop>
           <Tag :value="child.ticket_key || `#${child.ticket_number}`" severity="info" class="text-xs" />

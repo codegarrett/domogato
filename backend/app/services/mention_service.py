@@ -41,6 +41,9 @@ async def process_mentions(
     body: str,
     ticket_id: UUID,
     ticket_title: str,
+    project_id: UUID,
+    project_key: str,
+    ticket_number: int,
     author_id: UUID,
     author_name: str,
 ) -> list[UUID]:
@@ -63,7 +66,12 @@ async def process_mentions(
             body=f'You were mentioned in a comment on "{ticket_title}"',
             entity_type="ticket",
             entity_id=ticket_id,
-            data={"author_id": str(author_id), "author_name": author_name},
+            data={
+                "author_id": str(author_id),
+                "author_name": author_name,
+                "project_id": str(project_id),
+                "ticket_ref": f"{project_key.lower()}-{ticket_number}",
+            },
         )
         notified.append(user.id)
 

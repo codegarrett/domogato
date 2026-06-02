@@ -6,6 +6,7 @@ import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
 import ProgressSpinner from 'primevue/progressspinner'
 import { getDashboard, type DashboardData } from '@/api/dashboard'
+import { ticketDetailPath } from '@/utils/ticketUrls'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -128,7 +129,7 @@ onMounted(load)
               v-for="ticket in data.assigned_tickets"
               :key="ticket.id"
               class="ticket-row"
-              @click="router.push(`/tickets/${ticket.id}`)"
+              @click="router.push(ticketDetailPath(ticket.project_id, ticket))"
             >
               <div class="ticket-row-left">
                 <Tag
@@ -177,7 +178,7 @@ onMounted(load)
               v-for="w in data.watched_recent"
               :key="w.id"
               class="watched-row"
-              @click="router.push(`/tickets/${w.id}`)"
+              @click="router.push(ticketDetailPath(w.project_id, w))"
             >
               <span class="ticket-key">{{ w.ticket_key }}</span>
               <span class="watched-title">{{ w.title }}</span>

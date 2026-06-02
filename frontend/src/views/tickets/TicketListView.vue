@@ -147,7 +147,7 @@
           <Column field="ticket_key" :header="$t('projects.key')" style="width: 8rem">
             <template #body="{ data }">
               <router-link
-                :to="`/tickets/${data.id}`"
+                :to="ticketDetailPath(projectId, data)"
                 class="font-mono text-sm text-primary no-underline hover:underline"
                 @click.stop
               >
@@ -405,6 +405,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { ticketDetailPath } from '@/utils/ticketUrls'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'

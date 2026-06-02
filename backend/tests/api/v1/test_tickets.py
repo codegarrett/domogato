@@ -124,6 +124,93 @@ async def test_get_ticket(admin_client: AsyncClient, db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_get_ticket_by_ref(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="get-ref-tkt-org",
+    )
+    ticket = await _create_ticket(admin_client, project["id"], title="Ref Ticket")
+    slug = f"{project['key']}-{ticket['ticket_number']}".lower()
+
+    resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets/{slug}",
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == ticket["id"]
+    assert data["ticket_key"] == f"{project['key']}-{ticket['ticket_number']}"
+
+
+@pytest.mark.asyncio
+async def test_get_ticket_by_ref_case_insensitive(
+    admin_client: AsyncClient, db_session: AsyncSession,
+):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="get-ref-case-org",
+    )
+    ticket = await _create_ticket(admin_client, project["id"], title="Case Ticket")
+    ref = f"{project['key']}-{ticket['ticket_number']}"
+
+    resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets/{ref}",
+    )
+    assert resp.status_code == 200
+    assert resp.json()["id"] == ticket["id"]
+
+
+@pytest.mark.asyncio
+async def test_get_ticket_by_ref_wrong_project(
+    admin_client: AsyncClient, db_session: AsyncSession,
+):
+    org, project_a, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="ref-wrong-a-org",
+    )
+    proj_b_resp = await admin_client.post(
+        f"{ORG_API}/{org['id']}/projects",
+        json={"name": "Project B", "key": "TKB", "visibility": "internal"},
+    )
+    assert proj_b_resp.status_code == 201
+    project_b = proj_b_resp.json()
+
+    ticket = await _create_ticket(admin_client, project_a["id"], title="In A")
+    slug = f"{project_a['key']}-{ticket['ticket_number']}".lower()
+
+    resp = await admin_client.get(
+        f"{PROJECT_API}/{project_b['id']}/tickets/{slug}",
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_ticket_by_ref_uuid(
+    admin_client: AsyncClient, db_session: AsyncSession,
+):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="get-ref-uuid-org",
+    )
+    ticket = await _create_ticket(admin_client, project["id"], title="UUID Ref")
+
+    resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets/{ticket['id']}",
+    )
+    assert resp.status_code == 200
+    assert resp.json()["id"] == ticket["id"]
+
+
+@pytest.mark.asyncio
+async def test_get_ticket_by_ref_not_found(
+    admin_client: AsyncClient, db_session: AsyncSession,
+):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="get-ref-missing-org",
+    )
+
+    resp = await admin_client.get(
+        f"{PROJECT_API}/{project['id']}/tickets/{project['key'].lower()}-99999",
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_update_ticket(admin_client: AsyncClient, db_session: AsyncSession):
     _, project, _, _ = await _setup_project_with_workflow(
         admin_client, db_session, slug="update-tkt-org",

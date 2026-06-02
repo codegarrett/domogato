@@ -4,6 +4,7 @@ export interface DashboardTicket {
   id: string
   title: string
   ticket_key: string
+  project_id: string
   priority: string
   due_date: string | null
   status_name: string
@@ -14,6 +15,7 @@ export interface DashboardWatched {
   id: string
   title: string
   ticket_key: string
+  project_id: string
   updated_at: string | null
 }
 

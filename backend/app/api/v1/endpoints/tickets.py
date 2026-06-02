@@ -147,6 +147,26 @@ async def list_tickets(
     return PaginatedResponse(items=items, total=total, offset=offset, limit=limit)
 
 
+@router.get(
+    "/projects/{project_id}/tickets/{ticket_ref}",
+    response_model=TicketRead,
+)
+async def get_ticket_by_ref(
+    project_id: UUID,
+    ticket_ref: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_project_role(db, project_id, user, ProjectRole.GUEST)
+    project = await project_service.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    ticket = await ticket_service.get_ticket_by_ref(db, project_id, ticket_ref)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return _enrich_ticket_read(ticket, project.key)
+
+
 @router.get("/tickets/{ticket_id}", response_model=TicketRead)
 async def get_ticket(
     ticket_id: UUID,

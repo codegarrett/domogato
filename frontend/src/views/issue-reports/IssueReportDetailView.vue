@@ -221,7 +221,7 @@
           <router-link
             v-for="link in report.linked_tickets"
             :key="link.ticket_id"
-            :to="`/tickets/${link.ticket_id}`"
+            :to="linkedTicketPath(link)"
             class="linked-ticket-item block p-2 border-round mb-1 no-underline"
           >
             <div class="font-semibold text-sm text-primary">{{ link.ticket_key || link.ticket_id }}</div>
@@ -260,8 +260,10 @@ import {
   formatFileSize,
   type IssueReport,
   type IssueReportAttachment,
+  type IssueReportTicketLink,
 } from '@/api/issue-reports'
 import { useToastService } from '@/composables/useToast'
+import { ticketDetailPathFromRef } from '@/utils/ticketUrls'
 import { downloadFromApi } from '@/utils/download'
 import ImageAttachmentGallery, { type ImageAttachmentItem } from '@/components/common/ImageAttachmentGallery.vue'
 import CreateTicketFromReportsDialog from '@/components/issue-reports/CreateTicketFromReportsDialog.vue'
@@ -273,6 +275,13 @@ const toast = useToastService()
 
 const projectId = computed(() => route.params.projectId as string)
 const reportId = computed(() => route.params.reportId as string)
+
+function linkedTicketPath(link: IssueReportTicketLink): string {
+  if (link.ticket_key) {
+    return ticketDetailPathFromRef(projectId.value, link.ticket_key)
+  }
+  return `/tickets/${link.ticket_id}`
+}
 
 const report = ref<IssueReport | null>(null)
 const loading = ref(true)

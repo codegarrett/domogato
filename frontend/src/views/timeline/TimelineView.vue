@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
 import { getTimeline, type TimelineData } from '@/api/timeline'
+import { ticketDetailPathFromRef } from '@/utils/ticketUrls'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +29,7 @@ const allItems = computed(() => {
   const items: Array<{
     id: string
     label: string
+    ticketKey: string | null
     start: Date | null
     end: Date | null
     type: 'epic' | 'ticket'
@@ -41,6 +43,7 @@ const allItems = computed(() => {
     items.push({
       id: e.id,
       label: e.title,
+      ticketKey: null,
       start: e.start_date ? parseDate(e.start_date) : null,
       end: e.due_date ? parseDate(e.due_date) : null,
       type: 'epic',
@@ -55,6 +58,7 @@ const allItems = computed(() => {
     items.push({
       id: t.id,
       label: `${t.ticket_key} ${t.title}`,
+      ticketKey: t.ticket_key,
       start: t.start_date ? parseDate(t.start_date) : null,
       end: t.due_date ? parseDate(t.due_date) : null,
       type: 'ticket',
@@ -157,9 +161,9 @@ const todayOffset = computed(() => {
   return days * columnWidth.value
 })
 
-function onClickItem(item: { id: string; type: string }) {
-  if (item.type === 'ticket') {
-    router.push(`/tickets/${item.id}`)
+function onClickItem(item: { type: string; ticketKey: string | null }) {
+  if (item.type === 'ticket' && item.ticketKey) {
+    router.push(ticketDetailPathFromRef(projectId, item.ticketKey))
   }
 }
 
@@ -244,7 +248,7 @@ onMounted(loadTimeline)
               v-for="item in data.unscheduled"
               :key="item.id"
               class="gantt-row unscheduled"
-              @click="router.push(`/tickets/${item.id}`)"
+              @click="router.push(ticketDetailPathFromRef(projectId, item.ticket_key))"
             >
               <div class="gantt-label-col">
                 <span class="gantt-item-label text-color-secondary">{{ item.ticket_key }} {{ item.title }}</span>

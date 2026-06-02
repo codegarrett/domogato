@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, literal, select, text, union_all
+from sqlalchemy import String, cast, func, literal, select, text, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.comment import Comment
@@ -46,7 +46,14 @@ async def global_search(
                     literal(" · "), Ticket.ticket_type, literal(" · "), Ticket.priority,
                 ).label("subtitle"),
                 func.ts_headline("english", func.coalesce(Ticket.description, literal("")), ts_query).label("highlight"),
-                func.concat(literal("/tickets/"), Ticket.id).label("url"),
+                func.concat(
+                    literal("/projects/"),
+                    cast(Ticket.project_id, String),
+                    literal("/tickets/"),
+                    func.lower(Project.key),
+                    literal("-"),
+                    cast(Ticket.ticket_number, String),
+                ).label("url"),
                 Ticket.project_id.label("project_id"),
                 Ticket.updated_at.label("updated_at"),
                 func.ts_rank(Ticket.search_vector, ts_query).label("rank"),
@@ -123,7 +130,14 @@ async def global_search(
                     Project.key, literal("-"), Ticket.ticket_number,
                 ).label("subtitle"),
                 func.substr(Comment.body, 1, 200).label("highlight"),
-                func.concat(literal("/tickets/"), Ticket.id).label("url"),
+                func.concat(
+                    literal("/projects/"),
+                    cast(Ticket.project_id, String),
+                    literal("/tickets/"),
+                    func.lower(Project.key),
+                    literal("-"),
+                    cast(Ticket.ticket_number, String),
+                ).label("url"),
                 Ticket.project_id.label("project_id"),
                 Comment.updated_at.label("updated_at"),
                 literal(0.1).label("rank"),
