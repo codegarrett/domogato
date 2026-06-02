@@ -395,14 +395,40 @@ async def transition_status(
     return ticket
 
 
-async def soft_delete_ticket(db: AsyncSession, ticket_id: UUID) -> Ticket | None:
+async def _soft_delete_descendants(db: AsyncSession, ticket_id: UUID) -> list[UUID]:
+    """Soft-delete all non-deleted descendants; returns ids deleted (deepest first)."""
+    deleted_ids: list[UUID] = []
+    children = await get_ticket_children(db, ticket_id)
+    for child in children:
+        deleted_ids.extend(await _soft_delete_descendants(db, child.id))
+        if not child.is_deleted:
+            child.is_deleted = True
+            deleted_ids.append(child.id)
+    await db.flush()
+    return deleted_ids
+
+
+async def soft_delete_ticket(
+    db: AsyncSession,
+    ticket_id: UUID,
+    *,
+    delete_children: bool = False,
+) -> tuple[Ticket | None, list[UUID]]:
+    """Soft-delete a ticket. Returns (ticket, extra_deleted_child_ids)."""
     ticket = await get_ticket(db, ticket_id)
     if ticket is None:
-        return None
-    ticket.is_deleted = True
-    await db.flush()
-    await db.refresh(ticket)
-    return ticket
+        return None, []
+
+    child_ids: list[UUID] = []
+    if delete_children:
+        child_ids = await _soft_delete_descendants(db, ticket_id)
+
+    if not ticket.is_deleted:
+        ticket.is_deleted = True
+        await db.flush()
+        await db.refresh(ticket)
+
+    return ticket, child_ids
 
 
 async def bulk_update(

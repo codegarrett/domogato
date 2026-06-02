@@ -332,6 +332,7 @@ async def transition_ticket_status(
 @router.delete("/tickets/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ticket(
     ticket_id: UUID,
+    delete_children: bool = Query(False, description="Also soft-delete all child tickets"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -339,14 +340,29 @@ async def delete_ticket(
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
     await assert_user_can_administer_project(db, user, ticket.project_id)
-    await ticket_service.soft_delete_ticket(db, ticket_id)
+    deleted, child_ids = await ticket_service.soft_delete_ticket(
+        db, ticket_id, delete_children=delete_children,
+    )
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
 
+    project_id = str(ticket.project_id)
+    actor_id = str(user.id)
+    actor_name = user.display_name
+    for child_id in child_ids:
+        await events.publish(
+            events.EVENT_TICKET_DELETED,
+            ticket_id=str(child_id),
+            project_id=project_id,
+            actor_id=actor_id,
+            actor_name=actor_name,
+        )
     await events.publish(
         events.EVENT_TICKET_DELETED,
         ticket_id=str(ticket_id),
-        project_id=str(ticket.project_id),
-        actor_id=str(user.id),
-        actor_name=user.display_name,
+        project_id=project_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
     )
 
 

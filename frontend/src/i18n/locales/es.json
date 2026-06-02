@@ -139,6 +139,8 @@
     "deleteSelected": "Eliminar {n} tickets",
     "deleteConfirmTitle": "Eliminar tickets",
     "deleteConfirmMessage": "Vas a eliminar {count} ticket(s). Esta acción no se puede deshacer.",
+    "deleteSubtasksHint": "{count} subtarea(s) de los tickets seleccionados permanecerán a menos que las incluyas abajo.",
+    "deleteSubtasksLabel": "Eliminar también {count} subtarea(s)",
     "deleteConfirmType": "Escribe delete para confirmar",
     "deleteConfirmPlaceholder": "delete",
     "deletedSuccess": "Se eliminaron {count} ticket(s)",

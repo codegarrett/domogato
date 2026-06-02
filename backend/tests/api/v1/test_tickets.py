@@ -427,6 +427,51 @@ async def test_backlog_excludes_subtasks(admin_client: AsyncClient, db_session: 
 
 
 @pytest.mark.asyncio
+async def test_soft_delete_ticket_with_children(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="softdel-child-org",
+    )
+    parent = await _create_ticket(admin_client, project["id"], title="Parent Task")
+    sub = await _create_ticket(
+        admin_client,
+        project["id"],
+        title="Child Sub",
+        parent_ticket_id=parent["id"],
+    )
+
+    resp = await admin_client.delete(
+        f"{TICKET_API}/{parent['id']}",
+        params={"delete_children": True},
+    )
+    assert resp.status_code == 204
+
+    parent_get = await admin_client.get(f"{TICKET_API}/{parent['id']}")
+    sub_get = await admin_client.get(f"{TICKET_API}/{sub['id']}")
+    assert parent_get.json()["is_deleted"] is True
+    assert sub_get.json()["is_deleted"] is True
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_ticket_leaves_children(admin_client: AsyncClient, db_session: AsyncSession):
+    _, project, _, _ = await _setup_project_with_workflow(
+        admin_client, db_session, slug="softdel-orphan-org",
+    )
+    parent = await _create_ticket(admin_client, project["id"], title="Parent Keep Child")
+    sub = await _create_ticket(
+        admin_client,
+        project["id"],
+        title="Orphan Sub",
+        parent_ticket_id=parent["id"],
+    )
+
+    resp = await admin_client.delete(f"{TICKET_API}/{parent['id']}")
+    assert resp.status_code == 204
+
+    sub_get = await admin_client.get(f"{TICKET_API}/{sub['id']}")
+    assert sub_get.json()["is_deleted"] is False
+
+
+@pytest.mark.asyncio
 async def test_soft_delete_ticket(admin_client: AsyncClient, db_session: AsyncSession):
     _, project, _, _ = await _setup_project_with_workflow(
         admin_client, db_session, slug="softdel-tkt-org",

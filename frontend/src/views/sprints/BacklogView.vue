@@ -23,6 +23,7 @@ import {
 import { deleteTicket, updateTicket, type Ticket } from '@/api/tickets'
 import TicketBulkDeleteDialog from '@/components/tickets/TicketBulkDeleteDialog.vue'
 import { useProjectAdmin } from '@/composables/useProjectAdmin'
+import { orderedDeleteIds } from '@/utils/collectTicketsForDelete'
 import {
   DEFAULT_TICKET_SORT_COLUMN,
   DEFAULT_TICKET_SORT_DIRECTION,
@@ -313,10 +314,10 @@ async function onMove() {
   }
 }
 
-async function submitBulkDelete() {
+async function submitBulkDelete(options: { deleteSubtasks: boolean }) {
   if (selectedTickets.value.length === 0) return
   deletingTickets.value = true
-  const ids = selectedTickets.value.map((tk) => tk.id)
+  const ids = await orderedDeleteIds(selectedTickets.value, options.deleteSubtasks)
   try {
     const results = await Promise.allSettled(ids.map((id) => deleteTicket(id)))
     const failed = results.filter((r) => r.status === 'rejected').length
@@ -558,7 +559,7 @@ onMounted(loadData)
 
     <TicketBulkDeleteDialog
       v-model:visible="deleteDialogVisible"
-      :count="selectedTickets.length"
+      :selected-tickets="selectedTickets"
       :loading="deletingTickets"
       @confirm="submitBulkDelete"
     />

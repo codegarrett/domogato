@@ -139,6 +139,8 @@
     "deleteSelected": "Delete {n} tickets",
     "deleteConfirmTitle": "Delete tickets",
     "deleteConfirmMessage": "You are about to delete {count} ticket(s). This cannot be undone.",
+    "deleteSubtasksHint": "{count} subtask(s) under the selected ticket(s) will remain unless you include them below.",
+    "deleteSubtasksLabel": "Also delete {count} subtask(s)",
     "deleteConfirmType": "Type delete to confirm",
     "deleteConfirmPlaceholder": "delete",
     "deletedSuccess": "Deleted {count} ticket(s)",

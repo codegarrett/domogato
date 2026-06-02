@@ -130,8 +130,10 @@ export async function updateTicket(ticketId: string, payload: TicketUpdate) {
   return data
 }
 
-export async function deleteTicket(ticketId: string) {
-  await apiClient.delete(`/tickets/${ticketId}`)
+export async function deleteTicket(ticketId: string, options?: { deleteChildren?: boolean }) {
+  await apiClient.delete(`/tickets/${ticketId}`, {
+    params: options?.deleteChildren ? { delete_children: true } : undefined,
+  })
 }
 
 export async function transitionStatus(ticketId: string, payload: { workflow_status_id: string; resolution?: string }) {

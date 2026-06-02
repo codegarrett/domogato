@@ -309,7 +309,7 @@
 
     <TicketBulkDeleteDialog
       v-model:visible="deleteDialogVisible"
-      :count="selectedTickets.length"
+      :selected-tickets="selectedTickets"
       :loading="deletingTickets"
       @confirm="submitBulkDelete"
     />
@@ -361,6 +361,7 @@ import {
 import TicketBulkDeleteDialog from '@/components/tickets/TicketBulkDeleteDialog.vue'
 import { useProjectAdmin } from '@/composables/useProjectAdmin'
 import { useToastService } from '@/composables/useToast'
+import { orderedDeleteIds } from '@/utils/collectTicketsForDelete'
 import { listEpics, type Epic } from '@/api/epics'
 import { listSavedViews, createSavedView, type SavedView } from '@/api/saved-views'
 import { getProject, type Project } from '@/api/projects'
@@ -454,10 +455,10 @@ function toggleSelect(ticket: Ticket) {
   else selectedTickets.value.push(ticket)
 }
 
-async function submitBulkDelete() {
+async function submitBulkDelete(options: { deleteSubtasks: boolean }) {
   if (selectedTickets.value.length === 0) return
   deletingTickets.value = true
-  const ids = selectedTickets.value.map((t) => t.id)
+  const ids = await orderedDeleteIds(selectedTickets.value, options.deleteSubtasks)
   try {
     const results = await Promise.allSettled(ids.map((id) => deleteTicket(id)))
     const failed = results.filter((r) => r.status === 'rejected').length
