@@ -53,6 +53,9 @@ class WorkflowStatus(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_initial: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_terminal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    show_on_board: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
     workflow: Mapped[Workflow] = relationship(back_populates="statuses")
 

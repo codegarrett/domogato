@@ -14,6 +14,7 @@ class WorkflowStatusCreate(BaseModel):
     position: int = Field(0, ge=0)
     is_initial: bool = False
     is_terminal: bool = False
+    show_on_board: bool = True
 
 
 class WorkflowStatusRead(BaseModel):
@@ -25,6 +26,7 @@ class WorkflowStatusRead(BaseModel):
     position: int
     is_initial: bool
     is_terminal: bool
+    show_on_board: bool
     created_at: datetime
     updated_at: datetime
     model_config = {"from_attributes": True}
@@ -37,6 +39,11 @@ class WorkflowStatusUpdate(BaseModel):
     position: int | None = Field(None, ge=0)
     is_initial: bool | None = None
     is_terminal: bool | None = None
+    show_on_board: bool | None = None
+
+
+class WorkflowStatusReorder(BaseModel):
+    status_ids: list[UUID] = Field(..., min_length=1)
 
 
 class WorkflowTransitionCreate(BaseModel):

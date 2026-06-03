@@ -413,3 +413,50 @@ async def test_seed_default_workflows(admin_client: AsyncClient):
 
     resp2 = await admin_client.get(f"{ORG_API}/{org['id']}/workflows")
     assert resp2.json()["total"] == 3
+
+
+@pytest.mark.asyncio
+async def test_reorder_workflow_statuses(admin_client: AsyncClient):
+    org = await _create_org(admin_client, slug="wf-reorder-org")
+    wf = await _create_workflow(admin_client, org["id"], name="Reorder WF")
+    s1 = await _add_status(admin_client, wf["id"], "First", position=0)
+    s2 = await _add_status(admin_client, wf["id"], "Second", position=1)
+    s3 = await _add_status(admin_client, wf["id"], "Third", position=2)
+
+    resp = await admin_client.put(
+        f"{WF_API}/{wf['id']}/statuses/reorder",
+        json={"status_ids": [s3["id"], s1["id"], s2["id"]]},
+    )
+    assert resp.status_code == 200
+    ordered = resp.json()
+    assert [s["name"] for s in ordered] == ["Third", "First", "Second"]
+    assert [s["position"] for s in ordered] == [0, 1, 2]
+
+    bad = await admin_client.put(
+        f"{WF_API}/{wf['id']}/statuses/reorder",
+        json={"status_ids": [s1["id"], s2["id"]]},
+    )
+    assert bad.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_status_show_on_board_in_read(admin_client: AsyncClient):
+    org = await _create_org(admin_client, slug="wf-show-board-org")
+    wf = await _create_workflow(admin_client, org["id"], name="Visibility WF")
+    hidden = await admin_client.post(
+        f"{WF_API}/{wf['id']}/statuses",
+        json={
+            "name": "Wont Do",
+            "category": "done",
+            "position": 1,
+            "is_terminal": True,
+            "show_on_board": False,
+        },
+    )
+    assert hidden.status_code == 201
+    assert hidden.json()["show_on_board"] is False
+
+    detail = await admin_client.get(f"{WF_API}/{wf['id']}")
+    assert detail.status_code == 200
+    wont_do = next(s for s in detail.json()["statuses"] if s["name"] == "Wont Do")
+    assert wont_do["show_on_board"] is False

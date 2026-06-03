@@ -257,7 +257,14 @@
     "statuses": "Estados",
     "template": "Plantilla",
     "cloneFrom": "Clonar de plantilla (opcional)",
-    "startFromScratch": "Empezar de cero"
+    "startFromScratch": "Empezar de cero",
+    "statusOrderHelp": "Arrastra los estados para definir el orden de las columnas en el tablero. Desmarca Mostrar en el tablero para pasos sin columna (p. ej. No se hará); los tickets pueden llegar a esos estados por transiciones. Tras cambios grandes, usa Reconstruir columnas en el tablero si hace falta.",
+    "showOnBoard": "Mostrar en el tablero",
+    "showOnBoardHint": "Si está desactivado, no hay columna en el tablero pero el estado sigue en el flujo.",
+    "onBoard": "En el tablero",
+    "hiddenFromBoard": "Oculto del tablero",
+    "reorderFailed": "No se pudo guardar el orden",
+    "dragToReorder": "Arrastra para reordenar"
   },
   "auth": {
     "signInSubtitle": "Inicia sesión para acceder a tus proyectos",

@@ -257,7 +257,14 @@
     "statuses": "Statuses",
     "template": "Template",
     "cloneFrom": "Clone from Template (optional)",
-    "startFromScratch": "Start from scratch"
+    "startFromScratch": "Start from scratch",
+    "statusOrderHelp": "Drag statuses to set left-to-right column order on the project board. Uncheck Show on board for steps that should not have a column (e.g. Won't Do); tickets can still reach those statuses via transitions. After large changes, use Rebuild board columns on the board page if needed.",
+    "showOnBoard": "Show on board",
+    "showOnBoardHint": "When off, this status has no board column but remains available in the workflow.",
+    "onBoard": "On board",
+    "hiddenFromBoard": "Hidden from board",
+    "reorderFailed": "Failed to save status order",
+    "dragToReorder": "Drag to reorder"
   },
   "auth": {
     "signInSubtitle": "Sign in to access your projects",

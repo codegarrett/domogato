@@ -10,6 +10,7 @@ export interface WorkflowStatus {
   position: number
   is_initial: boolean
   is_terminal: boolean
+  show_on_board: boolean
   created_at: string
   updated_at: string
 }
@@ -67,8 +68,16 @@ export async function deleteWorkflow(workflowId: string) {
   await apiClient.delete(`/workflows/${workflowId}`)
 }
 
-export async function addStatus(workflowId: string, payload: { name: string; category?: string; color?: string; position?: number; is_initial?: boolean; is_terminal?: boolean }) {
+export async function addStatus(workflowId: string, payload: { name: string; category?: string; color?: string; position?: number; is_initial?: boolean; is_terminal?: boolean; show_on_board?: boolean }) {
   const { data } = await apiClient.post<WorkflowStatus>(`/workflows/${workflowId}/statuses`, payload)
+  return data
+}
+
+export async function reorderWorkflowStatuses(workflowId: string, statusIds: string[]): Promise<WorkflowStatus[]> {
+  const { data } = await apiClient.put<WorkflowStatus[]>(
+    `/workflows/${workflowId}/statuses/reorder`,
+    { status_ids: statusIds },
+  )
   return data
 }
 

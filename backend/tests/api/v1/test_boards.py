@@ -221,3 +221,64 @@ class TestBoardEnrichment:
         assert resp.status_code == 200
         tickets = resp.json()[str(s1.id)]
         assert tickets[0]["ticket_key"] == f"{test_project.key}-42"
+
+
+class TestBoardShowOnBoard:
+    async def test_sync_excludes_hidden_statuses(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+    ):
+        wf, s1, s2, s3 = await _setup_workflow(db_session, test_org.id, test_project)
+
+        hidden = await admin_client.post(
+            f"/api/v1/workflows/{wf.id}/statuses",
+            json={
+                "name": "Wont Do",
+                "category": "done",
+                "position": 3,
+                "is_terminal": True,
+                "show_on_board": False,
+            },
+        )
+        assert hidden.status_code == 201
+
+        board_resp = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/default",
+            params={"workflow_id": str(wf.id)},
+        )
+        assert board_resp.status_code == 201
+        col_status_ids = {c["workflow_status_id"] for c in board_resp.json()["columns"]}
+        assert str(s1.id) in col_status_ids
+        assert str(s2.id) in col_status_ids
+        assert str(s3.id) in col_status_ids
+        assert hidden.json()["id"] not in col_status_ids
+
+    async def test_reorder_updates_board_column_positions(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+    ):
+        wf, s1, s2, s3 = await _setup_workflow(db_session, test_org.id, test_project)
+        board_resp = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/default",
+            params={"workflow_id": str(wf.id)},
+        )
+        board_id = board_resp.json()["id"]
+
+        await admin_client.put(
+            f"/api/v1/workflows/{wf.id}/statuses/reorder",
+            json={"status_ids": [str(s3.id), str(s1.id), str(s2.id)]},
+        )
+
+        board = await admin_client.get(f"/api/v1/projects/{test_project.id}/boards")
+        columns = board.json()[0]["columns"]
+        assert [c["workflow_status_id"] for c in columns] == [
+            str(s3.id),
+            str(s1.id),
+            str(s2.id),
+        ]

@@ -5,10 +5,11 @@ from collections import deque
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.board import BoardColumn
 from app.models.workflow import Workflow, WorkflowStatus, WorkflowTransition
 
 
@@ -58,6 +59,7 @@ async def clone_from_template(
             position=s.position,
             is_initial=s.is_initial,
             is_terminal=s.is_terminal,
+            show_on_board=s.show_on_board,
         )
         db.add(new_status)
         await db.flush()
@@ -156,6 +158,7 @@ async def add_status(
     position: int = 0,
     is_initial: bool = False,
     is_terminal: bool = False,
+    show_on_board: bool = True,
 ) -> WorkflowStatus:
     status = WorkflowStatus(
         workflow_id=workflow_id,
@@ -165,11 +168,31 @@ async def add_status(
         position=position,
         is_initial=is_initial,
         is_terminal=is_terminal,
+        show_on_board=show_on_board,
     )
     db.add(status)
     await db.flush()
     await db.refresh(status)
     return status
+
+
+async def _remove_board_columns_for_status(
+    db: AsyncSession, status_id: UUID
+) -> None:
+    await db.execute(
+        delete(BoardColumn).where(BoardColumn.workflow_status_id == status_id)
+    )
+
+
+async def _sync_board_column_positions(
+    db: AsyncSession, status_positions: dict[UUID, int]
+) -> None:
+    for status_id, position in status_positions.items():
+        await db.execute(
+            update(BoardColumn)
+            .where(BoardColumn.workflow_status_id == status_id)
+            .values(position=position)
+        )
 
 
 async def update_status(
@@ -181,12 +204,59 @@ async def update_status(
     ws = result.scalar_one_or_none()
     if ws is None:
         return None
+    hide_from_board = False
     for key, value in kwargs.items():
-        if value is not None and hasattr(ws, key):
-            setattr(ws, key, value)
+        if not hasattr(ws, key):
+            continue
+        setattr(ws, key, value)
+        if key == "show_on_board" and value is False:
+            hide_from_board = True
     await db.flush()
+    if hide_from_board:
+        await _remove_board_columns_for_status(db, status_id)
     await db.refresh(ws)
     return ws
+
+
+async def reorder_statuses(
+    db: AsyncSession,
+    workflow_id: UUID,
+    status_ids: list[UUID],
+) -> list[WorkflowStatus]:
+    """Set status positions from an ordered ID list; sync board column positions."""
+    result = await db.execute(
+        select(WorkflowStatus)
+        .where(WorkflowStatus.workflow_id == workflow_id)
+        .order_by(WorkflowStatus.position)
+    )
+    existing = list(result.scalars().all())
+    existing_ids = {s.id for s in existing}
+    if len(status_ids) != len(existing_ids) or set(status_ids) != existing_ids:
+        raise ValueError(
+            "status_ids must include every status for this workflow exactly once"
+        )
+
+    status_positions: dict[UUID, int] = {}
+    for index, status_id in enumerate(status_ids):
+        await db.execute(
+            update(WorkflowStatus)
+            .where(
+                WorkflowStatus.id == status_id,
+                WorkflowStatus.workflow_id == workflow_id,
+            )
+            .values(position=index)
+        )
+        status_positions[status_id] = index
+
+    await _sync_board_column_positions(db, status_positions)
+    await db.flush()
+
+    result = await db.execute(
+        select(WorkflowStatus)
+        .where(WorkflowStatus.workflow_id == workflow_id)
+        .order_by(WorkflowStatus.position)
+    )
+    return list(result.scalars().all())
 
 
 async def remove_status(db: AsyncSession, status_id: UUID) -> bool:

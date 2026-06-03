@@ -15,6 +15,7 @@ from app.schemas.workflow import (
     WorkflowRead,
     WorkflowStatusCreate,
     WorkflowStatusRead,
+    WorkflowStatusReorder,
     WorkflowStatusUpdate,
     WorkflowTransitionCreate,
     WorkflowTransitionRead,
@@ -235,9 +236,35 @@ async def add_status(
         position=body.position,
         is_initial=body.is_initial,
         is_terminal=body.is_terminal,
+        show_on_board=body.show_on_board,
     )
     await _invalidate_workflow_cache(workflow_id, wf.organization_id)
     return ws
+
+
+@router.put(
+    "/workflows/{workflow_id}/statuses/reorder",
+    response_model=list[WorkflowStatusRead],
+)
+async def reorder_workflow_statuses(
+    workflow_id: UUID,
+    body: WorkflowStatusReorder,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    wf = await _get_workflow_or_404(db, workflow_id)
+    membership = await _get_org_membership(db, wf.organization_id, user)
+    _check_min_role(membership, OrgRole.ADMIN)
+
+    try:
+        statuses = await workflow_service.reorder_statuses(
+            db, workflow_id, body.status_ids
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    await _invalidate_workflow_cache(workflow_id, wf.organization_id)
+    return statuses
 
 
 @router.patch("/workflows/statuses/{status_id}", response_model=WorkflowStatusRead)

@@ -145,7 +145,10 @@ async def create_default_board_for_workflow(
     statuses = (
         await db.execute(
             select(WorkflowStatus)
-            .where(WorkflowStatus.workflow_id == workflow_id)
+            .where(
+                WorkflowStatus.workflow_id == workflow_id,
+                WorkflowStatus.show_on_board == True,  # noqa: E712
+            )
             .order_by(WorkflowStatus.position)
         )
     ).scalars().all()
@@ -204,7 +207,10 @@ async def sync_board_columns_from_workflow(
     statuses = (
         await db.execute(
             select(WorkflowStatus)
-            .where(WorkflowStatus.workflow_id == workflow_id)
+            .where(
+                WorkflowStatus.workflow_id == workflow_id,
+                WorkflowStatus.show_on_board == True,  # noqa: E712
+            )
             .order_by(WorkflowStatus.position)
         )
     ).scalars().all()
