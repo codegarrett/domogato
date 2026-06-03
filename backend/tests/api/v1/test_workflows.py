@@ -227,6 +227,7 @@ async def test_add_status(admin_client: AsyncClient):
     )
     assert status["name"] == "In Progress"
     assert status["category"] == "in_progress"
+    assert status["color"] == "#3B82F6"
     assert status["position"] == 1
     assert status["workflow_id"] == wf["id"]
 

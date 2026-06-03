@@ -3,7 +3,7 @@
     <div class="flex justify-content-between align-items-center mb-4">
       <h3>{{ workflow?.name || 'Workflow Editor' }}</h3>
       <div class="flex gap-2">
-        <Button label="Add Status" icon="pi pi-plus" size="small" @click="showAddStatus = true" />
+        <Button label="Add Status" icon="pi pi-plus" size="small" @click="openAddStatus" />
         <Button
           :label="addingTransition ? $t('common.cancel') : 'Add Transition'"
           :icon="addingTransition ? 'pi pi-times' : 'pi pi-arrow-right'"
@@ -111,8 +111,21 @@
           <Select v-model="newStatus.category" :options="['to_do', 'in_progress', 'done']" />
         </div>
         <div class="flex flex-column gap-1">
-          <label>Color</label>
-          <InputText v-model="newStatus.color" placeholder="#6B7280" />
+          <label>{{ $t('workflows.statusColor') }}</label>
+          <div class="flex align-items-center gap-2">
+            <input
+              type="color"
+              v-model="newStatus.color"
+              class="status-color-input"
+              @input="addColorTouched = true"
+            />
+            <InputText
+              v-model="newStatus.color"
+              class="flex-1"
+              placeholder="#6B7280"
+              @input="addColorTouched = true"
+            />
+          </div>
         </div>
         <div class="flex gap-3 flex-wrap">
           <div class="flex align-items-center gap-2">
@@ -147,8 +160,20 @@
           <Select v-model="editingStatus.category" :options="['to_do', 'in_progress', 'done']" />
         </div>
         <div class="flex flex-column gap-1">
-          <label>Color</label>
-          <InputText v-model="editingStatus.color" />
+          <label>{{ $t('workflows.statusColor') }}</label>
+          <div class="flex align-items-center gap-2">
+            <input
+              type="color"
+              v-model="editingStatus.color"
+              class="status-color-input"
+              @input="editColorTouched = true"
+            />
+            <InputText
+              v-model="editingStatus.color"
+              class="flex-1"
+              @input="editColorTouched = true"
+            />
+          </div>
         </div>
         <div class="flex gap-3 flex-wrap">
           <div class="flex align-items-center gap-2">
@@ -175,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
 import Button from 'primevue/button'
@@ -200,6 +225,10 @@ import {
   type Workflow,
   type WorkflowStatus,
 } from '@/api/workflows'
+import {
+  defaultWorkflowStatusColor,
+  WORKFLOW_COLOR_INITIAL,
+} from '@/utils/workflowColors'
 
 const props = defineProps<{ workflowId: string }>()
 const { t } = useI18n()
@@ -224,14 +253,66 @@ const editingStatus = ref<{
   is_terminal: boolean
   show_on_board: boolean
 } | null>(null)
+const addColorTouched = ref(false)
+const editColorTouched = ref(false)
+
 const newStatus = ref({
   name: '',
   category: 'to_do',
-  color: '#6B7280',
+  color: WORKFLOW_COLOR_INITIAL,
   is_initial: false,
   is_terminal: false,
   show_on_board: true,
 })
+
+function applyDefaultNewStatusColor() {
+  if (addColorTouched.value) return
+  newStatus.value.color = defaultWorkflowStatusColor({
+    category: newStatus.value.category,
+    is_initial: newStatus.value.is_initial,
+    is_terminal: newStatus.value.is_terminal,
+  })
+}
+
+function applyDefaultEditStatusColor() {
+  if (editColorTouched.value || !editingStatus.value) return
+  editingStatus.value.color = defaultWorkflowStatusColor({
+    category: editingStatus.value.category,
+    is_initial: editingStatus.value.is_initial,
+    is_terminal: editingStatus.value.is_terminal,
+  })
+}
+
+watch(
+  () => [newStatus.value.category, newStatus.value.is_initial, newStatus.value.is_terminal],
+  applyDefaultNewStatusColor,
+)
+
+watch(
+  () =>
+    editingStatus.value
+      ? [
+          editingStatus.value.category,
+          editingStatus.value.is_initial,
+          editingStatus.value.is_terminal,
+        ]
+      : null,
+  () => applyDefaultEditStatusColor(),
+)
+
+function openAddStatus() {
+  addColorTouched.value = false
+  newStatus.value = {
+    name: '',
+    category: 'to_do',
+    color: WORKFLOW_COLOR_INITIAL,
+    is_initial: false,
+    is_terminal: false,
+    show_on_board: true,
+  }
+  applyDefaultNewStatusColor()
+  showAddStatus.value = true
+}
 
 function syncOrderedStatuses() {
   orderedStatuses.value = [...(workflow.value?.statuses || [])].sort(
@@ -302,6 +383,7 @@ async function handleStatusClick(status: WorkflowStatus) {
     }
     return
   }
+  editColorTouched.value = false
   editingStatus.value = {
     id: status.id,
     name: status.name,
@@ -318,10 +400,11 @@ async function handleAddStatus() {
   const pos = defaultPositionForNewStatus()
   await addStatus(props.workflowId, { ...newStatus.value, position: pos })
   showAddStatus.value = false
+  addColorTouched.value = false
   newStatus.value = {
     name: '',
     category: 'to_do',
-    color: '#6B7280',
+    color: WORKFLOW_COLOR_INITIAL,
     is_initial: false,
     is_terminal: false,
     show_on_board: true,
@@ -380,5 +463,15 @@ async function handleValidate() {
 }
 .status-order-row {
   min-height: 6rem;
+}
+
+.status-color-input {
+  width: 2.75rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 </style>

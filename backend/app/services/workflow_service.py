@@ -14,6 +14,27 @@ from sqlalchemy.orm import selectinload
 from app.models.board import BoardColumn
 from app.models.workflow import Workflow, WorkflowStatus, WorkflowTransition
 
+COLOR_INITIAL = "#6B7280"
+COLOR_IN_PROGRESS = "#3B82F6"
+COLOR_TERMINAL = "#10B981"
+
+
+def default_status_color(
+    *,
+    category: str = "to_do",
+    is_initial: bool = False,
+    is_terminal: bool = False,
+) -> str:
+    if is_terminal:
+        return COLOR_TERMINAL
+    if is_initial:
+        return COLOR_INITIAL
+    if category == "in_progress":
+        return COLOR_IN_PROGRESS
+    if category == "done":
+        return COLOR_TERMINAL
+    return COLOR_INITIAL
+
 
 async def create_workflow(
     db: AsyncSession,

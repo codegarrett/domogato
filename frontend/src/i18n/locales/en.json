@@ -264,7 +264,8 @@
     "onBoard": "On board",
     "hiddenFromBoard": "Hidden from board",
     "reorderFailed": "Failed to save status order",
-    "dragToReorder": "Drag to reorder"
+    "dragToReorder": "Drag to reorder",
+    "statusColor": "Color"
   },
   "auth": {
     "signInSubtitle": "Sign in to access your projects",

@@ -264,7 +264,8 @@
     "onBoard": "En el tablero",
     "hiddenFromBoard": "Oculto del tablero",
     "reorderFailed": "No se pudo guardar el orden",
-    "dragToReorder": "Arrastra para reordenar"
+    "dragToReorder": "Arrastra para reordenar",
+    "statusColor": "Color"
   },
   "auth": {
     "signInSubtitle": "Inicia sesión para acceder a tus proyectos",

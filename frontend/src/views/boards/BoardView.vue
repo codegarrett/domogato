@@ -23,6 +23,10 @@ import {
 } from '@/api/boards'
 import { getProject, listProjectMembers, type Project, type ProjectMember } from '@/api/projects'
 import { listSprints, type Sprint } from '@/api/sprints'
+import {
+  defaultWorkflowStatusColor,
+  workflowColumnHeaderStyle,
+} from '@/utils/workflowColors'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,8 +52,6 @@ const selectedAssigneeIds = ref<Set<string>>(new Set())
 
 const organizationId = computed(() => project.value?.organization_id)
 const { canAdministerProject } = useProjectAdmin(projectId, organizationId)
-
-const isScrumBoard = computed(() => board.value?.board_type === 'scrum')
 
 type SwimlaneMode = 'none' | 'assignee' | 'priority' | 'type'
 const swimlaneMode = ref<SwimlaneMode>('none')
@@ -175,7 +177,9 @@ const columns = computed(() => {
   return board.value.columns.map((col) => ({
     ...col,
     name: col.status_name ?? 'Unknown',
-    color: col.status_color ?? undefined,
+    color:
+      col.status_color
+      ?? defaultWorkflowStatusColor({ category: col.status_category ?? 'to_do' }),
     tickets: filteredTicketsByStatus.value[col.workflow_status_id] ?? [],
   }))
 })
@@ -312,8 +316,10 @@ async function rebuildBoard() {
 
 async function refreshTickets() {
   if (!board.value) return
-  const sprintParam = isScrumBoard.value ? selectedSprintId.value || undefined : undefined
-  const tickets = await getBoardTickets(board.value.id, sprintParam)
+  const tickets = await getBoardTickets(
+    board.value.id,
+    selectedSprintId.value || undefined,
+  )
   ticketsByStatus.value = tickets
 }
 
@@ -433,7 +439,7 @@ onUnmounted(() => {
       <h2 class="m-0">{{ $t('boards.title') }}</h2>
       <div class="flex align-items-center gap-2 flex-wrap">
         <Select
-          v-if="isScrumBoard && sprints.length > 0"
+          v-if="sprints.length > 0"
           v-model="selectedSprintId"
           :options="sprintOptions"
           option-label="label"
@@ -552,32 +558,32 @@ onUnmounted(() => {
             <span class="font-semibold text-sm text-color-secondary">{{ lane.label }}</span>
           </div>
         </div>
-        <div class="board-columns">
-          <div
-            v-for="col in lane.columns"
-            :key="col.id"
-            class="board-column"
-            :class="{ 'drag-over': dragOverColumn === col.workflow_status_id }"
-            @dragover="onDragOver(col.workflow_status_id, $event)"
-            @dragleave="onDragLeave"
-            @drop="onDrop(col.workflow_status_id, $event)"
-          >
-            <div v-if="lane.key === swimlanes[0]?.key" class="column-header">
-              <div class="flex align-items-center gap-2">
-                <div
-                  v-if="col.color"
-                  class="status-dot"
-                  :style="{ background: col.color }"
-                />
-                <span class="font-semibold text-sm">{{ col.name }}</span>
-                <Tag :value="String(col.tickets.length)" severity="secondary" rounded class="text-xs" />
+        <div class="board-columns-scroll">
+          <div class="board-columns">
+            <div
+              v-for="col in lane.columns"
+              :key="col.id"
+              class="board-column"
+              :class="{ 'drag-over': dragOverColumn === col.workflow_status_id }"
+              @dragover="onDragOver(col.workflow_status_id, $event)"
+              @dragleave="onDragLeave"
+              @drop="onDrop(col.workflow_status_id, $event)"
+            >
+              <div class="column-header" :style="workflowColumnHeaderStyle(col.color)">
+                <div class="flex align-items-center gap-2">
+                  <div
+                    class="status-dot"
+                    :style="{ background: col.color }"
+                  />
+                  <span class="font-semibold text-sm">{{ col.name }}</span>
+                  <Tag :value="String(col.tickets.length)" severity="secondary" rounded class="text-xs" />
+                </div>
+                <span v-if="col.wip_limit" class="text-xs text-color-secondary">
+                  {{ $t('boards.wipLimit') }}: {{ col.wip_limit }}
+                </span>
               </div>
-              <span v-if="col.wip_limit" class="text-xs text-color-secondary">
-                {{ $t('boards.wipLimit') }}: {{ col.wip_limit }}
-              </span>
-            </div>
 
-            <div class="column-body">
+              <div class="column-body">
               <div
                 v-for="ticket in col.tickets"
                 :key="ticket.id"
@@ -611,6 +617,7 @@ onUnmounted(() => {
               <div v-if="col.tickets.length === 0" class="text-center text-color-secondary text-xs p-3">
                 {{ $t('boards.dropHere') }}
               </div>
+              </div>
             </div>
           </div>
         </div>
@@ -621,8 +628,15 @@ onUnmounted(() => {
 
 <style scoped>
 .board-container {
-  overflow-x: auto;
   padding-bottom: 1rem;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.swimlane-group {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .assignee-filter-bar {
@@ -667,10 +681,18 @@ onUnmounted(() => {
   padding: 0.25rem 0 0.5rem;
 }
 
+.board-columns-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+  padding-bottom: 0.25rem;
+}
+
 .board-columns {
-  display: flex;
+  display: inline-flex;
   gap: 0.75rem;
   min-height: 20vh;
+  vertical-align: top;
 }
 
 .board-column {
@@ -689,7 +711,6 @@ onUnmounted(() => {
 
 .column-header {
   padding: 0.75rem;
-  border-bottom: 1px solid var(--p-content-border-color, #e2e8f0);
   display: flex;
   align-items: center;
   justify-content: space-between;

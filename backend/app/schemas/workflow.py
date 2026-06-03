@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class WorkflowStatusCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     category: str = Field("to_do", pattern=r"^(to_do|in_progress|done)$")
-    color: str = Field("#6B7280", pattern=r"^#[0-9A-Fa-f]{6}$")
+    color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     position: int = Field(0, ge=0)
     is_initial: bool = False
     is_terminal: bool = False

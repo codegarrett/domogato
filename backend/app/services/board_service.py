@@ -317,11 +317,9 @@ async def get_board_tickets(
         )
     )
 
-    if board.board_type == "scrum" and sprint_id:
+    query = query.where(Ticket.project_id == board.project_id)
+    if sprint_id:
         query = query.where(Ticket.sprint_id == sprint_id)
-    else:
-        project_id = board.project_id
-        query = query.where(Ticket.project_id == project_id)
 
     query = query.order_by(Ticket.board_rank.asc())
     result = await db.execute(query)

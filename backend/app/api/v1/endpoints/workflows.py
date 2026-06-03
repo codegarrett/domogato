@@ -227,12 +227,17 @@ async def add_status(
     membership = await _get_org_membership(db, wf.organization_id, user)
     _check_min_role(membership, OrgRole.ADMIN)
 
+    color = body.color or workflow_service.default_status_color(
+        category=body.category,
+        is_initial=body.is_initial,
+        is_terminal=body.is_terminal,
+    )
     ws = await workflow_service.add_status(
         db,
         workflow_id,
         name=body.name,
         category=body.category,
-        color=body.color,
+        color=color,
         position=body.position,
         is_initial=body.is_initial,
         is_terminal=body.is_terminal,
