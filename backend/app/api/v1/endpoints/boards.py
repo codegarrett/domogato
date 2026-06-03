@@ -34,7 +34,7 @@ async def list_boards(
     db: AsyncSession = Depends(get_db),
 ):
     boards = await board_service.list_boards(db, project_id)
-    return [BoardRead.model_validate(b) for b in boards]
+    return await board_service.boards_to_reads(db, boards)
 
 
 @router.post(
@@ -52,7 +52,8 @@ async def create_board(
     board = await board_service.create_board(
         db, project_id=project_id, name=body.name, board_type=body.board_type,
     )
-    return BoardRead.model_validate(board)
+    status_map = await board_service._status_map_for_ids(db, [])
+    return board_service.board_to_read(board, status_map)
 
 
 @router.post(
@@ -67,10 +68,31 @@ async def create_default_board(
     _role: ProjectRole = require_project_role(ProjectRole.MAINTAINER),
     db: AsyncSession = Depends(get_db),
 ):
-    board = await board_service.create_default_board_for_workflow(
+    return await board_service.create_default_board_for_workflow(
         db, project_id=project_id, workflow_id=workflow_id,
     )
-    return BoardRead.model_validate(board)
+
+
+@router.post(
+    "/projects/{project_id}/boards/sync",
+    response_model=BoardRead,
+)
+async def sync_board_columns(
+    project_id: UUID,
+    board_id: UUID | None = Query(None),
+    user: User = Depends(get_current_user),
+    _role: ProjectRole = require_project_role(ProjectRole.MAINTAINER),
+    db: AsyncSession = Depends(get_db),
+):
+    synced = await board_service.sync_board_columns_from_workflow(
+        db, project_id, board_id=board_id,
+    )
+    if synced is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project has no default workflow configured",
+        )
+    return synced
 
 
 @router.get(
@@ -85,7 +107,10 @@ async def get_board(
     board = await board_service.get_board(db, board_id)
     if board is None:
         raise HTTPException(status_code=404, detail="Board not found")
-    return BoardRead.model_validate(board)
+    status_map = await board_service._status_map_for_ids(
+        db, [c.workflow_status_id for c in board.columns]
+    )
+    return board_service.board_to_read(board, status_map)
 
 
 @router.patch(
@@ -103,7 +128,12 @@ async def update_board(
         raise HTTPException(status_code=404, detail="Board not found")
     update_data = body.model_dump(exclude_unset=True)
     updated = await board_service.update_board(db, board_id, **update_data)
-    return BoardRead.model_validate(updated)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+    status_map = await board_service._status_map_for_ids(
+        db, [c.workflow_status_id for c in updated.columns]
+    )
+    return board_service.board_to_read(updated, status_map)
 
 
 @router.delete(

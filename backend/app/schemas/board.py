@@ -19,6 +19,9 @@ class BoardColumnRead(BaseModel):
     position: int
     wip_limit: int | None = None
     is_collapsed: bool = False
+    status_name: str | None = None
+    status_color: str | None = None
+    status_category: str | None = None
 
     model_config = {"from_attributes": True}
 

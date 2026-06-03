@@ -6,20 +6,22 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Avatar from 'primevue/avatar'
 import Select from 'primevue/select'
+import Message from 'primevue/message'
 import { useToastService } from '@/composables/useToast'
+import { useProjectAdmin } from '@/composables/useProjectAdmin'
 import { assetUrl } from '@/utils/assetUrl'
 import { ticketDetailPathFromRef } from '@/utils/ticketUrls'
 import { useWebSocket } from '@/composables/useWebSocket'
 import {
   listBoards,
   createDefaultBoard,
+  syncBoardColumns,
   getBoardTickets,
   moveTicket,
   type Board,
   type BoardTicket,
 } from '@/api/boards'
 import { getProject, listProjectMembers, type Project, type ProjectMember } from '@/api/projects'
-import { listWorkflows, type Workflow } from '@/api/workflows'
 import { listSprints, type Sprint } from '@/api/sprints'
 
 const route = useRoute()
@@ -27,15 +29,15 @@ const router = useRouter()
 const { t } = useI18n()
 const toast = useToastService()
 const ws = useWebSocket()
-const projectId = route.params.projectId as string
 
-const STORAGE_KEY = `board_filters_${projectId}`
+const projectId = computed(() => route.params.projectId as string)
+const storageKey = computed(() => `board_filters_${projectId.value}`)
 
 const project = ref<Project | null>(null)
 const board = ref<Board | null>(null)
-const workflow = ref<Workflow | null>(null)
 const ticketsByStatus = ref<Record<string, BoardTicket[]>>({})
 const loading = ref(false)
+const rebuilding = ref(false)
 const draggingTicket = ref<BoardTicket | null>(null)
 const dragOverColumn = ref<string | null>(null)
 
@@ -43,6 +45,11 @@ const sprints = ref<Sprint[]>([])
 const selectedSprintId = ref<string | null>(null)
 const members = ref<ProjectMember[]>([])
 const selectedAssigneeIds = ref<Set<string>>(new Set())
+
+const organizationId = computed(() => project.value?.organization_id)
+const { canAdministerProject } = useProjectAdmin(projectId, organizationId)
+
+const isScrumBoard = computed(() => board.value?.board_type === 'scrum')
 
 type SwimlaneMode = 'none' | 'assignee' | 'priority' | 'type'
 const swimlaneMode = ref<SwimlaneMode>('none')
@@ -61,7 +68,7 @@ const sprintOptions = computed(() => [
 
 function saveFilters() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    localStorage.setItem(storageKey.value, JSON.stringify({
       sprintId: selectedSprintId.value,
       swimlane: swimlaneMode.value,
     }))
@@ -70,13 +77,22 @@ function saveFilters() {
 
 function loadFilters() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey.value)
     if (raw) {
       const data = JSON.parse(raw)
-      if (data.sprintId) selectedSprintId.value = data.sprintId
       if (data.swimlane) swimlaneMode.value = data.swimlane
+      if (data.sprintId) selectedSprintId.value = data.sprintId
     }
   } catch { /* ignore */ }
+}
+
+function validateSprintFilter() {
+  if (!selectedSprintId.value) return
+  const exists = sprints.value.some(s => s.id === selectedSprintId.value)
+  if (!exists) {
+    selectedSprintId.value = null
+    saveFilters()
+  }
 }
 
 const memberMap = computed(() => {
@@ -102,6 +118,18 @@ function memberInitials(userId: string): string {
 const allBoardTickets = computed((): BoardTicket[] => {
   return Object.values(ticketsByStatus.value).flat()
 })
+
+const hasNoColumns = computed(
+  () => board.value != null && board.value.columns.length === 0,
+)
+
+const showNoTicketsHint = computed(
+  () =>
+    board.value != null
+    && board.value.columns.length > 0
+    && allBoardTickets.value.length === 0
+    && !loading.value,
+)
 
 const assigneesOnBoard = computed(() => {
   const ids = new Set<string>()
@@ -143,16 +171,13 @@ const filteredTicketsByStatus = computed((): Record<string, BoardTicket[]> => {
 })
 
 const columns = computed(() => {
-  if (!board.value || !workflow.value) return []
-  return board.value.columns.map((col) => {
-    const wfStatus = workflow.value!.statuses.find((s) => s.id === col.workflow_status_id)
-    return {
-      ...col,
-      name: wfStatus?.name ?? 'Unknown',
-      color: wfStatus?.color ?? undefined,
-      tickets: filteredTicketsByStatus.value[col.workflow_status_id] ?? [],
-    }
-  })
+  if (!board.value?.columns.length) return []
+  return board.value.columns.map((col) => ({
+    ...col,
+    name: col.status_name ?? 'Unknown',
+    color: col.status_color ?? undefined,
+    tickets: filteredTicketsByStatus.value[col.workflow_status_id] ?? [],
+  }))
 })
 
 interface SwimlaneGroup {
@@ -162,6 +187,8 @@ interface SwimlaneGroup {
 }
 
 const swimlanes = computed((): SwimlaneGroup[] => {
+  if (columns.value.length === 0) return []
+
   if (swimlaneMode.value === 'none') {
     return [{ key: '_all', label: '', columns: columns.value }]
   }
@@ -187,6 +214,10 @@ const swimlanes = computed((): SwimlaneGroup[] => {
       return [{ key: '_all', label: '', columns: columns.value }]
   }
 
+  if (allTickets.length === 0) {
+    return [{ key: '_all', label: '', columns: columns.value }]
+  }
+
   const groups = new Map<string, Set<string>>()
   for (const tk of allTickets) {
     const key = groupFn(tk)
@@ -204,38 +235,55 @@ const swimlanes = computed((): SwimlaneGroup[] => {
   }))
 })
 
+let boardWsChannel: string | null = null
+
+function subscribeBoardChannel() {
+  if (boardWsChannel) {
+    ws.unsubscribe(boardWsChannel)
+    boardWsChannel = null
+  }
+  if (board.value?.id) {
+    boardWsChannel = `board:${board.value.id}`
+    ws.subscribe(boardWsChannel)
+  }
+}
+
 async function loadBoard() {
   loading.value = true
   try {
-    const proj = await getProject(projectId)
+    const proj = await getProject(projectId.value)
     project.value = proj
 
-    let boards = await listBoards(projectId)
-    let b = boards.find((b) => b.is_default) ?? boards[0]
+    let boards = await listBoards(projectId.value)
+    let b = boards.find((x) => x.is_default) ?? boards[0]
 
     if (!b && proj.default_workflow_id) {
-      b = await createDefaultBoard(projectId, proj.default_workflow_id)
+      b = await createDefaultBoard(projectId.value, proj.default_workflow_id)
       toast.showSuccess(t('common.success'), t('boards.created'))
     }
 
     if (!b) {
-      loading.value = false
+      board.value = null
       return
     }
-    board.value = b
 
-    const wfRes = await listWorkflows(proj.organization_id, 0, 100)
-    const wf = wfRes.items.find((w) =>
-      w.statuses.some((s) => b!.columns.some((c) => c.workflow_status_id === s.id))
-    )
-    workflow.value = wf ?? null
+    if (b.columns.length === 0 && proj.default_workflow_id && canAdministerProject.value) {
+      try {
+        b = await syncBoardColumns(projectId.value, b.id)
+        toast.showSuccess(t('common.success'), t('boards.rebuilt'))
+      } catch { /* interceptor */ }
+    }
+
+    board.value = b
+    subscribeBoardChannel()
 
     const [sprintRes, memberRes] = await Promise.all([
-      listSprints(projectId, { limit: 50 }),
-      listProjectMembers(projectId, 0, 200),
+      listSprints(projectId.value, { limit: 50 }),
+      listProjectMembers(projectId.value, 0, 200),
     ])
     sprints.value = sprintRes.items ?? []
     members.value = memberRes.items ?? []
+    validateSprintFilter()
 
     await refreshTickets()
   } finally {
@@ -243,12 +291,29 @@ async function loadBoard() {
   }
 }
 
+async function rebuildBoard() {
+  if (!project.value?.default_workflow_id) return
+  rebuilding.value = true
+  try {
+    const updated = await syncBoardColumns(
+      projectId.value,
+      board.value?.id,
+    )
+    board.value = updated
+    subscribeBoardChannel()
+    await refreshTickets()
+    toast.showSuccess(t('common.success'), t('boards.rebuilt'))
+  } catch {
+    toast.showError(t('common.error'), t('boards.rebuildFailed'))
+  } finally {
+    rebuilding.value = false
+  }
+}
+
 async function refreshTickets() {
   if (!board.value) return
-  const tickets = await getBoardTickets(
-    board.value.id,
-    selectedSprintId.value || undefined,
-  )
+  const sprintParam = isScrumBoard.value ? selectedSprintId.value || undefined : undefined
+  const tickets = await getBoardTickets(board.value.id, sprintParam)
   ticketsByStatus.value = tickets
 }
 
@@ -259,6 +324,12 @@ watch(selectedSprintId, () => {
 
 watch(swimlaneMode, () => {
   saveFilters()
+})
+
+watch(projectId, () => {
+  loadFilters()
+  selectedAssigneeIds.value = new Set()
+  void loadBoard()
 })
 
 function onDragStart(ticket: BoardTicket, event: DragEvent) {
@@ -290,7 +361,7 @@ async function onDrop(statusId: string, event: DragEvent) {
   draggingTicket.value = null
 
   const currentCol = columns.value.find((c) =>
-    c.tickets.some((t) => t.id === ticket.id)
+    c.tickets.some((t) => t.id === ticket.id),
   )
   if (currentCol?.workflow_status_id === statusId) return
 
@@ -301,7 +372,7 @@ async function onDrop(statusId: string, event: DragEvent) {
 }
 
 function goToTicket(ticket: BoardTicket) {
-  router.push(ticketDetailPathFromRef(route.params.projectId as string, ticket.ticket_key))
+  router.push(ticketDetailPathFromRef(projectId.value, ticket.ticket_key))
 }
 
 function priorityClass(p: string): string {
@@ -332,9 +403,10 @@ function onWsEvent(data: Record<string, unknown>) {
   const event = data.event as string | undefined
   if (!event) return
   if (
-    event.startsWith('ticket.') ||
-    event.startsWith('sprint.') ||
-    event === 'comment.added'
+    event.startsWith('ticket.')
+    || event.startsWith('sprint.')
+    || event === 'comment.added'
+    || event === 'ticket.moved'
   ) {
     scheduleRefresh()
   }
@@ -343,12 +415,13 @@ function onWsEvent(data: Record<string, unknown>) {
 onMounted(() => {
   loadFilters()
   loadBoard()
-  ws.subscribe(`project:${projectId}`)
+  ws.subscribe(`project:${projectId.value}`)
   ws.on('event', onWsEvent)
 })
 
 onUnmounted(() => {
-  ws.unsubscribe(`project:${projectId}`)
+  ws.unsubscribe(`project:${projectId.value}`)
+  if (boardWsChannel) ws.unsubscribe(boardWsChannel)
   ws.off('event', onWsEvent)
   if (refreshTimer) clearTimeout(refreshTimer)
 })
@@ -360,7 +433,7 @@ onUnmounted(() => {
       <h2 class="m-0">{{ $t('boards.title') }}</h2>
       <div class="flex align-items-center gap-2 flex-wrap">
         <Select
-          v-if="sprints.length > 0"
+          v-if="isScrumBoard && sprints.length > 0"
           v-model="selectedSprintId"
           :options="sprintOptions"
           option-label="label"
@@ -388,6 +461,35 @@ onUnmounted(() => {
     </div>
 
     <div v-else class="board-container">
+      <Message v-if="hasNoColumns" severity="warn" class="mb-3 w-full">
+        <div class="flex align-items-center justify-content-between flex-wrap gap-2">
+          <span>{{ $t('boards.noColumns') }}</span>
+          <Button
+            v-if="canAdministerProject && project?.default_workflow_id"
+            :label="$t('boards.rebuildBoard')"
+            icon="pi pi-wrench"
+            size="small"
+            :loading="rebuilding"
+            @click="rebuildBoard"
+          />
+        </div>
+      </Message>
+
+      <Message v-else-if="showNoTicketsHint" severity="info" class="mb-3 w-full">
+        <div class="flex align-items-center justify-content-between flex-wrap gap-2">
+          <span>{{ $t('boards.noTicketsOnBoard') }}</span>
+          <Button
+            v-if="canAdministerProject && project?.default_workflow_id"
+            :label="$t('boards.rebuildBoard')"
+            icon="pi pi-wrench"
+            size="small"
+            severity="secondary"
+            :loading="rebuilding"
+            @click="rebuildBoard"
+          />
+        </div>
+      </Message>
+
       <div v-if="assigneesOnBoard.length > 0" class="assignee-filter-bar mb-3">
         <span class="text-xs font-semibold text-color-secondary mr-2">{{ $t('tickets.assignee') }}:</span>
         <div class="flex align-items-center gap-2 flex-wrap">

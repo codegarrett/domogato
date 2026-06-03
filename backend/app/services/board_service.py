@@ -8,8 +8,59 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.board import Board, BoardColumn
+from app.models.project import Project
 from app.models.ticket import Ticket
 from app.models.workflow import Workflow, WorkflowStatus
+from app.schemas.board import BoardColumnRead, BoardRead
+
+
+async def _status_map_for_ids(
+    db: AsyncSession, status_ids: list[UUID]
+) -> dict[UUID, WorkflowStatus]:
+    if not status_ids:
+        return {}
+    result = await db.execute(
+        select(WorkflowStatus).where(WorkflowStatus.id.in_(status_ids))
+    )
+    return {s.id: s for s in result.scalars().all()}
+
+
+def board_to_read(board: Board, status_map: dict[UUID, WorkflowStatus]) -> BoardRead:
+    columns: list[BoardColumnRead] = []
+    for col in board.columns:
+        st = status_map.get(col.workflow_status_id)
+        columns.append(
+            BoardColumnRead(
+                id=col.id,
+                board_id=col.board_id,
+                workflow_status_id=col.workflow_status_id,
+                position=col.position,
+                wip_limit=col.wip_limit,
+                is_collapsed=col.is_collapsed,
+                status_name=st.name if st else None,
+                status_color=st.color if st else None,
+                status_category=st.category if st else None,
+            )
+        )
+    return BoardRead(
+        id=board.id,
+        project_id=board.project_id,
+        name=board.name,
+        board_type=board.board_type,
+        filter_config=board.filter_config or {},
+        is_default=board.is_default,
+        columns=columns,
+        created_at=board.created_at,
+        updated_at=board.updated_at,
+    )
+
+
+async def boards_to_reads(db: AsyncSession, boards: list[Board]) -> list[BoardRead]:
+    status_ids = [
+        c.workflow_status_id for b in boards for c in b.columns
+    ]
+    status_map = await _status_map_for_ids(db, status_ids)
+    return [board_to_read(b, status_map) for b in boards]
 
 
 async def create_board(
@@ -110,7 +161,71 @@ async def create_default_board_for_workflow(
 
     board_id = board.id
     db.expunge(board)
-    return await get_board(db, board_id)  # type: ignore[return-value]
+    reloaded = await get_board(db, board_id)
+    if reloaded is None:
+        raise ValueError("Board not found after creation")
+    status_map = await _status_map_for_ids(
+        db, [c.workflow_status_id for c in reloaded.columns]
+    )
+    return board_to_read(reloaded, status_map)
+
+
+async def sync_board_columns_from_workflow(
+    db: AsyncSession,
+    project_id: UUID,
+    *,
+    board_id: UUID | None = None,
+) -> BoardRead | None:
+    """Replace board columns with statuses from the project's default workflow."""
+    project = (
+        await db.execute(select(Project).where(Project.id == project_id))
+    ).scalar_one_or_none()
+    if project is None or project.default_workflow_id is None:
+        return None
+
+    workflow_id = project.default_workflow_id
+    boards = await list_boards(db, project_id)
+    target: Board | None = None
+    if board_id is not None:
+        target = await get_board(db, board_id)
+    else:
+        target = next((b for b in boards if b.is_default), boards[0] if boards else None)
+
+    if target is None:
+        created = await create_default_board_for_workflow(
+            db, project_id, workflow_id,
+        )
+        return created
+
+    for col in list(target.columns):
+        await db.delete(col)
+    await db.flush()
+
+    statuses = (
+        await db.execute(
+            select(WorkflowStatus)
+            .where(WorkflowStatus.workflow_id == workflow_id)
+            .order_by(WorkflowStatus.position)
+        )
+    ).scalars().all()
+
+    for i, status in enumerate(statuses):
+        db.add(
+            BoardColumn(
+                board_id=target.id,
+                workflow_status_id=status.id,
+                position=i,
+            )
+        )
+    await db.flush()
+
+    reloaded = await get_board(db, target.id)
+    if reloaded is None:
+        return None
+    status_map = await _status_map_for_ids(
+        db, [c.workflow_status_id for c in reloaded.columns]
+    )
+    return board_to_read(reloaded, status_map)
 
 
 async def add_column(
@@ -179,6 +294,11 @@ async def get_board_tickets(
     if board is None:
         return {}
 
+    project = (
+        await db.execute(select(Project).where(Project.id == board.project_id))
+    ).scalar_one_or_none()
+    project_key = project.key if project else ""
+
     status_ids = [c.workflow_status_id for c in board.columns]
     if not status_ids:
         return {}
@@ -205,9 +325,14 @@ async def get_board_tickets(
     for t in tickets:
         sid = str(t.workflow_status_id)
         if sid in grouped:
+            ticket_key = (
+                f"{project_key}-{t.ticket_number}"
+                if project_key
+                else str(t.ticket_number)
+            )
             grouped[sid].append({
                 "id": str(t.id),
-                "ticket_key": f"{t.ticket_number}",
+                "ticket_key": ticket_key,
                 "title": t.title,
                 "ticket_type": t.ticket_type,
                 "priority": t.priority,

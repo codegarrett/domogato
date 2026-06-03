@@ -7,6 +7,9 @@ export interface BoardColumn {
   position: number
   wip_limit: number | null
   is_collapsed: boolean
+  status_name?: string | null
+  status_color?: string | null
+  status_category?: string | null
 }
 
 export interface Board {
@@ -44,6 +47,13 @@ export async function createBoard(projectId: string, body: { name: string; board
 
 export async function createDefaultBoard(projectId: string, workflowId: string): Promise<Board> {
   const { data } = await apiClient.post<Board>(`/projects/${projectId}/boards/default`, null, { params: { workflow_id: workflowId } })
+  return data
+}
+
+export async function syncBoardColumns(projectId: string, boardId?: string): Promise<Board> {
+  const params: Record<string, string> = {}
+  if (boardId) params.board_id = boardId
+  const { data } = await apiClient.post<Board>(`/projects/${projectId}/boards/sync`, null, { params })
   return data
 }
 

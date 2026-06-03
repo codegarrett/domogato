@@ -141,3 +141,83 @@ class TestBoardTickets:
         )
         assert resp.status_code == 200
         assert resp.json()["workflow_status_id"] == str(s2.id)
+
+
+class TestBoardEnrichment:
+    async def test_list_boards_includes_status_metadata(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+    ):
+        wf, s1, _, _ = await _setup_workflow(db_session, test_org.id, test_project)
+        await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/default",
+            params={"workflow_id": str(wf.id)},
+        )
+        resp = await admin_client.get(
+            f"/api/v1/projects/{test_project.id}/boards",
+        )
+        assert resp.status_code == 200
+        boards = resp.json()
+        assert len(boards) >= 1
+        col = boards[0]["columns"][0]
+        assert col["status_name"] == "Todo"
+        assert col["workflow_status_id"] == str(s1.id)
+
+    async def test_sync_board_columns(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+    ):
+        wf, s1, s2, s3 = await _setup_workflow(db_session, test_org.id, test_project)
+        empty = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards",
+            json={"name": "Empty Board"},
+        )
+        assert empty.status_code == 201
+        assert empty.json()["columns"] == []
+
+        sync = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/sync",
+            params={"board_id": empty.json()["id"]},
+        )
+        assert sync.status_code == 200
+        assert len(sync.json()["columns"]) == 3
+        status_names = {c["status_name"] for c in sync.json()["columns"]}
+        assert status_names == {"Todo", "In Progress", "Done"}
+
+    async def test_board_ticket_key_uses_project_key(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+        admin_user: User,
+    ):
+        wf, s1, _, _ = await _setup_workflow(db_session, test_org.id, test_project)
+        board_resp = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/default",
+            params={"workflow_id": str(wf.id)},
+        )
+        board_id = board_resp.json()["id"]
+
+        t1 = Ticket(
+            project_id=test_project.id,
+            ticket_number=42,
+            ticket_type="task",
+            title="Key Test",
+            priority="medium",
+            reporter_id=admin_user.id,
+            workflow_status_id=s1.id,
+        )
+        db_session.add(t1)
+        await db_session.flush()
+
+        resp = await admin_client.get(f"/api/v1/boards/{board_id}/tickets")
+        assert resp.status_code == 200
+        tickets = resp.json()[str(s1.id)]
+        assert tickets[0]["ticket_key"] == f"{test_project.key}-42"
