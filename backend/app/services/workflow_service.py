@@ -5,6 +5,8 @@ from collections import deque
 from typing import Any
 from uuid import UUID
 
+from collections import defaultdict
+
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -187,12 +189,34 @@ async def _remove_board_columns_for_status(
 async def _sync_board_column_positions(
     db: AsyncSession, status_positions: dict[UUID, int]
 ) -> None:
-    for status_id, position in status_positions.items():
-        await db.execute(
-            update(BoardColumn)
-            .where(BoardColumn.workflow_status_id == status_id)
-            .values(position=position)
+    """Update board column order; two-phase per board to avoid uq_board_columns_board_position clashes."""
+    if not status_positions:
+        return
+
+    result = await db.execute(
+        select(BoardColumn).where(
+            BoardColumn.workflow_status_id.in_(list(status_positions.keys()))
         )
+    )
+    columns = list(result.scalars().all())
+    by_board: dict[UUID, list[BoardColumn]] = defaultdict(list)
+    for col in columns:
+        by_board[col.board_id].append(col)
+
+    temp_offset = 100_000
+    for board_cols in by_board.values():
+        for col in board_cols:
+            await db.execute(
+                update(BoardColumn)
+                .where(BoardColumn.id == col.id)
+                .values(position=col.position + temp_offset)
+            )
+        for col in board_cols:
+            await db.execute(
+                update(BoardColumn)
+                .where(BoardColumn.id == col.id)
+                .values(position=status_positions[col.workflow_status_id])
+            )
 
 
 async def update_status(

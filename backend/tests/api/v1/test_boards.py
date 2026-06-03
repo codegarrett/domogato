@@ -282,3 +282,24 @@ class TestBoardShowOnBoard:
             str(s1.id),
             str(s2.id),
         ]
+
+    async def test_reorder_swap_does_not_violate_position_unique(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+    ):
+        """Swapping adjacent column positions must not hit uq_board_columns_board_position."""
+        wf, s1, s2, s3 = await _setup_workflow(db_session, test_org.id, test_project)
+        await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/default",
+            params={"workflow_id": str(wf.id)},
+        )
+
+        resp = await admin_client.put(
+            f"/api/v1/workflows/{wf.id}/statuses/reorder",
+            json={"status_ids": [str(s2.id), str(s1.id), str(s3.id)]},
+        )
+        assert resp.status_code == 200
+        assert [s["name"] for s in resp.json()] == ["In Progress", "Todo", "Done"]
