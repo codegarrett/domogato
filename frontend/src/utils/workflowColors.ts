@@ -25,9 +25,19 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+/** Normalize to #RRGGBB for native color inputs and consistent display. */
+export function normalizeHexColor(color: string | null | undefined): string {
+  if (!color) return WORKFLOW_COLOR_INITIAL
+  const trimmed = color.trim()
+  const match = trimmed.match(/^#?([0-9A-Fa-f]{6})$/)
+  if (!match) return WORKFLOW_COLOR_INITIAL
+  return `#${match[1]!.toUpperCase()}`
+}
+
 export function workflowColumnHeaderStyle(color: string): Record<string, string> {
+  const hex = normalizeHexColor(color)
   return {
-    background: hexToRgba(color, 0.14),
-    borderBottom: `1px solid ${hexToRgba(color, 0.25)}`,
+    background: hexToRgba(hex, 0.22),
+    borderBottom: `1px solid ${hexToRgba(hex, 0.32)}`,
   }
 }

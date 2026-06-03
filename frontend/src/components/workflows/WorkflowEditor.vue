@@ -227,6 +227,7 @@ import {
 } from '@/api/workflows'
 import {
   defaultWorkflowStatusColor,
+  normalizeHexColor,
   WORKFLOW_COLOR_INITIAL,
 } from '@/utils/workflowColors'
 
@@ -388,7 +389,7 @@ async function handleStatusClick(status: WorkflowStatus) {
     id: status.id,
     name: status.name,
     category: status.category,
-    color: status.color,
+    color: normalizeHexColor(status.color),
     is_initial: status.is_initial,
     is_terminal: status.is_terminal,
     show_on_board: status.show_on_board,

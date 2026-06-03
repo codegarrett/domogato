@@ -25,6 +25,7 @@ import { getProject, listProjectMembers, type Project, type ProjectMember } from
 import { listSprints, type Sprint } from '@/api/sprints'
 import {
   defaultWorkflowStatusColor,
+  normalizeHexColor,
   workflowColumnHeaderStyle,
 } from '@/utils/workflowColors'
 
@@ -177,9 +178,10 @@ const columns = computed(() => {
   return board.value.columns.map((col) => ({
     ...col,
     name: col.status_name ?? 'Unknown',
-    color:
+    color: normalizeHexColor(
       col.status_color
       ?? defaultWorkflowStatusColor({ category: col.status_category ?? 'to_do' }),
+    ),
     tickets: filteredTicketsByStatus.value[col.workflow_status_id] ?? [],
   }))
 })
@@ -700,6 +702,7 @@ onUnmounted(() => {
   min-width: 280px;
   background: var(--app-card-alt-bg);
   border-radius: 8px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   transition: box-shadow 0.15s;
@@ -714,6 +717,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
+  border-radius: 8px 8px 0 0;
 }
 
 .status-dot {
