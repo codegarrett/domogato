@@ -99,7 +99,9 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ### 3. Optional: Enable AI features
 
-Set `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` in `.env` to enable the AI assistant. Set `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, and `EMBEDDING_API_KEY` for semantic KB search.
+Set `LLM_PROVIDER`, `LLM_MODEL`, and provider-specific credentials in `.env` to enable the AI assistant. Set `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, and related vars for semantic KB search.
+
+See [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md) for local (Ollama) vs production (Azure OpenAI) configuration examples.
 
 ### 4. Optional: Enable email notifications
 

@@ -8,11 +8,15 @@ from openai import AsyncAzureOpenAI, APIConnectionError, APITimeoutError, RateLi
 from app.services.llm.base import (
     BaseLLMProvider,
     BaseEmbeddingProvider,
-    ChatResponse,
     StreamEvent,
     LLMConnectionError,
     LLMRateLimitError,
     LLMResponseError,
+)
+from app.services.llm.openai_compat import (
+    build_chat_completion_kwargs,
+    parse_chat_completion_response,
+    parse_stream_delta,
 )
 
 
@@ -47,21 +51,18 @@ class AzureOpenAIProvider(BaseLLMProvider):
         *,
         max_tokens: int | None = None,
         temperature: float | None = None,
-    ) -> ChatResponse:
+        tools: list[dict] | None = None,
+    ):
         try:
-            resp = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
+            kwargs = build_chat_completion_kwargs(
+                self.model,
+                messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                tools=tools,
             )
-            choice = resp.choices[0]
-            return ChatResponse(
-                content=choice.message.content or "",
-                model=resp.model,
-                prompt_tokens=resp.usage.prompt_tokens if resp.usage else None,
-                completion_tokens=resp.usage.completion_tokens if resp.usage else None,
-            )
+            resp = await self.client.chat.completions.create(**kwargs)
+            return parse_chat_completion_response(resp, fallback_model=self.model)
         except Exception as exc:
             raise _map_azure_error(exc) from exc
 
@@ -73,13 +74,14 @@ class AzureOpenAIProvider(BaseLLMProvider):
         temperature: float | None = None,
     ) -> AsyncIterator[str]:
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
+            kwargs = build_chat_completion_kwargs(
+                self.model,
+                messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 stream=True,
             )
+            stream = await self.client.chat.completions.create(**kwargs)
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
@@ -94,17 +96,20 @@ class AzureOpenAIProvider(BaseLLMProvider):
         temperature: float | None = None,
     ) -> AsyncIterator[StreamEvent]:
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
+            kwargs = build_chat_completion_kwargs(
+                self.model,
+                messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 stream=True,
                 stream_options={"include_usage": True},
             )
+            stream = await self.client.chat.completions.create(**kwargs)
             async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield StreamEvent(content=chunk.choices[0].delta.content)
+                if chunk.choices:
+                    event = parse_stream_delta(chunk.choices[0].delta)
+                    if event:
+                        yield event
 
                 if chunk.usage:
                     yield StreamEvent(

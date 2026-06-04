@@ -13,6 +13,14 @@ from app.services.llm.base import (
 logger = structlog.get_logger()
 
 
+def _normalize_provider_name(name: str) -> str:
+    """Map legacy aliases to canonical provider names."""
+    normalized = name.lower().strip()
+    if normalized == "azure":
+        return "azure_openai"
+    return normalized
+
+
 def is_llm_configured() -> bool:
     return bool(settings.LLM_PROVIDER and settings.LLM_MODEL)
 
@@ -25,7 +33,7 @@ def is_embedding_configured() -> bool:
 
 def get_llm_provider() -> BaseLLMProvider:
     """Return a configured LLM provider based on settings."""
-    provider_name = settings.LLM_PROVIDER.lower().strip()
+    provider_name = _normalize_provider_name(settings.LLM_PROVIDER)
     model = settings.LLM_MODEL
 
     if not provider_name or not model:
@@ -78,15 +86,18 @@ def get_llm_provider() -> BaseLLMProvider:
 
     raise LLMConfigError(
         f"Unknown LLM provider: '{provider_name}'. "
-        f"Supported: openai, ollama, azure_openai, anthropic."
+        f"Supported: openai, ollama, azure_openai (or azure), anthropic."
     )
 
 
 def get_embedding_provider() -> BaseEmbeddingProvider:
     """Return a configured embedding provider based on settings."""
-    provider_name = (settings.EMBEDDING_PROVIDER or settings.LLM_PROVIDER).lower().strip()
+    provider_name = _normalize_provider_name(
+        settings.EMBEDDING_PROVIDER or settings.LLM_PROVIDER,
+    )
     model = settings.EMBEDDING_MODEL
-    uses_same_provider = provider_name == (settings.LLM_PROVIDER or "").lower().strip()
+    llm_provider = _normalize_provider_name(settings.LLM_PROVIDER or "")
+    uses_same_provider = provider_name == llm_provider
     api_key = settings.EMBEDDING_API_KEY or (settings.LLM_API_KEY if uses_same_provider else "")
     base_url = settings.EMBEDDING_BASE_URL or (settings.LLM_BASE_URL if uses_same_provider else "")
 
@@ -131,5 +142,5 @@ def get_embedding_provider() -> BaseEmbeddingProvider:
 
     raise LLMConfigError(
         f"Unknown embedding provider: '{provider_name}'. "
-        f"Supported: openai, ollama, azure_openai."
+        f"Supported: openai, ollama, azure_openai (or azure)."
     )
