@@ -545,13 +545,20 @@ function confirmReindexProject() {
       reindexLoading.value = true
       try {
         const res = await reindexProject(reindexProjectId.value!)
-        toast.showSuccess(
-          t('common.success'),
-          t('admin.embeddings.reindexProjectDone', {
-            pages: res.pages_queued,
-            attachments: res.attachments_queued,
-          }),
-        )
+        if (res.pages_queued === 0 && res.attachments_queued === 0) {
+          toast.showWarn(
+            t('admin.embeddings.reindexProjectTitle'),
+            t('admin.embeddings.reindexProjectEmpty'),
+          )
+        } else {
+          toast.showSuccess(
+            t('common.success'),
+            t('admin.embeddings.reindexProjectDone', {
+              pages: res.pages_queued,
+              attachments: res.attachments_queued,
+            }),
+          )
+        }
       } finally {
         reindexLoading.value = false
       }

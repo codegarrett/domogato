@@ -8,6 +8,7 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_embedding import AIEmbedding
+from app.services.llm.base import LLMConfigError
 from app.services.llm.factory import get_embedding_provider, is_embedding_configured
 from app.services.text_extraction import chunk_text
 
@@ -28,9 +29,14 @@ async def embed_and_store(
     """Chunk text, generate embeddings, and store in ai_embeddings.
 
     Returns the number of chunks embedded. Replaces any existing embeddings
-    for the same (content_type, content_id).
+    for the same (content_type, content_id) only after vectors are generated.
     """
     if not is_embedding_configured():
+        logger.warning(
+            "embedding_skipped_not_configured",
+            content_type=content_type,
+            content_id=str(content_id),
+        )
         return 0
 
     chunks = chunk_text(text_content)
@@ -38,11 +44,17 @@ async def embed_and_store(
         await delete_embeddings(db, content_type=content_type, content_id=content_id)
         return 0
 
-    provider = get_embedding_provider()
+    try:
+        provider = get_embedding_provider()
+    except LLMConfigError:
+        logger.exception(
+            "embedding_provider_unavailable",
+            content_type=content_type,
+            content_id=str(content_id),
+        )
+        return 0
 
-    await delete_embeddings(db, content_type=content_type, content_id=content_id)
-
-    total_stored = 0
+    pending_rows: list[AIEmbedding] = []
     for batch_start in range(0, len(chunks), BATCH_SIZE):
         batch = chunks[batch_start : batch_start + BATCH_SIZE]
         try:
@@ -56,21 +68,44 @@ async def embed_and_store(
             )
             continue
 
-        for i, (chunk, vector) in enumerate(zip(batch, vectors)):
-            embedding = AIEmbedding(
-                project_id=project_id,
+        if len(vectors) != len(batch):
+            logger.error(
+                "embedding_batch_size_mismatch",
                 content_type=content_type,
-                content_id=content_id,
-                chunk_index=batch_start + i,
-                chunk_text=chunk,
-                embedding=vector,
-                metadata_=metadata,
+                content_id=str(content_id),
+                batch_start=batch_start,
+                expected=len(batch),
+                got=len(vectors),
             )
-            db.add(embedding)
-        total_stored += len(batch)
+            continue
 
+        for i, (chunk, vector) in enumerate(zip(batch, vectors)):
+            pending_rows.append(
+                AIEmbedding(
+                    project_id=project_id,
+                    content_type=content_type,
+                    content_id=content_id,
+                    chunk_index=batch_start + i,
+                    chunk_text=chunk,
+                    embedding=vector,
+                    metadata_=metadata,
+                )
+            )
+
+    if not pending_rows:
+        logger.error(
+            "embedding_store_failed_no_vectors",
+            content_type=content_type,
+            content_id=str(content_id),
+            chunk_count=len(chunks),
+        )
+        return 0
+
+    await delete_embeddings(db, content_type=content_type, content_id=content_id)
+    for row in pending_rows:
+        db.add(row)
     await db.flush()
-    return total_stored
+    return len(pending_rows)
 
 
 async def delete_embeddings(

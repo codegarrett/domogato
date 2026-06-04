@@ -693,6 +693,7 @@
       "reindexProjectTitle": "Reindex project embeddings",
       "reindexProjectConfirm": "This will queue Celery jobs to re-embed all KB pages and attachments in the selected project. Continue?",
       "reindexProjectDone": "Queued {pages} pages and {attachments} attachments for reindexing.",
+      "reindexProjectEmpty": "No KB pages with content were found in this project. Create or edit KB pages with markdown content first.",
       "detailTitle": "Embedding detail",
       "viewKbPage": "View KB page",
       "chunkText": "Chunk text",

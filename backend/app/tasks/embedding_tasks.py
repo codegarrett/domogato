@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from uuid import UUID
 
 import structlog
 from sqlalchemy import select
@@ -27,6 +28,13 @@ def _run_async(coro):
         loop.close()
 
 
+def _parse_uuid(value: str, label: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise ValueError(f"Invalid {label}: {value}") from exc
+
+
 async def _build_page_metadata(db: AsyncSession, page, space) -> dict:
     """Build rich metadata including page hierarchy."""
     from app.services.kb_service import get_page_ancestors
@@ -50,36 +58,46 @@ class PageNotReadyError(Exception):
     """Raised when a KB page is not yet visible (e.g. transaction not committed)."""
 
 
-async def _embed_kb_page_async(page_id: str) -> None:
+async def _embed_kb_page_async(page_id: str) -> dict:
     from app.models.kb_page import KBPage
     from app.models.kb_space import KBSpace
     from app.services.embedding_service import embed_and_store
     from app.services.llm.factory import is_embedding_configured
 
     if not is_embedding_configured():
-        return
+        logger.warning("embed_kb_page_skipped", page_id=page_id, reason="embedding_not_configured")
+        return {"status": "skipped", "reason": "embedding_not_configured", "page_id": page_id}
 
+    page_uuid = _parse_uuid(page_id, "page_id")
     factory = _get_async_session_factory()
     async with factory() as db:
         result = await db.execute(
-            select(KBPage).where(KBPage.id == page_id)
+            select(KBPage).where(KBPage.id == page_uuid)
         )
         page = result.scalar_one_or_none()
         if page is None:
             raise PageNotReadyError(f"KB page {page_id} not found")
         if page.is_deleted:
-            return
+            logger.info("embed_kb_page_skipped", page_id=page_id, reason="page_deleted")
+            return {"status": "skipped", "reason": "page_deleted", "page_id": page_id}
 
         result = await db.execute(
             select(KBSpace).where(KBSpace.id == page.space_id)
         )
         space = result.scalar_one_or_none()
         if space is None:
-            return
+            logger.warning("embed_kb_page_skipped", page_id=page_id, reason="space_not_found")
+            return {"status": "skipped", "reason": "space_not_found", "page_id": page_id}
 
         text_content = page.content_markdown or ""
         if not text_content.strip():
-            return
+            logger.info(
+                "embed_kb_page_skipped",
+                page_id=page_id,
+                reason="empty_content",
+                page_title=page.title,
+            )
+            return {"status": "skipped", "reason": "empty_content", "page_id": page_id}
 
         metadata = await _build_page_metadata(db, page, space)
 
@@ -92,10 +110,20 @@ async def _embed_kb_page_async(page_id: str) -> None:
             metadata=metadata,
         )
         await db.commit()
-        logger.info("kb_page_embedded", page_id=page_id, chunks=count)
+        if count == 0:
+            logger.error(
+                "embed_kb_page_failed",
+                page_id=page_id,
+                page_title=page.title,
+                reason="zero_chunks_stored",
+            )
+            return {"status": "failed", "reason": "zero_chunks_stored", "page_id": page_id}
+
+        logger.info("kb_page_embedded", page_id=page_id, chunks=count, page_title=page.title)
+        return {"status": "embedded", "page_id": page_id, "chunks": count}
 
 
-async def _embed_kb_attachment_async(attachment_id: str, page_id: str) -> None:
+async def _embed_kb_attachment_async(attachment_id: str, page_id: str) -> dict:
     from app.models.kb_attachment import KBPageAttachment
     from app.models.kb_page import KBPage
     from app.models.kb_space import KBSpace
@@ -104,40 +132,92 @@ async def _embed_kb_attachment_async(attachment_id: str, page_id: str) -> None:
     from app.services.text_extraction import extract_text_from_file
 
     if not is_embedding_configured():
-        return
+        logger.warning(
+            "embed_kb_attachment_skipped",
+            attachment_id=attachment_id,
+            reason="embedding_not_configured",
+        )
+        return {
+            "status": "skipped",
+            "reason": "embedding_not_configured",
+            "attachment_id": attachment_id,
+        }
 
+    attachment_uuid = _parse_uuid(attachment_id, "attachment_id")
+    page_uuid = _parse_uuid(page_id, "page_id")
     factory = _get_async_session_factory()
     async with factory() as db:
         result = await db.execute(
-            select(KBPageAttachment).where(KBPageAttachment.id == attachment_id)
+            select(KBPageAttachment).where(KBPageAttachment.id == attachment_uuid)
         )
         attachment = result.scalar_one_or_none()
         if attachment is None:
-            return
+            logger.warning(
+                "embed_kb_attachment_skipped",
+                attachment_id=attachment_id,
+                reason="attachment_not_found",
+            )
+            return {
+                "status": "skipped",
+                "reason": "attachment_not_found",
+                "attachment_id": attachment_id,
+            }
 
         result = await db.execute(
-            select(KBPage).where(KBPage.id == page_id)
+            select(KBPage).where(KBPage.id == page_uuid)
         )
         page = result.scalar_one_or_none()
         if page is None:
-            return
+            logger.warning(
+                "embed_kb_attachment_skipped",
+                attachment_id=attachment_id,
+                reason="page_not_found",
+            )
+            return {
+                "status": "skipped",
+                "reason": "page_not_found",
+                "attachment_id": attachment_id,
+            }
 
         result = await db.execute(
             select(KBSpace).where(KBSpace.id == page.space_id)
         )
         space = result.scalar_one_or_none()
         if space is None:
-            return
+            logger.warning(
+                "embed_kb_attachment_skipped",
+                attachment_id=attachment_id,
+                reason="space_not_found",
+            )
+            return {
+                "status": "skipped",
+                "reason": "space_not_found",
+                "attachment_id": attachment_id,
+            }
 
         file_bytes = await _download_s3_file(attachment.s3_key)
         if not file_bytes:
-            return
+            return {
+                "status": "skipped",
+                "reason": "s3_download_failed",
+                "attachment_id": attachment_id,
+            }
 
         text_content = extract_text_from_file(
             file_bytes, attachment.content_type, attachment.filename
         )
         if not text_content.strip():
-            return
+            logger.info(
+                "embed_kb_attachment_skipped",
+                attachment_id=attachment_id,
+                reason="empty_extracted_text",
+                filename=attachment.filename,
+            )
+            return {
+                "status": "skipped",
+                "reason": "empty_extracted_text",
+                "attachment_id": attachment_id,
+            }
 
         page_metadata = await _build_page_metadata(db, page, space)
         metadata = {
@@ -158,12 +238,30 @@ async def _embed_kb_attachment_async(attachment_id: str, page_id: str) -> None:
             metadata=metadata,
         )
         await db.commit()
+        if count == 0:
+            logger.error(
+                "embed_kb_attachment_failed",
+                attachment_id=attachment_id,
+                filename=attachment.filename,
+                reason="zero_chunks_stored",
+            )
+            return {
+                "status": "failed",
+                "reason": "zero_chunks_stored",
+                "attachment_id": attachment_id,
+            }
+
         logger.info(
             "kb_attachment_embedded",
             attachment_id=attachment_id,
             filename=attachment.filename,
             chunks=count,
         )
+        return {
+            "status": "embedded",
+            "attachment_id": attachment_id,
+            "chunks": count,
+        }
 
 
 async def _download_s3_file(s3_key: str) -> bytes | None:
@@ -178,13 +276,14 @@ async def _download_s3_file(s3_key: str) -> bytes | None:
         return None
 
 
-async def _delete_kb_embeddings_async(content_type: str, content_id: str) -> None:
+async def _delete_kb_embeddings_async(content_type: str, content_id: str) -> dict:
     from app.services.embedding_service import delete_embeddings
 
+    content_uuid = _parse_uuid(content_id, "content_id")
     factory = _get_async_session_factory()
     async with factory() as db:
         count = await delete_embeddings(
-            db, content_type=content_type, content_id=content_id
+            db, content_type=content_type, content_id=content_uuid
         )
         await db.commit()
         logger.info(
@@ -193,18 +292,18 @@ async def _delete_kb_embeddings_async(content_type: str, content_id: str) -> Non
             content_id=content_id,
             count=count,
         )
+        return {"status": "deleted", "content_type": content_type, "content_id": content_id, "deleted": count}
 
 
 @celery_app.task(
     name="embed_kb_page",
     bind=True,
-    ignore_result=True,
     max_retries=5,
     default_retry_delay=3,
 )
-def embed_kb_page(self, page_id: str) -> None:
+def embed_kb_page(self, page_id: str) -> dict:
     try:
-        _run_async(_embed_kb_page_async(page_id))
+        return _run_async(_embed_kb_page_async(page_id))
     except PageNotReadyError as exc:
         raise self.retry(exc=exc) from exc
 
@@ -214,20 +313,37 @@ def schedule_kb_page_embedding(page_id: str) -> None:
     embed_kb_page.apply_async(args=[page_id], countdown=3)
 
 
-@celery_app.task(name="embed_kb_attachment", ignore_result=True)
-def embed_kb_attachment(attachment_id: str, page_id: str) -> None:
-    _run_async(_embed_kb_attachment_async(attachment_id, page_id))
+@celery_app.task(name="embed_kb_attachment")
+def embed_kb_attachment(attachment_id: str, page_id: str) -> dict:
+    return _run_async(_embed_kb_attachment_async(attachment_id, page_id))
 
 
-@celery_app.task(name="delete_kb_embeddings", ignore_result=True)
-def delete_kb_embeddings(content_type: str, content_id: str) -> None:
-    _run_async(_delete_kb_embeddings_async(content_type, content_id))
+@celery_app.task(name="delete_kb_embeddings")
+def delete_kb_embeddings(content_type: str, content_id: str) -> dict:
+    return _run_async(_delete_kb_embeddings_async(content_type, content_id))
 
 
-async def _reindex_project_embeddings_async(project_id: str) -> None:
+async def _reindex_project_embeddings_async(project_id: str) -> dict:
     from app.models.kb_attachment import KBPageAttachment
     from app.models.kb_page import KBPage
     from app.models.kb_space import KBSpace
+    from app.services.llm.factory import is_embedding_configured
+
+    project_uuid = _parse_uuid(project_id, "project_id")
+
+    if not is_embedding_configured():
+        logger.warning(
+            "reindex_project_skipped",
+            project_id=project_id,
+            reason="embedding_not_configured",
+        )
+        return {
+            "status": "skipped",
+            "reason": "embedding_not_configured",
+            "project_id": project_id,
+            "pages_queued": 0,
+            "attachments_queued": 0,
+        }
 
     factory = _get_async_session_factory()
     async with factory() as db:
@@ -236,7 +352,7 @@ async def _reindex_project_embeddings_async(project_id: str) -> None:
                 select(KBPage.id)
                 .join(KBSpace, KBSpace.id == KBPage.space_id)
                 .where(
-                    KBSpace.project_id == project_id,
+                    KBSpace.project_id == project_uuid,
                     KBPage.is_deleted.is_(False),
                     KBPage.content_markdown.isnot(None),
                     KBPage.content_markdown != "",
@@ -254,27 +370,41 @@ async def _reindex_project_embeddings_async(project_id: str) -> None:
         ).all() if page_ids else []
 
     pages_queued = 0
-    for i, page_id in enumerate(page_ids):
-        embed_kb_page.apply_async(args=[str(page_id)], countdown=3 + i)
+    for i, pid in enumerate(page_ids):
+        embed_kb_page.apply_async(args=[str(pid)], countdown=3 + i)
         pages_queued += 1
 
     attachments_queued = 0
     base_countdown = 3 + pages_queued
-    for i, (attachment_id, page_id) in enumerate(attachment_rows):
+    for i, (attachment_id, pid) in enumerate(attachment_rows):
         embed_kb_attachment.apply_async(
-            args=[str(attachment_id), str(page_id)],
+            args=[str(attachment_id), str(pid)],
             countdown=base_countdown + i,
         )
         attachments_queued += 1
 
-    logger.info(
-        "project_embeddings_reindex_queued",
-        project_id=project_id,
-        pages_queued=pages_queued,
-        attachments_queued=attachments_queued,
-    )
+    if pages_queued == 0 and attachments_queued == 0:
+        logger.warning(
+            "reindex_project_no_sources",
+            project_id=project_id,
+            reason="no_kb_pages_with_content",
+        )
+    else:
+        logger.info(
+            "project_embeddings_reindex_queued",
+            project_id=project_id,
+            pages_queued=pages_queued,
+            attachments_queued=attachments_queued,
+        )
+
+    return {
+        "status": "queued",
+        "project_id": project_id,
+        "pages_queued": pages_queued,
+        "attachments_queued": attachments_queued,
+    }
 
 
-@celery_app.task(name="reindex_project_embeddings", ignore_result=True)
-def reindex_project_embeddings(project_id: str) -> None:
-    _run_async(_reindex_project_embeddings_async(project_id))
+@celery_app.task(name="reindex_project_embeddings")
+def reindex_project_embeddings(project_id: str) -> dict:
+    return _run_async(_reindex_project_embeddings_async(project_id))

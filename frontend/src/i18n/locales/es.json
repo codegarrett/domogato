@@ -693,6 +693,7 @@
       "reindexProjectTitle": "Reindexar embeddings del proyecto",
       "reindexProjectConfirm": "Esto encolará trabajos Celery para re-embeder todas las páginas y adjuntos KB del proyecto seleccionado. ¿Continuar?",
       "reindexProjectDone": "Se encolaron {pages} páginas y {attachments} adjuntos para reindexación.",
+      "reindexProjectEmpty": "No se encontraron páginas KB con contenido en este proyecto. Crea o edita páginas KB con contenido markdown primero.",
       "detailTitle": "Detalle del embedding",
       "viewKbPage": "Ver página KB",
       "chunkText": "Texto del fragmento",
