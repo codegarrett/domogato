@@ -37,6 +37,76 @@ def estimate_message_tokens(message: dict) -> int:
     return tokens
 
 
+def sanitize_tool_messages(messages: list[dict]) -> list[dict]:
+    """Ensure OpenAI-compatible tool-call chains in message history.
+
+    Drops orphaned tool messages and incomplete tool-call groups that can
+    occur when DB timestamps collide or context compaction splits a turn.
+    """
+    if not messages:
+        return messages
+
+    start = 1 if messages[0].get("role") == "system" else 0
+    result = messages[:start]
+    pending_tool_ids: set[str] | None = None
+    group_start = len(result)
+
+    for msg in messages[start:]:
+        role = msg.get("role")
+
+        if role == "assistant" and msg.get("tool_calls"):
+            if pending_tool_ids is not None:
+                result = result[:group_start]
+            group_start = len(result)
+            result.append(msg)
+            pending_tool_ids = {
+                tc["id"] for tc in msg["tool_calls"] if tc.get("id")
+            }
+            continue
+
+        if role == "tool":
+            if pending_tool_ids is not None:
+                tool_call_id = msg.get("tool_call_id")
+                if tool_call_id and tool_call_id in pending_tool_ids:
+                    result.append(msg)
+                    pending_tool_ids.discard(tool_call_id)
+                    if not pending_tool_ids:
+                        pending_tool_ids = None
+            continue
+
+        if pending_tool_ids is not None:
+            result = result[:group_start]
+            pending_tool_ids = None
+
+        result.append(msg)
+        group_start = len(result)
+
+    if pending_tool_ids is not None:
+        result = result[:group_start]
+
+    return result
+
+
+def _message_groups(messages: list[dict]) -> list[list[dict]]:
+    """Split non-system messages into atomic groups for safe compaction."""
+    start = 1 if messages and messages[0].get("role") == "system" else 0
+    groups: list[list[dict]] = []
+    i = start
+    while i < len(messages):
+        msg = messages[i]
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            group = [msg]
+            i += 1
+            while i < len(messages) and messages[i].get("role") == "tool":
+                group.append(messages[i])
+                i += 1
+            groups.append(group)
+        else:
+            groups.append([msg])
+            i += 1
+    return groups
+
+
 def compact_messages(
     messages: list[dict],
     *,
@@ -59,18 +129,14 @@ def compact_messages(
     if not messages:
         return messages
 
+    messages = sanitize_tool_messages(messages)
+
     input_budget = int(context_window - max_tokens - (context_window * reserve_ratio))
     if input_budget <= 0:
         input_budget = context_window // 2
 
-    msg_costs = [estimate_message_tokens(m) for m in messages]
-    total = sum(msg_costs)
-
-    if total <= input_budget:
-        return messages
-
     system_msg = messages[0] if messages[0].get("role") == "system" else None
-    system_cost = msg_costs[0] if system_msg else 0
+    system_cost = estimate_message_tokens(system_msg) if system_msg else 0
 
     compaction_notice = {
         "role": "system",
@@ -84,19 +150,27 @@ def compact_messages(
 
     available = input_budget - system_cost - notice_cost
 
-    kept: list[dict] = []
+    groups = _message_groups(messages)
+    group_costs = [sum(estimate_message_tokens(m) for m in group) for group in groups]
+    total = sum(group_costs)
+
+    if total <= input_budget:
+        return messages
+
+    kept_groups: list[list[dict]] = []
     kept_cost = 0
-    for i in range(len(messages) - 1, 0, -1):
-        cost = msg_costs[i]
+    for i in range(len(groups) - 1, -1, -1):
+        cost = group_costs[i]
         if kept_cost + cost > available:
             break
-        kept.insert(0, messages[i])
+        kept_groups.insert(0, groups[i])
         kept_cost += cost
 
-    if not kept:
-        kept = [messages[-1]]
+    if not kept_groups:
+        kept_groups = [groups[-1]]
 
-    dropped = len(messages) - 1 - len(kept)
+    dropped = len(groups) - len(kept_groups)
+    kept = [msg for group in kept_groups for msg in group]
 
     result: list[dict] = []
     if system_msg:
@@ -111,4 +185,4 @@ def compact_messages(
             budget=input_budget,
         )
     result.extend(kept)
-    return result
+    return sanitize_tool_messages(result)

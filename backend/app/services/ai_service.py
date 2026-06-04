@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import structlog
@@ -15,8 +15,9 @@ from app.models.ai_conversation import AIConversation
 from app.models.ai_message import AIMessage
 from app.models.user import User
 from app.services import ai_attachment_service
-from app.services.llm import get_llm_provider
+from app.services.llm.context import compact_messages, sanitize_tool_messages
 from app.services.llm.vision import build_user_message_content
+from app.services.llm import get_llm_provider
 from app.services.agent import registry as skill_registry
 from app.services.agent.executor import run_agent_turn
 from app.services.agent.debug_events import maybe_debug_sse
@@ -196,6 +197,11 @@ PENDING_ACTION_MESSAGES = {
     "en": "Please review the request above and approve or reject to continue.",
     "es": "Revisa la solicitud anterior y aprueba o rechaza para continuar.",
 }
+
+
+def _next_save_time(cursor: datetime) -> datetime:
+    """Return monotonic timestamps so message order is stable in the DB."""
+    return cursor + timedelta(milliseconds=1)
 
 
 def _generate_title(text: str) -> str:
@@ -463,7 +469,7 @@ async def _build_llm_messages(
     q = (
         select(AIMessage)
         .where(AIMessage.conversation_id == conversation_id)
-        .order_by(AIMessage.created_at)
+        .order_by(AIMessage.created_at, AIMessage.id)
     )
     result = await db.execute(q)
     messages_db = list(result.scalars().all())
@@ -492,12 +498,14 @@ async def _build_llm_messages(
                 "content": msg.content or None,
                 "tool_calls": msg.tool_calls,
             })
-        elif msg.role == "tool" and msg.tool_calls and isinstance(msg.tool_calls, dict):
-            messages.append({
-                "role": "tool",
-                "tool_call_id": msg.tool_calls.get("tool_call_id", ""),
-                "content": msg.content,
-            })
+        elif msg.role == "tool" and isinstance(msg.tool_calls, dict):
+            tool_call_id = msg.tool_calls.get("tool_call_id", "")
+            if tool_call_id:
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": msg.content,
+                })
         elif msg.role == "user" and vision_for_latest_user and msg.id == latest_user_msg_id:
             attachments = attachments_by_message.get(msg.id, [])
             if attachments and vision_enabled:
@@ -517,7 +525,7 @@ async def _build_llm_messages(
         else:
             messages.append({"role": msg.role, "content": msg.content})
 
-    return messages
+    return sanitize_tool_messages(messages)
 
 
 async def send_message_stream(
@@ -607,12 +615,12 @@ async def send_message_stream(
         db, conversation_id, locale=user_locale,
     )
 
-    from app.services.llm.context import compact_messages
     llm_messages = compact_messages(
         llm_messages,
         context_window=settings.LLM_CONTEXT_WINDOW,
         max_tokens=settings.LLM_MAX_TOKENS,
     )
+    llm_messages = sanitize_tool_messages(llm_messages)
 
     if dbg := maybe_debug_sse(
         user,
@@ -671,20 +679,24 @@ async def send_message_stream(
     ):
         yield dbg
 
+    save_time = datetime.now(timezone.utc)
     for tc_msg in tool_call_history:
         role = tc_msg.get("role")
+        save_time = _next_save_time(save_time)
         if role == "assistant":
             db.add(AIMessage(
                 conversation_id=conversation_id,
                 role="assistant",
                 content=tc_msg.get("content") or "",
                 tool_calls=tc_msg.get("tool_calls"),
+                created_at=save_time,
             ))
         elif role == "interaction":
             db.add(AIMessage(
                 conversation_id=conversation_id,
                 role="interaction",
                 content=tc_msg.get("content", ""),
+                created_at=save_time,
             ))
         elif role == "tool":
             db.add(AIMessage(
@@ -695,8 +707,10 @@ async def send_message_stream(
                     "tool_call_id": tc_msg.get("tool_call_id", ""),
                     "name": tc_msg.get("name", ""),
                 },
+                created_at=save_time,
             ))
 
+    save_time = _next_save_time(save_time)
     assistant_msg = AIMessage(
         conversation_id=conversation_id,
         role="assistant",
@@ -704,6 +718,7 @@ async def send_message_stream(
         model=model_name,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        created_at=save_time,
     )
     db.add(assistant_msg)
 
