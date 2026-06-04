@@ -129,8 +129,13 @@ class AzureEmbeddingProvider(BaseEmbeddingProvider):
         azure_endpoint: str,
         api_version: str,
         deployment: str,
+        *,
+        dimensions: int | None = None,
     ):
+        from app.core.config import settings
+
         self.model = deployment
+        self.dimensions = dimensions if dimensions is not None else settings.EMBEDDING_DIMENSIONS
         self.client = AsyncAzureOpenAI(
             api_key=api_key,
             azure_endpoint=azure_endpoint,
@@ -142,6 +147,7 @@ class AzureEmbeddingProvider(BaseEmbeddingProvider):
             resp = await self.client.embeddings.create(
                 model=self.model,
                 input=texts,
+                dimensions=self.dimensions,
             )
             return [item.embedding for item in resp.data]
         except Exception as exc:

@@ -123,8 +123,22 @@ class OpenAIProvider(BaseLLMProvider):
 
 
 class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
-    def __init__(self, api_key: str, model: str, base_url: str | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str | None = None,
+        *,
+        dimensions: int | None = None,
+        request_dimensions: bool | None = None,
+    ):
+        from app.core.config import settings
+
         self.model = model
+        self.dimensions = dimensions if dimensions is not None else settings.EMBEDDING_DIMENSIONS
+        if request_dimensions is None:
+            request_dimensions = "text-embedding-3" in model
+        self.request_dimensions = request_dimensions
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url or None,
@@ -132,10 +146,10 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
 
     async def create_embeddings(self, texts: list[str]) -> list[list[float]]:
         try:
-            resp = await self.client.embeddings.create(
-                model=self.model,
-                input=texts,
-            )
+            kwargs: dict = {"model": self.model, "input": texts}
+            if self.request_dimensions:
+                kwargs["dimensions"] = self.dimensions
+            resp = await self.client.embeddings.create(**kwargs)
             return [item.embedding for item in resp.data]
         except Exception as exc:
             raise _map_openai_error(exc) from exc

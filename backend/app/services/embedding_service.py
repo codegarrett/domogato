@@ -7,6 +7,7 @@ import structlog
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.ai_embedding import AIEmbedding
 from app.services.llm.base import LLMConfigError
 from app.services.llm.factory import get_embedding_provider, is_embedding_configured
@@ -80,6 +81,18 @@ async def embed_and_store(
             continue
 
         for i, (chunk, vector) in enumerate(zip(batch, vectors)):
+            if len(vector) != settings.EMBEDDING_DIMENSIONS:
+                logger.error(
+                    "embedding_dimension_mismatch",
+                    content_type=content_type,
+                    content_id=str(content_id),
+                    batch_start=batch_start,
+                    expected=settings.EMBEDDING_DIMENSIONS,
+                    got=len(vector),
+                    model=getattr(provider, "model", None),
+                )
+                continue
+
             pending_rows.append(
                 AIEmbedding(
                     project_id=project_id,
