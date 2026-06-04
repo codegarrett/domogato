@@ -75,6 +75,7 @@ class ListMyProjectsSkill(BaseSkill):
             org_name = org_result.scalar_one_or_none() or "Unknown"
             for p in projects:
                 all_projects.append({
+                    "project_id": str(p.id),
                     "key": p.key,
                     "name": p.name,
                     "description": (p.description or "")[:200],

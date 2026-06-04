@@ -122,6 +122,24 @@ export interface ApprovalInteraction {
 
 
 
+export interface ChoiceInteraction {
+
+  type: 'choice'
+
+  status: 'pending' | 'answered'
+
+  question: string
+
+  options: string[]
+
+  selected_option?: string
+
+  decided_at?: string
+
+}
+
+
+
 export function parseApprovalInteraction(content: string): ApprovalInteraction | null {
 
   try {
@@ -129,6 +147,26 @@ export function parseApprovalInteraction(content: string): ApprovalInteraction |
     const data = JSON.parse(content) as ApprovalInteraction
 
     if (data.type === 'approval') return data
+
+  } catch {
+
+    // not JSON
+
+  }
+
+  return null
+
+}
+
+
+
+export function parseChoiceInteraction(content: string): ChoiceInteraction | null {
+
+  try {
+
+    const data = JSON.parse(content) as ChoiceInteraction
+
+    if (data.type === 'choice') return data
 
   } catch {
 
@@ -352,6 +390,8 @@ export async function sendChatMessage(
 
   attachmentIds: string[],
 
+  locale: string,
+
   onEvent: (event: SSEEvent) => void,
 
 ): Promise<void> {
@@ -381,6 +421,8 @@ export async function sendChatMessage(
       message,
 
       attachment_ids: attachmentIds,
+
+      locale,
 
     }),
 

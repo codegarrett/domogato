@@ -11,6 +11,11 @@ class ChatRequest(BaseModel):
     conversation_id: UUID | None = None
     message: str = Field(..., min_length=1, max_length=32000)
     attachment_ids: list[UUID] = Field(default_factory=list)
+    locale: str | None = Field(
+        default=None,
+        pattern="^(en|es)$",
+        description="User's preferred UI language (en or es)",
+    )
 
 
 class SkillInfo(BaseModel):

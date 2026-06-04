@@ -33,15 +33,22 @@ SYSTEM_PROMPT = (
     "actually calling a tool in the same turn. You can call multiple tools "
     "in sequence across rounds to gather all the information you need.\n\n"
 
-    "When using tools, identify the project by its key (e.g., 'PROJ'). "
-    "If the user doesn't specify a project, call list_my_projects first, "
-    "then use present_choices to let them pick which project they mean.\n\n"
+    "## Project Selection\n"
+    "When a tool needs a project_key and the user did not name one explicitly:\n"
+    "1. ALWAYS call list_my_projects first (returns key, name, description, organization).\n"
+    "2. If total is 1, use that project's key immediately — do NOT ask.\n"
+    "3. If multiple projects, infer the best match from the user's message using "
+    "project name, key, and description (e.g. legal, IT, finance, or development context).\n"
+    "4. Only call present_choices when two or more projects are equally plausible "
+    "or none match confidently.\n"
+    "5. Never ask 'which project?' without calling list_my_projects first.\n\n"
 
     "## Approval Required for Mutations\n"
     "Before calling any mutating tool, you MUST first call request_approval with "
     "a clear summary of what will be changed. Mutating tools that require approval:\n"
     "- create_ticket, update_ticket, transition_ticket_status\n"
     "- create_issue_report, create_ticket_from_issue_reports\n"
+    "- create_kb_page\n"
     "- add_ticket_comment\n"
     "- attach_file_to_ticket, attach_file_to_issue_report\n"
     "Only proceed with the actual action after the user approves. If the user "
@@ -112,9 +119,55 @@ SYSTEM_PROMPT = (
     "semantic_search_kb first for broad questions. If it returns no results or "
     "the user is looking for a specific term, fall back to search_knowledge_base.\n\n"
 
+    "## Knowledge Base Management\n"
+    "When the user wants to create documentation, a wiki page, KB page, or "
+    "knowledge base article, use create_kb_page — NOT create_ticket. Tickets "
+    "track work items; KB pages store documentation.\n"
+    "Call list_kb_spaces when the KB space is unknown. Infer the space from its "
+    "name or description when possible. Use markdown for page content.\n\n"
+
     "## Response Style\n"
     "Be concise, helpful, and use markdown formatting when it improves readability."
 )
+
+SUPPORTED_LOCALES = frozenset({"en", "es"})
+
+LOCALE_LANGUAGE_NAMES = {
+    "en": "English",
+    "es": "Spanish",
+}
+
+
+def resolve_user_locale(
+    user: User,
+    request_locale: str | None = None,
+) -> str:
+    """Resolve the user's preferred locale from the request or stored preferences."""
+    if request_locale and request_locale in SUPPORTED_LOCALES:
+        return request_locale
+    prefs = user.preferences or {}
+    pref_locale = prefs.get("locale")
+    if isinstance(pref_locale, str) and pref_locale in SUPPORTED_LOCALES:
+        return pref_locale
+    return "en"
+
+
+def build_system_prompt(locale: str = "en") -> str:
+    """Build the system prompt with locale-specific language instructions."""
+    locale = locale if locale in SUPPORTED_LOCALES else "en"
+    language_name = LOCALE_LANGUAGE_NAMES[locale]
+    language_section = (
+        f"\n\n## Language\n"
+        f"The user's preferred interface language is {language_name} ({locale}). "
+        f"Respond in {language_name} by default — greetings, explanations, "
+        f"questions, and summaries should be in {language_name}. "
+        f"If the user explicitly asks for a response in another language or "
+        f"requests a translation, honor that request for that message or task. "
+        f"Content created via tools (ticket titles, descriptions, KB pages, "
+        f"comments) should use the language the user is using in the conversation "
+        f"unless they specify otherwise."
+    )
+    return SYSTEM_PROMPT + language_section
 
 MAX_TITLE_LENGTH = 80
 
@@ -283,10 +336,68 @@ async def _resolve_pending_approval(
     return False
 
 
+def _parse_choice_interaction(content: str) -> dict | None:
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    if data.get("type") == "choice":
+        return data
+    return None
+
+
+def _match_choice_option(user_message: str, options: list) -> str | None:
+    """Return the canonical option text if user_message matches one option."""
+    normalized = user_message.strip().lower()
+    if not normalized:
+        return None
+    for option in options:
+        if str(option).strip().lower() == normalized:
+            return str(option)
+    return None
+
+
+async def _resolve_pending_choice(
+    db: AsyncSession,
+    conversation_id: UUID,
+    user_message: str,
+    decided_at: datetime,
+) -> bool:
+    """Resolve the latest pending choice interaction from the user's reply."""
+    trimmed = user_message.strip()
+    if not trimmed:
+        return False
+
+    q = (
+        select(AIMessage)
+        .where(
+            AIMessage.conversation_id == conversation_id,
+            AIMessage.role == "interaction",
+        )
+        .order_by(AIMessage.created_at.desc())
+    )
+    result = await db.execute(q)
+    for msg in result.scalars():
+        interaction = _parse_choice_interaction(msg.content)
+        if interaction is None or interaction.get("status") != "pending":
+            continue
+        options = interaction.get("options") or []
+        matched = _match_choice_option(trimmed, options)
+        selected = matched if matched is not None else trimmed
+        interaction["status"] = "answered"
+        interaction["selected_option"] = selected
+        interaction["decided_at"] = decided_at.isoformat()
+        msg.content = json.dumps(interaction)
+        await db.flush()
+        return True
+    return False
+
+
 async def _build_llm_messages(
     db: AsyncSession,
     conversation_id: UUID,
     *,
+    locale: str = "en",
     vision_for_latest_user: bool = True,
 ) -> list[dict]:
     """Load conversation history and prepend system prompt.
@@ -316,7 +427,7 @@ async def _build_llm_messages(
     from app.core.config import settings
     vision_enabled = settings.LLM_VISION_ENABLED
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": build_system_prompt(locale)}]
     for msg in messages_db:
         if msg.role == "interaction":
             continue
@@ -360,6 +471,7 @@ async def send_message_stream(
     conversation_id: UUID | None,
     user_message: str,
     attachment_ids: list[UUID] | None = None,
+    locale: str | None = None,
 ) -> AsyncIterator[str]:
     """Process a chat message and yield SSE events.
 
@@ -371,6 +483,7 @@ async def send_message_stream(
 
     provider = get_llm_provider()
     model_name = settings.LLM_MODEL
+    user_locale = resolve_user_locale(user, locale)
 
     if conversation_id is None:
         title = _generate_title(user_message)
@@ -416,8 +529,16 @@ async def send_message_stream(
         user_message,
         user_msg.created_at,
     )
+    await _resolve_pending_choice(
+        db,
+        conversation_id,
+        user_message,
+        user_msg.created_at,
+    )
 
-    llm_messages = await _build_llm_messages(db, conversation_id)
+    llm_messages = await _build_llm_messages(
+        db, conversation_id, locale=user_locale,
+    )
 
     from app.services.llm.context import compact_messages
     llm_messages = compact_messages(

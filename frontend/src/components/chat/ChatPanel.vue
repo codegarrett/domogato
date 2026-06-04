@@ -11,6 +11,15 @@
         @click="chatStore.goToList()"
       />
       <span class="chat-panel-title">{{ $t('ai.assistant') }}</span>
+      <Select
+        v-model="chatLocale"
+        :options="localeOptions"
+        option-label="label"
+        option-value="value"
+        class="chat-locale-select"
+        :aria-label="$t('ai.chatLanguage')"
+        @change="onChatLocaleChange"
+      />
       <Button
         v-if="chatStore.view === 'list'"
         icon="pi pi-plus"
@@ -75,6 +84,14 @@
             @approve="chatStore.respondToApproval(true)"
             @reject="chatStore.respondToApproval(false)"
           />
+          <!-- Choice interaction cards -->
+          <ChatChoiceCard
+            v-else-if="msg.role === 'interaction' && parseChoice(msg)"
+            :interaction="parseChoice(msg)!"
+            :disabled="chatStore.isStreaming"
+            show-other
+            @select="chatStore.respondToChoice($event)"
+          />
           <!-- Tool result messages: collapsible -->
           <div v-else-if="msg.role === 'tool' && !isApprovalToolMessage(msg)" class="chat-tool-result">
             <button class="chat-tool-result-toggle" @click="toggleToolResult(msg.id)">
@@ -126,45 +143,6 @@
         </div>
       </div>
 
-      <!-- Choice interaction prompts -->
-      <div v-if="chatStore.pendingInteraction?.type === 'choice'" class="chat-interaction">
-        <div class="chat-interaction-question">
-          {{ chatStore.pendingInteraction.question }}
-        </div>
-        <div class="chat-interaction-options">
-          <button
-            v-for="(option, idx) in chatStore.pendingInteraction.options"
-            :key="idx"
-            class="chat-interaction-btn chat-interaction-btn--option"
-            @click="chatStore.sendMessage(option)"
-          >
-            {{ option }}
-          </button>
-          <button
-            class="chat-interaction-btn chat-interaction-btn--other"
-            @click="showOtherInput = true"
-          >
-            {{ $t('ai.otherOption') }}
-          </button>
-        </div>
-        <div v-if="showOtherInput" class="chat-interaction-other">
-          <input
-            v-model="otherInputValue"
-            type="text"
-            class="chat-interaction-other-input"
-            :placeholder="$t('ai.typeYourOption')"
-            @keydown.enter="submitOther"
-          />
-          <button
-            class="chat-interaction-btn chat-interaction-btn--submit"
-            :disabled="!otherInputValue.trim()"
-            @click="submitOther"
-          >
-            {{ $t('ai.submitOption') }}
-          </button>
-        </div>
-      </div>
-
       <ChatInput
         :disabled="chatStore.isStreaming"
         @send="chatStore.sendMessage($event)"
@@ -178,12 +156,17 @@
 import { watch, ref, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
+import Select from 'primevue/select'
 import { useChatStore } from '@/stores/chat'
+import { useAuthStore } from '@/stores/auth'
+import { updateCurrentUser } from '@/api/users'
+import { getLocale, setLocale } from '@/i18n'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import ChatApprovalCard from '@/components/chat/ChatApprovalCard.vue'
+import ChatChoiceCard from '@/components/chat/ChatChoiceCard.vue'
 import ChatWelcome from '@/components/chat/ChatWelcome.vue'
-import { parseApprovalInteraction, type ApprovalInteraction, type Message } from '@/api/ai'
+import { parseApprovalInteraction, parseChoiceInteraction, type ApprovalInteraction, type ChoiceInteraction, type Message } from '@/api/ai'
 
 defineProps<{
   embedded?: boolean
@@ -191,8 +174,32 @@ defineProps<{
 
 const { t } = useI18n()
 const chatStore = useChatStore()
+const authStore = useAuthStore()
 const messagesContainer = ref<HTMLElement>()
 const reasoningExpanded = ref(true)
+
+const localeOptions = [
+  { label: 'English', value: 'en' },
+  { label: 'Español', value: 'es' },
+]
+
+const chatLocale = ref<'en' | 'es'>(
+  (getLocale() === 'es' ? 'es' : 'en'),
+)
+
+async function onChatLocaleChange() {
+  setLocale(chatLocale.value)
+  const existing = (authStore.currentUser?.preferences ?? {}) as Record<string, unknown>
+  const prefs = { ...existing, locale: chatLocale.value }
+  try {
+    await updateCurrentUser({ preferences: prefs })
+    if (authStore.currentUser) {
+      authStore.currentUser = { ...authStore.currentUser, preferences: prefs }
+    }
+  } catch {
+    // preferences sync is best-effort from chat; settings page remains source of truth
+  }
+}
 
 const showWelcome = computed(
   () =>
@@ -209,6 +216,8 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_sprint_status: 'ai.toolSprintStatus',
   search_knowledge_base: 'ai.toolSearchKB',
   semantic_search_kb: 'ai.toolSemanticSearchKB',
+  list_kb_spaces: 'ai.toolListKBSpaces',
+  create_kb_page: 'ai.toolCreateKBPage',
   create_ticket: 'ai.toolCreateTicket',
   update_ticket: 'ai.toolUpdateTicket',
   transition_ticket_status: 'ai.toolTransitionStatus',
@@ -233,20 +242,14 @@ function toolDisplayName(name: string): string {
   return key ? t(key) : name.replace(/_/g, ' ')
 }
 
-const showOtherInput = ref(false)
-const otherInputValue = ref('')
-
-function submitOther() {
-  if (otherInputValue.value.trim()) {
-    chatStore.sendMessage(otherInputValue.value.trim())
-    otherInputValue.value = ''
-    showOtherInput.value = false
-  }
-}
-
 function parseApproval(msg: Message): ApprovalInteraction | null {
   if (msg.role !== 'interaction') return null
   return parseApprovalInteraction(msg.content)
+}
+
+function parseChoice(msg: Message): ChoiceInteraction | null {
+  if (msg.role !== 'interaction') return null
+  return parseChoiceInteraction(msg.content)
 }
 
 function isApprovalToolMessage(msg: Message): boolean {
@@ -333,17 +336,6 @@ watch(
   () => chatStore.activeConversationId,
   () => {
     expandedToolResults.value = {}
-    showOtherInput.value = false
-    otherInputValue.value = ''
-  },
-)
-
-watch(
-  () => chatStore.pendingInteraction,
-  () => {
-    showOtherInput.value = false
-    otherInputValue.value = ''
-    scrollToBottom()
   },
 )
 </script>
@@ -392,6 +384,16 @@ watch(
   flex: 1;
   font-weight: 600;
   font-size: 0.9375rem;
+}
+
+.chat-locale-select {
+  width: 6.5rem;
+  flex-shrink: 0;
+}
+
+.chat-locale-select :deep(.p-select-label) {
+  font-size: 0.8125rem;
+  padding-block: 0.375rem;
 }
 
 .chat-flyout-list {

@@ -48,12 +48,15 @@ def _register_builtin_skills() -> None:
         AttachFileToTicketSkill,
         AttachFileToIssueReportSkill,
     )
+    from app.services.agent.kb_skills import ListKBSpacesSkill, CreateKBPageSkill
     registry.register(ListMyProjectsSkill())
     registry.register(SearchTicketsSkill())
     registry.register(GetTicketDetailsSkill())
     registry.register(GetSprintStatusSkill())
     registry.register(SearchKnowledgeBaseSkill())
     registry.register(SemanticSearchKBSkill())
+    registry.register(ListKBSpacesSkill())
+    registry.register(CreateKBPageSkill())
     registry.register(CreateTicketSkill())
     registry.register(UpdateTicketSkill())
     registry.register(TransitionTicketStatusSkill())

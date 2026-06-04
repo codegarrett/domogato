@@ -16,8 +16,11 @@ class PresentChoicesSkill(BaseSkill):
     name = "present_choices"
     description = (
         "Present the user with multiple-choice options when clarification is "
-        "needed. For example, when the user's request could refer to multiple "
-        "tickets or projects, show them as clickable options."
+        "needed and the answer is ambiguous. Use ONLY when there are 2–6 concrete "
+        "options and you cannot infer the correct choice (e.g. two equally "
+        "plausible projects or tickets). Do NOT use this as the default after "
+        "list_my_projects — infer the project from name/description first, or "
+        "auto-select when the user has only one project."
     )
     category = "interaction"
     parameters_schema = {
@@ -49,6 +52,7 @@ class RequestApprovalSkill(BaseSkill):
         "action (creating, updating, or deleting data). ALWAYS call this before "
         "create_ticket, update_ticket, transition_ticket_status, "
         "create_issue_report, create_ticket_from_issue_reports, "
+        "create_kb_page, "
         "add_ticket_comment, attach_file_to_ticket, or "
         "attach_file_to_issue_report. Present a clear summary of what will be changed "
         "so the user can approve or reject."

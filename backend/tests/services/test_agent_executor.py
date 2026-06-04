@@ -170,6 +170,65 @@ async def test_executor_approval_short_circuit(
 
 
 @pytest.mark.asyncio
+async def test_executor_choice_short_circuit(
+    db_session: AsyncSession, test_user: User,
+):
+    mock_provider = MagicMock()
+    mock_provider.model = "test-model"
+    mock_provider.chat_completion = AsyncMock(return_value=MagicMock(
+        content="Which project did you mean?",
+        tool_calls=[{
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "present_choices",
+                "arguments": json.dumps({
+                    "question": "Which project?",
+                    "options": ["Legal", "IT"],
+                }),
+            },
+        }],
+        prompt_tokens=10,
+        completion_tokens=5,
+    ))
+
+    empty_registry = SkillRegistry()
+    events: list[str] = []
+
+    async for event in run_agent_turn(
+        provider=mock_provider,
+        messages=[{"role": "user", "content": "create a ticket"}],
+        registry=empty_registry,
+        db=db_session,
+        user=test_user,
+        max_tokens=100,
+        temperature=0.0,
+        max_tool_rounds=3,
+    ):
+        events.append(event)
+
+    parsed = [json.loads(e.removeprefix("data: ").strip()) for e in events]
+    types = [p["type"] for p in parsed]
+    assert "choice_request" in types
+    assert "_agent_done" in types
+    assert "tool_start" not in types
+
+    done_event = next(p for p in parsed if p["type"] == "_agent_done")
+    history = done_event["tool_call_history"]
+    interaction_msgs = [m for m in history if m.get("role") == "interaction"]
+    assert len(interaction_msgs) == 1
+    interaction = json.loads(interaction_msgs[0]["content"])
+    assert interaction["type"] == "choice"
+    assert interaction["status"] == "pending"
+    assert interaction["question"] == "Which project?"
+    assert interaction["options"] == ["Legal", "IT"]
+
+    tool_msgs = [m for m in history if m.get("role") == "tool"]
+    assert len(tool_msgs) == 1
+    assert tool_msgs[0]["name"] == "present_choices"
+
+
+@pytest.mark.asyncio
 async def test_executor_tool_start_and_result(
     db_session: AsyncSession, test_user: User,
 ):

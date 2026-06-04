@@ -156,11 +156,22 @@ async def run_agent_turn(
 
             if func_name in INTERACTION_TOOLS:
                 if func_name == "present_choices":
-                    yield _sse_event({
-                        "type": "choice_request",
+                    choice_payload = {
+                        "type": "choice",
+                        "status": "pending",
                         "question": func_args.get("question", ""),
                         "options": func_args.get("options", []),
+                    }
+                    yield _sse_event({
+                        "type": "choice_request",
+                        "question": choice_payload["question"],
+                        "options": choice_payload["options"],
                     })
+                    interaction_msg = {
+                        "role": "interaction",
+                        "content": json.dumps(choice_payload),
+                    }
+                    tool_call_history.append(interaction_msg)
                 elif func_name == "request_approval":
                     approval_payload = {
                         "type": "approval",

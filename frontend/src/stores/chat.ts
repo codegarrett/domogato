@@ -30,11 +30,13 @@ import {
 
   type SSEEvent,
 
-  type PendingInteraction,
-
   parseApprovalInteraction,
 
+  parseChoiceInteraction,
+
 } from '@/api/ai'
+
+import { getLocale } from '@/i18n'
 
 
 
@@ -57,8 +59,6 @@ export const useChatStore = defineStore('chat', () => {
   const streamingReasoning = ref('')
 
   const activeToolCall = ref<{ name: string; arguments?: Record<string, unknown> } | null>(null)
-
-  const pendingInteraction = ref<PendingInteraction | null>(null)
 
   const isStreaming = ref(false)
 
@@ -246,6 +246,27 @@ export const useChatStore = defineStore('chat', () => {
 
 
 
+  async function respondToChoice(option: string) {
+    const pending = [...messages.value].reverse().find((m) => {
+      if (m.role !== 'interaction') return false
+      const data = parseChoiceInteraction(m.content)
+      return data?.status === 'pending'
+    })
+
+    if (pending) {
+      const data = parseChoiceInteraction(pending.content)
+      if (data) {
+        data.status = 'answered'
+        data.selected_option = option
+        data.decided_at = new Date().toISOString()
+        pending.content = JSON.stringify(data)
+      }
+    }
+
+    shouldReloadAfterStream = true
+    await sendMessage(option)
+  }
+
   async function respondToApproval(approved: boolean) {
 
     const text = approved ? 'Yes, go ahead' : 'No, cancel that'
@@ -291,14 +312,6 @@ export const useChatStore = defineStore('chat', () => {
     const hasAttachments = pendingAttachments.value.length > 0
 
     if (isStreaming.value || (!trimmed && !hasAttachments)) return
-
-    if (pendingInteraction.value?.type === 'choice') {
-
-      pendingInteraction.value = null
-
-    }
-
-
 
     const attachmentSnapshot = [...pendingAttachments.value]
 
@@ -354,6 +367,8 @@ export const useChatStore = defineStore('chat', () => {
 
         attachmentIds,
 
+        getLocale(),
+
         (event: SSEEvent) => {
 
           switch (event.type) {
@@ -397,17 +412,22 @@ export const useChatStore = defineStore('chat', () => {
               break
 
             case 'choice_request':
-
-              pendingInteraction.value = {
-
-                type: 'choice',
-
-                question: event.question,
-
-                options: event.options,
-
-              }
-
+              messages.value.push({
+                id: crypto.randomUUID(),
+                role: 'interaction',
+                content: JSON.stringify({
+                  type: 'choice',
+                  status: 'pending',
+                  question: event.question || '',
+                  options: event.options || [],
+                }),
+                model: null,
+                prompt_tokens: null,
+                completion_tokens: null,
+                tool_calls: null,
+                created_at: new Date().toISOString(),
+              })
+              shouldReloadAfterStream = true
               break
 
             case 'approval_request':
@@ -497,8 +517,6 @@ export const useChatStore = defineStore('chat', () => {
               streamingReasoning.value = ''
 
               activeToolCall.value = null
-
-              pendingInteraction.value = null
 
               break
 
@@ -608,8 +626,6 @@ export const useChatStore = defineStore('chat', () => {
 
     activeToolCall,
 
-    pendingInteraction,
-
     isStreaming,
 
     isOpen,
@@ -639,6 +655,8 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
 
     respondToApproval,
+
+    respondToChoice,
 
     deleteConversation,
 

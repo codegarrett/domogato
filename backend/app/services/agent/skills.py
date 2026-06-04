@@ -219,6 +219,10 @@ def issue_report_path(project_id: UUID, report_id: UUID) -> str:
     return f"/projects/{project_id}/issue-reports/{report_id}"
 
 
+def kb_page_path(project_id: UUID, space_slug: str, page_slug: str) -> str:
+    return f"/projects/{project_id}/kb/{space_slug}/{page_slug}"
+
+
 def absolute_url(path: str) -> str:
     from app.core.config import settings
 

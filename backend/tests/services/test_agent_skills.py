@@ -14,6 +14,7 @@ from app.services.agent.builtin_skills import (
     GetTicketDetailsSkill,
     SearchTicketsSkill,
 )
+from app.services.agent.kb_skills import CreateKBPageSkill, ListKBSpacesSkill
 from app.services.agent.productivity_skills import (
     AddTicketCommentSkill,
     GlobalSearchSkill,
@@ -23,6 +24,8 @@ from app.services.agent.skills import SkillContext
 from app.services.agent.workflow_skills import GetTicketTransitionsSkill
 from app.services.ticket_service import create_ticket
 from app.services.workflow_service import seed_default_workflows
+from app.services import kb_service
+from app.schemas.kb import SpaceCreate
 
 
 async def _setup_agent_project(
@@ -74,7 +77,7 @@ def _ctx(db: AsyncSession, user: User, params: dict) -> SkillContext:
 
 @pytest.mark.asyncio
 async def test_registry_has_expected_skill_count():
-    assert len(registry) == 25
+    assert len(registry) == 27
 
 
 @pytest.mark.asyncio
@@ -277,3 +280,54 @@ async def test_watch_ticket_idempotent(
     ))
     assert first["watching"] is True
     assert second["watching"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_kb_spaces(
+    db_session: AsyncSession, test_user: User,
+):
+    project, _, _ = await _setup_agent_project(db_session, test_user)
+    await kb_service.create_space(
+        db_session,
+        project.id,
+        SpaceCreate(name="Documentation"),
+        user_id=test_user.id,
+    )
+
+    skill = ListKBSpacesSkill()
+    result = await skill.execute(_ctx(
+        db_session, test_user,
+        {"project_key": project.key},
+    ))
+    assert result["total"] == 1
+    assert result["spaces"][0]["name"] == "Documentation"
+    assert result["spaces"][0]["slug"] == "documentation"
+
+
+@pytest.mark.asyncio
+async def test_create_kb_page(
+    db_session: AsyncSession, test_user: User,
+):
+    project, _, _ = await _setup_agent_project(db_session, test_user)
+    space = await kb_service.create_space(
+        db_session,
+        project.id,
+        SpaceCreate(name="Wiki"),
+        user_id=test_user.id,
+    )
+
+    skill = CreateKBPageSkill()
+    result = await skill.execute(_ctx(
+        db_session, test_user,
+        {
+            "project_key": project.key,
+            "space_slug": space.slug,
+            "title": "Getting Started",
+            "content_markdown": "# Hello\n\nWelcome to the wiki.",
+        },
+    ))
+    assert result["created"] is True
+    assert result["slug"] == "getting-started"
+    assert result["space_slug"] == space.slug
+    assert f"/projects/{project.id}/kb/{space.slug}/getting-started" in result["path"]
+    assert result["url"].endswith(result["path"])

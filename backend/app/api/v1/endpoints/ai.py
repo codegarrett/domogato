@@ -117,6 +117,7 @@ async def chat(
                 body.conversation_id,
                 body.message,
                 attachment_ids=body.attachment_ids,
+                locale=body.locale,
             ):
                 yield event
         except LLMConfigError as exc:
