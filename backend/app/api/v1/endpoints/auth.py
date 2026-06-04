@@ -13,6 +13,7 @@ from app.core.password import hash_password, verify_password, validate_password_
 from app.models.user import User
 from app.services.system_settings_service import (
     get_effective_auth_settings,
+    get_effective_embed_settings,
     needs_setup,
 )
 
@@ -47,6 +48,18 @@ class AuthConfigResponse(BaseModel):
     needs_setup: bool
     local_registration_enabled: bool
     oidc: dict | None = None
+    external_agent_enabled: bool = False
+    external_agent_url: str | None = None
+
+
+class SessionRequest(BaseModel):
+    embed: bool = False
+
+
+class EmbedConfigResponse(BaseModel):
+    enabled: bool
+    url: str | None = None
+    allowed_origins: list[str] = []
 
 
 def _user_summary(user: User) -> dict:
@@ -72,11 +85,28 @@ async def get_auth_config(db: AsyncSession = Depends(get_db)):
             "client_id": effective["oidc_client_id"].value,
         }
 
+    embed_settings = await get_effective_embed_settings(db)
+    external_enabled = bool(embed_settings["external_agent_enabled"].value)
+
     return AuthConfigResponse(
         auth_mode=auth_mode,
         needs_setup=setup_needed,
         local_registration_enabled=bool(effective["local_registration_enabled"].value) if auth_mode == "local" else False,
         oidc=oidc_info,
+        external_agent_enabled=external_enabled,
+        external_agent_url="/embed/agent" if external_enabled else None,
+    )
+
+
+@router.get("/embed-config", response_model=EmbedConfigResponse)
+async def get_embed_config(db: AsyncSession = Depends(get_db)):
+    """Public embed configuration for the external agent iframe page."""
+    embed_settings = await get_effective_embed_settings(db)
+    enabled = bool(embed_settings["external_agent_enabled"].value)
+    return EmbedConfigResponse(
+        enabled=enabled,
+        url="/embed/agent" if enabled else None,
+        allowed_origins=list(embed_settings["external_agent_allowed_origins"].value or []),
     )
 
 
@@ -239,11 +269,13 @@ async def refresh_token(
 @router.post("/session")
 async def establish_session(
     response: Response,
+    body: SessionRequest | None = None,
     _user: User = Depends(get_current_user),
     token: str = Depends(get_bearer_token),
 ):
     """Set the HttpOnly session cookie from a Bearer token (e.g. after OIDC login)."""
-    set_auth_cookie(response, token)
+    embed = body.embed if body else False
+    set_auth_cookie(response, token, embed=embed)
     return {"ok": True}
 
 

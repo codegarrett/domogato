@@ -164,6 +164,102 @@ async def update_auth_settings(
     return await get_effective_auth_settings(db)
 
 
+EMBED_SETTING_KEYS = [
+    "external_agent_enabled",
+    "external_agent_allowed_origins",
+]
+
+EMBED_DEFAULTS: dict[str, Any] = {
+    "external_agent_enabled": False,
+    "external_agent_allowed_origins": [],
+}
+
+EMBED_ENV_MAP: dict[str, str] = {
+    "external_agent_enabled": "EXTERNAL_AGENT_ENABLED",
+    "external_agent_allowed_origins": "EXTERNAL_AGENT_ALLOWED_ORIGINS",
+}
+
+EMBED_ENV_DEFAULTS: dict[str, str] = {
+    "EXTERNAL_AGENT_ENABLED": "",
+    "EXTERNAL_AGENT_ALLOWED_ORIGINS": "",
+}
+
+
+def _parse_embed_env_value(key: str, raw: str) -> Any:
+    if key == "external_agent_enabled":
+        return raw.lower() in ("true", "1", "yes")
+    if key == "external_agent_allowed_origins":
+        return [o.strip() for o in raw.split(",") if o.strip()] if raw else []
+    return raw
+
+
+def _get_embed_env_value(key: str) -> tuple[Any, bool]:
+    env_attr = EMBED_ENV_MAP.get(key)
+    if not env_attr:
+        return EMBED_DEFAULTS[key], False
+
+    raw = getattr(settings, env_attr, "")
+    default_raw = EMBED_ENV_DEFAULTS.get(env_attr, "")
+
+    if raw and raw != default_raw:
+        return _parse_embed_env_value(key, raw), True
+
+    return EMBED_DEFAULTS[key], False
+
+
+async def get_embed_db_settings(db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key.in_(EMBED_SETTING_KEYS))
+    )
+    rows = result.scalars().all()
+    return {row.key: row.value for row in rows}
+
+
+async def get_effective_embed_settings(db: AsyncSession) -> dict[str, SettingValue]:
+    db_settings = await get_embed_db_settings(db)
+    result: dict[str, SettingValue] = {}
+
+    for key in EMBED_SETTING_KEYS:
+        env_val, env_set = _get_embed_env_value(key)
+
+        if env_set:
+            result[key] = SettingValue(value=env_val, source="env", env_locked=True)
+        elif key in db_settings:
+            val = db_settings[key]
+            result[key] = SettingValue(value=val, source="database", env_locked=False)
+        else:
+            result[key] = SettingValue(value=EMBED_DEFAULTS[key], source="default", env_locked=False)
+
+    return result
+
+
+async def update_embed_settings(
+    db: AsyncSession, updates: dict[str, Any], updated_by: UUID | None = None
+) -> dict[str, SettingValue]:
+    current = await get_effective_embed_settings(db)
+
+    locked_keys = [k for k in updates if k in current and current[k].env_locked]
+    if locked_keys:
+        env_names = [EMBED_ENV_MAP.get(k, k) for k in locked_keys]
+        raise ValueError(
+            f"Cannot change settings locked by environment variables: {', '.join(env_names)}"
+        )
+
+    for key, value in updates.items():
+        if key not in EMBED_SETTING_KEYS:
+            continue
+        stmt = pg_insert(SystemSetting).values(
+            key=key, value=value, updated_by=updated_by, updated_at=func.now()
+        ).on_conflict_do_update(
+            index_elements=["key"],
+            set_={"value": value, "updated_by": updated_by, "updated_at": func.now()},
+        )
+        await db.execute(stmt)
+    await db.flush()
+
+    return await get_effective_embed_settings(db)
+
+
 async def has_system_admin(db: AsyncSession) -> bool:
     """Check if at least one system admin user exists."""
     from app.models.user import User

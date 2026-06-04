@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     conversation_id: UUID | None = None
     message: str = Field(..., min_length=1, max_length=32000)
+    attachment_ids: list[UUID] = Field(default_factory=list)
 
 
 class SkillInfo(BaseModel):
@@ -25,7 +26,21 @@ class AIConfigOut(BaseModel):
     embedding_configured: bool = False
     embedding_provider: str | None = None
     embedding_model: str | None = None
+    vision_enabled: bool = False
     available_skills: list[SkillInfo] = []
+
+
+class AIAttachmentRead(BaseModel):
+    id: UUID
+    conversation_id: UUID
+    filename: str
+    content_type: str
+    size_bytes: int
+    message_id: UUID | None = None
+    promoted_to_type: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class MessageOut(BaseModel):
@@ -37,6 +52,7 @@ class MessageOut(BaseModel):
     completion_tokens: int | None = None
     tool_calls: dict | list | None = None
     created_at: datetime
+    attachments: list[AIAttachmentRead] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

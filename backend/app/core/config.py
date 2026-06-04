@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     EMBEDDING_BASE_URL: str = ""
     EMBEDDING_DIMENSIONS: int = 1536
 
+    LLM_VISION_ENABLED: bool = True
+    LLM_VISION_MAX_IMAGE_BYTES: int = 5_242_880
+
+    # Comma-separated parent origins for iframe CSP (mirrors admin DB setting at deploy time)
+    EXTERNAL_AGENT_ENABLED: str = ""
+    EXTERNAL_AGENT_ALLOWED_ORIGINS: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 

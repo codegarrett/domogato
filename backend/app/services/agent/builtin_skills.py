@@ -4,12 +4,12 @@ Skills enforce user permissions via check_project_access.
 """
 from __future__ import annotations
 
-import json
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.epic import Epic
 from app.models.kb_page import KBPage
 from app.models.kb_space import KBSpace
 from app.models.membership import OrgMembership
@@ -21,7 +21,20 @@ from app.models.user import User
 from app.models.workflow import Workflow, WorkflowStatus, WorkflowTransition
 from app.core import events
 from app.core.permissions import ProjectRole
-from app.services.agent.skills import BaseSkill, SkillContext, SkillPermissionError, check_project_access
+from app.services.agent.skills import (
+    BaseSkill,
+    SkillContext,
+    SkillPermissionError,
+    absolute_url,
+    check_project_access,
+    resolve_assignee_id,
+    resolve_epic_id_by_title,
+    resolve_sprint_id_by_name,
+    resolve_ticket,
+    resolve_workflow_status_id,
+    ticket_path,
+)
+from app.services import comment_service, issue_report_service
 from app.services.project_service import list_projects_for_user
 from app.services.sprint_service import get_sprint_stats, list_sprints
 from app.services.ticket_service import create_ticket, get_ticket, list_tickets, update_ticket, transition_status
@@ -91,8 +104,12 @@ class SearchTicketsSkill(BaseSkill):
             },
             "priority": {
                 "type": "string",
-                "enum": ["critical", "high", "medium", "low"],
+                "enum": ["lowest", "low", "medium", "high", "highest"],
                 "description": "Filter by priority level",
+            },
+            "status_name": {
+                "type": "string",
+                "description": "Filter by workflow status name (e.g., 'Open', 'In Progress')",
             },
             "assignee": {
                 "type": "string",
@@ -113,14 +130,18 @@ class SearchTicketsSkill(BaseSkill):
         assignee_id = None
         assignee_param = ctx.params.get("assignee")
         if assignee_param:
-            if assignee_param.lower() == "me":
-                assignee_id = ctx.user.id
-            else:
-                from app.models.user import User as UserModel
-                user_result = await ctx.db.execute(
-                    select(UserModel.id).where(UserModel.email == assignee_param)
-                )
-                assignee_id = user_result.scalar_one_or_none()
+            assignee_id = await resolve_assignee_id(ctx.db, assignee_param, ctx.user)
+
+        workflow_status_id = None
+        status_name = ctx.params.get("status_name")
+        if status_name:
+            workflow_status_id = await resolve_workflow_status_id(
+                ctx.db, project=project, status_name=status_name,
+            )
+            if workflow_status_id is None:
+                return {
+                    "error": f"Status '{status_name}' not found in this project's workflow.",
+                }
 
         tickets_list, total = await list_tickets(
             ctx.db,
@@ -129,6 +150,7 @@ class SearchTicketsSkill(BaseSkill):
             priority=ctx.params.get("priority"),
             assignee_id=assignee_id,
             ticket_type=ctx.params.get("ticket_type"),
+            workflow_status_id=workflow_status_id,
             limit=20,
         )
 
@@ -187,14 +209,7 @@ class GetTicketDetailsSkill(BaseSkill):
     async def execute(self, ctx: SkillContext) -> dict:
         project = await check_project_access(ctx.db, ctx.user, ctx.params["project_key"])
 
-        result = await ctx.db.execute(
-            select(Ticket).where(
-                Ticket.project_id == project.id,
-                Ticket.ticket_number == ctx.params["ticket_number"],
-                Ticket.is_deleted == False,
-            )
-        )
-        ticket = result.scalar_one_or_none()
+        ticket = await resolve_ticket(ctx.db, project, ctx.params["ticket_number"])
         if ticket is None:
             return {"error": f"Ticket {project.key}-{ctx.params['ticket_number']} not found"}
 
@@ -219,6 +234,45 @@ class GetTicketDetailsSkill(BaseSkill):
             )
             reporter_name = u.scalar_one_or_none()
 
+        parent_key = None
+        if ticket.parent_ticket_id:
+            parent = await ctx.db.get(Ticket, ticket.parent_ticket_id)
+            if parent and not parent.is_deleted:
+                parent_key = f"{project.key}-{parent.ticket_number}"
+
+        sprint_name = None
+        if ticket.sprint_id:
+            sprint_row = await ctx.db.execute(
+                select(Sprint.name).where(Sprint.id == ticket.sprint_id)
+            )
+            sprint_name = sprint_row.scalar_one_or_none()
+
+        epic_title = None
+        if ticket.epic_id:
+            epic_row = await ctx.db.execute(
+                select(Epic.title).where(Epic.id == ticket.epic_id)
+            )
+            epic_title = epic_row.scalar_one_or_none()
+
+        subtasks_list, subtask_total = await list_tickets(
+            ctx.db, project.id, parent_ticket_id=ticket.id, limit=10,
+        )
+        subtasks = [
+            {
+                "key": f"{project.key}-{st.ticket_number}",
+                "title": st.title,
+                "status_id": str(st.workflow_status_id),
+            }
+            for st in subtasks_list
+        ]
+
+        _, comment_count = await comment_service.list_comments(
+            ctx.db, ticket.id, limit=1,
+        )
+        source_issue_reports = await issue_report_service.get_ticket_issue_report_links(
+            ctx.db, ticket.id,
+        )
+
         return {
             "key": f"{project.key}-{ticket.ticket_number}",
             "title": ticket.title,
@@ -228,6 +282,13 @@ class GetTicketDetailsSkill(BaseSkill):
             "status": status_name,
             "assignee": assignee_name,
             "reporter": reporter_name,
+            "parent_key": parent_key,
+            "sprint_name": sprint_name,
+            "epic_title": epic_title,
+            "subtask_count": subtask_total,
+            "subtasks": subtasks,
+            "comment_count": comment_count,
+            "source_issue_reports": source_issue_reports,
             "story_points": ticket.story_points,
             "due_date": str(ticket.due_date) if ticket.due_date else None,
             "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
@@ -375,7 +436,9 @@ class CreateTicketSkill(BaseSkill):
             },
             "description": {
                 "type": "string",
-                "description": "Detailed description, acceptance criteria, etc.",
+                "description": (
+                    "Markdown-formatted detailed description, acceptance criteria, etc."
+                ),
             },
             "ticket_type": {
                 "type": "string",
@@ -390,6 +453,22 @@ class CreateTicketSkill(BaseSkill):
             "story_points": {
                 "type": "integer",
                 "description": "Story point estimate",
+            },
+            "assignee_email": {
+                "type": "string",
+                "description": "Email of assignee, or 'me' for the current user",
+            },
+            "parent_ticket_number": {
+                "type": "integer",
+                "description": "Parent ticket number to create a subtask (e.g., 42 for PROJ-42)",
+            },
+            "sprint_name": {
+                "type": "string",
+                "description": "Name of the sprint to assign the ticket to",
+            },
+            "epic_title": {
+                "type": "string",
+                "description": "Title of the epic to assign the ticket to",
             },
         },
         "required": ["project_key", "title"],
@@ -424,6 +503,43 @@ class CreateTicketSkill(BaseSkill):
         if ctx.params.get("story_points") is not None:
             kwargs["story_points"] = ctx.params["story_points"]
 
+        if ctx.params.get("assignee_email"):
+            assignee_id = await resolve_assignee_id(
+                ctx.db, ctx.params["assignee_email"], ctx.user,
+            )
+            if assignee_id is None:
+                return {"error": f"User with email '{ctx.params['assignee_email']}' not found"}
+            kwargs["assignee_id"] = assignee_id
+
+        if ctx.params.get("parent_ticket_number") is not None:
+            parent = await resolve_ticket(
+                ctx.db, project, ctx.params["parent_ticket_number"],
+            )
+            if parent is None:
+                return {
+                    "error": (
+                        f"Parent ticket {project.key}-{ctx.params['parent_ticket_number']} "
+                        "not found"
+                    ),
+                }
+            kwargs["parent_ticket_id"] = parent.id
+
+        if ctx.params.get("sprint_name"):
+            sprint_id = await resolve_sprint_id_by_name(
+                ctx.db, project.id, ctx.params["sprint_name"],
+            )
+            if sprint_id is None:
+                return {"error": f"Sprint '{ctx.params['sprint_name']}' not found"}
+            kwargs["sprint_id"] = sprint_id
+
+        if ctx.params.get("epic_title"):
+            epic_id = await resolve_epic_id_by_title(
+                ctx.db, project.id, ctx.params["epic_title"],
+            )
+            if epic_id is None:
+                return {"error": f"Epic '{ctx.params['epic_title']}' not found"}
+            kwargs["epic_id"] = epic_id
+
         try:
             ticket = await create_ticket(ctx.db, **kwargs)
         except ValueError as exc:
@@ -435,13 +551,19 @@ class CreateTicketSkill(BaseSkill):
             project_id=str(ticket.project_id),
         )
 
+        ticket_key = f"{project.key}-{ticket.ticket_number}"
+        path = ticket_path(project.id, ticket_key)
+
         return {
             "created": True,
-            "key": f"{project.key}-{ticket.ticket_number}",
+            "key": ticket_key,
             "title": ticket.title,
             "type": ticket.ticket_type,
             "priority": ticket.priority,
-            "message": f"Ticket {project.key}-{ticket.ticket_number} created successfully.",
+            "project_id": str(project.id),
+            "path": path,
+            "url": absolute_url(path),
+            "message": f"Ticket {ticket_key} created successfully.",
         }
 
 
@@ -449,8 +571,9 @@ class UpdateTicketSkill(BaseSkill):
     name = "update_ticket"
     description = (
         "Update fields on an existing ticket (title, description, priority, "
-        "assignee, type, story points, dates). Requires Developer role. "
-        "Does NOT change workflow status — use transition_ticket_status for that."
+        "assignee, type, story points, dates, sprint, epic, parent). Requires "
+        "Developer role. Does NOT change workflow status — use "
+        "transition_ticket_status for that."
     )
     category = "tickets"
     parameters_schema = {
@@ -494,6 +617,22 @@ class UpdateTicketSkill(BaseSkill):
                 "type": "string",
                 "description": "Due date in YYYY-MM-DD format, or null to clear",
             },
+            "sprint_name": {
+                "type": "string",
+                "description": "Sprint name to assign, or 'null' to clear",
+            },
+            "epic_title": {
+                "type": "string",
+                "description": "Epic title to assign, or 'null' to clear",
+            },
+            "parent_ticket_number": {
+                "type": "integer",
+                "description": "Parent ticket number for reparenting (creates subtask link)",
+            },
+            "clear_assignee": {
+                "type": "boolean",
+                "description": "Set to true to remove the current assignee",
+            },
         },
         "required": ["project_key", "ticket_number"],
     }
@@ -512,14 +651,7 @@ class UpdateTicketSkill(BaseSkill):
                 ),
             }
 
-        result = await ctx.db.execute(
-            select(Ticket).where(
-                Ticket.project_id == project.id,
-                Ticket.ticket_number == ctx.params["ticket_number"],
-                Ticket.is_deleted == False,
-            )
-        )
-        ticket = result.scalar_one_or_none()
+        ticket = await resolve_ticket(ctx.db, project, ctx.params["ticket_number"])
         if ticket is None:
             return {"error": f"Ticket {project.key}-{ctx.params['ticket_number']} not found"}
 
@@ -528,18 +660,14 @@ class UpdateTicketSkill(BaseSkill):
             if field in ctx.params and ctx.params[field] is not None:
                 kwargs[field] = ctx.params[field]
 
-        if ctx.params.get("assignee_email"):
+        if ctx.params.get("clear_assignee"):
+            kwargs["assignee_id"] = None
+        elif ctx.params.get("assignee_email"):
             email = ctx.params["assignee_email"]
-            if email.lower() == "me":
-                kwargs["assignee_id"] = ctx.user.id
-            else:
-                user_result = await ctx.db.execute(
-                    select(User.id).where(User.email == email)
-                )
-                uid = user_result.scalar_one_or_none()
-                if uid is None:
-                    return {"error": f"User with email '{email}' not found"}
-                kwargs["assignee_id"] = uid
+            assignee_id = await resolve_assignee_id(ctx.db, email, ctx.user)
+            if assignee_id is None:
+                return {"error": f"User with email '{email}' not found"}
+            kwargs["assignee_id"] = assignee_id
 
         if "due_date" in ctx.params:
             from datetime import date as date_type
@@ -551,6 +679,39 @@ class UpdateTicketSkill(BaseSkill):
                     kwargs["due_date"] = date_type.fromisoformat(val)
                 except ValueError:
                     return {"error": f"Invalid date format: '{val}'. Use YYYY-MM-DD."}
+
+        if "sprint_name" in ctx.params:
+            val = ctx.params["sprint_name"]
+            if val is None or val == "" or val == "null":
+                kwargs["sprint_id"] = None
+            else:
+                sprint_id = await resolve_sprint_id_by_name(ctx.db, project.id, val)
+                if sprint_id is None:
+                    return {"error": f"Sprint '{val}' not found"}
+                kwargs["sprint_id"] = sprint_id
+
+        if "epic_title" in ctx.params:
+            val = ctx.params["epic_title"]
+            if val is None or val == "" or val == "null":
+                kwargs["epic_id"] = None
+            else:
+                epic_id = await resolve_epic_id_by_title(ctx.db, project.id, val)
+                if epic_id is None:
+                    return {"error": f"Epic '{val}' not found"}
+                kwargs["epic_id"] = epic_id
+
+        if ctx.params.get("parent_ticket_number") is not None:
+            parent = await resolve_ticket(
+                ctx.db, project, ctx.params["parent_ticket_number"],
+            )
+            if parent is None:
+                return {
+                    "error": (
+                        f"Parent ticket {project.key}-{ctx.params['parent_ticket_number']} "
+                        "not found"
+                    ),
+                }
+            kwargs["parent_ticket_id"] = parent.id
 
         if not kwargs:
             return {"error": "No fields provided to update"}
@@ -621,14 +782,7 @@ class TransitionTicketStatusSkill(BaseSkill):
                 ),
             }
 
-        result = await ctx.db.execute(
-            select(Ticket).where(
-                Ticket.project_id == project.id,
-                Ticket.ticket_number == ctx.params["ticket_number"],
-                Ticket.is_deleted == False,
-            )
-        )
-        ticket = result.scalar_one_or_none()
+        ticket = await resolve_ticket(ctx.db, project, ctx.params["ticket_number"])
         if ticket is None:
             return {"error": f"Ticket {project.key}-{ctx.params['ticket_number']} not found"}
 

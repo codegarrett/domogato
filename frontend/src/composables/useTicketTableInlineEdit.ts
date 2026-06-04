@@ -1,5 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { transitionStatus, updateTicket, type Ticket, type TicketUpdate } from '@/api/tickets'
+import { useToastService } from '@/composables/useToast'
 
 export interface InlineEdit {
   id: string
@@ -10,6 +12,8 @@ export interface InlineEdit {
 export function useTicketTableInlineEdit(options?: {
   onTicketUpdated?: (updated: Ticket) => void
 }) {
+  const { t } = useI18n()
+  const toast = useToastService()
   const editingCell = ref<InlineEdit | null>(null)
 
   const inlineEditValue = computed({
@@ -90,10 +94,10 @@ export function useTicketTableInlineEdit(options?: {
     cancelEdit()
   }
 
-  async function commitStatusEdit(row: Ticket) {
+  async function commitStatusEdit(row: Ticket, chosenStatusId?: string | null) {
     const cell = editingCell.value
     if (!cell || cell.field !== 'workflow_status_id') return
-    const newStatusId = cell.value as string
+    const newStatusId = (chosenStatusId ?? cell.value) as string | null
     if (!newStatusId || newStatusId === row.workflow_status_id) {
       cancelEdit()
       return
@@ -103,6 +107,7 @@ export function useTicketTableInlineEdit(options?: {
       options?.onTicketUpdated?.(updated)
     } catch (e) {
       console.error(e)
+      toast.showError(t('common.error'), t('tickets.statusChangeFailed'))
     }
     cancelEdit()
   }

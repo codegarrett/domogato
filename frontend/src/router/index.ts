@@ -31,6 +31,33 @@ const router = createRouter({
       component: () => import('@/views/setup/SetupWizardView.vue'),
     },
     {
+      path: '/embed',
+      component: () => import('@/layouts/EmbedLayout.vue'),
+      children: [
+        {
+          path: 'agent',
+          name: 'embed-agent',
+          component: () => import('@/views/embed/ExternalAgentView.vue'),
+        },
+      ],
+    },
+    {
+      path: '/auth/embed',
+      component: () => import('@/layouts/EmbedLayout.vue'),
+      children: [
+        {
+          path: 'login',
+          name: 'embed-login',
+          component: () => import('@/views/auth/EmbedLoginView.vue'),
+        },
+      ],
+    },
+    {
+      path: '/auth/silent-renew',
+      name: 'silent-renew',
+      component: () => import('@/views/auth/SilentRenewView.vue'),
+    },
+    {
       path: '/',
       component: () => import('@/layouts/AppLayout.vue'),
       children: [
@@ -193,6 +220,11 @@ const router = createRouter({
           path: 'admin/auth',
           name: 'admin-auth',
           component: () => import('@/views/admin/AdminAuthView.vue'),
+        },
+        {
+          path: 'admin/embed',
+          name: 'admin-embed',
+          component: () => import('@/views/admin/AdminEmbedView.vue'),
         },
       ],
     },

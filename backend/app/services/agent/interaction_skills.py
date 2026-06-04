@@ -47,8 +47,11 @@ class RequestApprovalSkill(BaseSkill):
     description = (
         "Request explicit approval from the user before performing a mutating "
         "action (creating, updating, or deleting data). ALWAYS call this before "
-        "create_ticket, update_ticket, or transition_ticket_status. Present a "
-        "clear summary of what will be changed so the user can approve or reject."
+        "create_ticket, update_ticket, transition_ticket_status, "
+        "create_issue_report, create_ticket_from_issue_reports, "
+        "add_ticket_comment, attach_file_to_ticket, or "
+        "attach_file_to_issue_report. Present a clear summary of what will be changed "
+        "so the user can approve or reject."
     )
     category = "interaction"
     parameters_schema = {

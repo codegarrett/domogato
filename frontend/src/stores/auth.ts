@@ -5,6 +5,7 @@ import apiClient from '@/api/client'
 import { setLocale } from '@/i18n'
 import { useUiStore } from '@/stores/ui'
 import { syncSessionCookie, clearSessionCookie } from '@/utils/sessionCookie'
+import { isEmbedMode, embedLoginPath } from '@/utils/embedMode'
 import axios from 'axios'
 
 export interface AuthConfig {
@@ -12,6 +13,8 @@ export interface AuthConfig {
   needs_setup: boolean
   local_registration_enabled: boolean
   oidc: { issuer_url: string; client_id: string } | null
+  external_agent_enabled?: boolean
+  external_agent_url?: string | null
 }
 
 export interface UserProfile {
@@ -179,7 +182,7 @@ export const useAuthStore = defineStore('auth', () => {
     await clearSessionCookie()
     await logout()
     if (isLocalMode.value) {
-      window.location.href = '/auth/login'
+      window.location.href = isEmbedMode() ? embedLoginPath('/embed/agent') : '/auth/login'
     }
   }
 

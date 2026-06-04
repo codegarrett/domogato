@@ -267,5 +267,5 @@ Update the AI system prompt with guidance on when to use semantic vs keyword sea
 | 10.6 | DB Migration | Small | None | PENDING |
 | 10.7 | Celery Embedding Tasks | Medium | 10.5 | PENDING |
 | 10.8 | Hook into Endpoints | Small | 10.7 | PENDING |
-| 10.9 | Semantic Search Skill | Medium | 10.5 | PENDING |
-| 10.10 | System Prompt + Frontend | Small | 10.9 | PENDING |
+| 10.9 | Semantic Search Skill | Medium | 10.5 | DONE |
+| 10.10 | System Prompt + Frontend | Small | 10.9 | DONE |

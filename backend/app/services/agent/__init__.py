@@ -34,6 +34,20 @@ def _register_builtin_skills() -> None:
         AddReporterToIssueReportSkill,
         CreateTicketFromIssueReportsSkill,
     )
+    from app.services.agent.workflow_skills import GetTicketTransitionsSkill
+    from app.services.agent.productivity_skills import (
+        GlobalSearchSkill,
+        GetMyDashboardSkill,
+        ListTicketCommentsSkill,
+        AddTicketCommentSkill,
+        WatchTicketSkill,
+        UnwatchTicketSkill,
+    )
+    from app.services.agent.file_skills import (
+        ListConversationAttachmentsSkill,
+        AttachFileToTicketSkill,
+        AttachFileToIssueReportSkill,
+    )
     registry.register(ListMyProjectsSkill())
     registry.register(SearchTicketsSkill())
     registry.register(GetTicketDetailsSkill())
@@ -43,12 +57,22 @@ def _register_builtin_skills() -> None:
     registry.register(CreateTicketSkill())
     registry.register(UpdateTicketSkill())
     registry.register(TransitionTicketStatusSkill())
+    registry.register(GetTicketTransitionsSkill())
     registry.register(PresentChoicesSkill())
     registry.register(RequestApprovalSkill())
     registry.register(SearchIssueReportsSkill())
     registry.register(CreateIssueReportSkill())
     registry.register(AddReporterToIssueReportSkill())
     registry.register(CreateTicketFromIssueReportsSkill())
+    registry.register(GlobalSearchSkill())
+    registry.register(GetMyDashboardSkill())
+    registry.register(ListTicketCommentsSkill())
+    registry.register(AddTicketCommentSkill())
+    registry.register(WatchTicketSkill())
+    registry.register(UnwatchTicketSkill())
+    registry.register(ListConversationAttachmentsSkill())
+    registry.register(AttachFileToTicketSkill())
+    registry.register(AttachFileToIssueReportSkill())
 
 
 _register_builtin_skills()
@@ -61,5 +85,10 @@ __all__ = [
     "SkillPermissionError",
     "SkillNotFoundError",
     "check_project_access",
+    "resolve_ticket",
+    "resolve_workflow_status_id",
+    "resolve_assignee_id",
+    "resolve_sprint_id_by_name",
+    "resolve_epic_id_by_title",
     "registry",
 ]

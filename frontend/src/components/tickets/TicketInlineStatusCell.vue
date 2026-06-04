@@ -17,7 +17,7 @@ const editValue = defineModel<string | null>('editValue')
 
 const emit = defineEmits<{
   start: []
-  commit: []
+  commit: [statusId: string | null]
   cancel: []
 }>()
 
@@ -32,7 +32,7 @@ const displayStatusId = computed(() =>
     v-model="editValue"
     :options="statusOptions"
     @start="emit('start')"
-    @commit="emit('commit')"
+    @commit="(statusId) => emit('commit', statusId)"
     @cancel="emit('cancel')"
   >
     <Tag

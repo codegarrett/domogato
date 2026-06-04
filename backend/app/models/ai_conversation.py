@@ -24,4 +24,9 @@ class AIConversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         order_by="AIMessage.created_at",
         cascade="all, delete-orphan",
     )
+    attachments: Mapped[list["AIConversationAttachment"]] = relationship(
+        "AIConversationAttachment",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+    )
     user = relationship("User")

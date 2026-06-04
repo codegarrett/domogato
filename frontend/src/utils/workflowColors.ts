@@ -25,13 +25,13 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-/** Normalize to #RRGGBB for native color inputs and consistent display. */
+/** Normalize to #rrggbb (lowercase) — required for native color inputs. */
 export function normalizeHexColor(color: string | null | undefined): string {
-  if (!color) return WORKFLOW_COLOR_INITIAL
+  if (!color) return WORKFLOW_COLOR_INITIAL.toLowerCase()
   const trimmed = color.trim()
   const match = trimmed.match(/^#?([0-9A-Fa-f]{6})$/)
-  if (!match) return WORKFLOW_COLOR_INITIAL
-  return `#${match[1]!.toUpperCase()}`
+  if (!match) return WORKFLOW_COLOR_INITIAL.toLowerCase()
+  return `#${match[1]!.toLowerCase()}`
 }
 
 export function workflowColumnHeaderStyle(color: string): Record<string, string> {

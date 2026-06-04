@@ -24,6 +24,14 @@
       <i class="pi pi-lock" />
       {{ t('admin.authentication') }}
     </router-link>
+    <router-link
+      to="/admin/embed"
+      class="sub-nav-link"
+      :class="{ active: route.path === '/admin/embed' }"
+    >
+      <i class="pi pi-window-maximize" />
+      {{ t('admin.externalAgent') }}
+    </router-link>
   </nav>
 </template>
 

@@ -8,46 +8,31 @@ Phase 9 does not add new REST endpoints. It extends the existing `POST /ai/chat`
 
 ## Updated: `GET /api/v1/ai/config`
 
-Now includes the list of available skills.
+Now includes the list of all registered skills (currently 25). Skills are returned dynamically from `SkillRegistry.list_all()` — the response includes `name`, `description`, and `category` for each.
 
-**Response (200):**
+**Response (200)** — abbreviated example:
 ```json
 {
   "is_configured": true,
   "provider": "ollama",
   "model": "kimi-k2.5",
-  "embedding_configured": false,
-  "embedding_provider": null,
-  "embedding_model": null,
+  "embedding_configured": true,
+  "embedding_provider": "ollama",
+  "embedding_model": "nomic-embed-text",
   "available_skills": [
-    {
-      "name": "list_my_projects",
-      "description": "List projects you have access to",
-      "category": "projects"
-    },
-    {
-      "name": "search_tickets",
-      "description": "Search for tickets in a project by keyword, status, priority, or assignee",
-      "category": "tickets"
-    },
-    {
-      "name": "get_ticket_details",
-      "description": "Get full details of a specific ticket by project key and ticket number",
-      "category": "tickets"
-    },
-    {
-      "name": "get_sprint_status",
-      "description": "Get the active sprint status and completion statistics for a project",
-      "category": "sprints"
-    },
-    {
-      "name": "search_knowledge_base",
-      "description": "Search published knowledge base pages in a project",
-      "category": "knowledge_base"
-    }
+    {"name": "list_my_projects", "description": "...", "category": "projects"},
+    {"name": "search_tickets", "description": "...", "category": "tickets"},
+    {"name": "get_ticket_details", "description": "...", "category": "tickets"},
+    {"name": "create_ticket", "description": "...", "category": "tickets"},
+    {"name": "semantic_search_kb", "description": "...", "category": "knowledge_base"},
+    {"name": "search_issue_reports", "description": "...", "category": "issue_reports"},
+    {"name": "global_search", "description": "...", "category": "search"},
+    {"name": "get_my_dashboard", "description": "...", "category": "productivity"}
   ]
 }
 ```
+
+See `docs/phase_9/ARCHITECTURE.md` for the complete skill catalog and RBAC matrix.
 
 ---
 

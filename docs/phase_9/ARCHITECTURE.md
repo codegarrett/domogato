@@ -8,6 +8,7 @@
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                 ChatFlyout (PrimeVue Drawer)              │   │
+│  │                 External embed: /embed/agent (iframe)     │   │
 │  │                                                          │   │
 │  │  Messages:                                               │   │
 │  │  [User] "What tickets are assigned to me in PROJ?"       │   │
@@ -143,15 +144,48 @@ The final response uses streaming to preserve the Phase 8 UX (token-by-token dis
 
 ## Skill Framework
 
+### Registered Skills (25 total)
+
+| Category | Skill | Min Role | Mutating |
+|----------|-------|----------|----------|
+| projects | `list_my_projects` | Org membership | No |
+| tickets | `search_tickets` | GUEST | No |
+| tickets | `get_ticket_details` | GUEST | No |
+| tickets | `create_ticket` | DEVELOPER | Yes |
+| tickets | `update_ticket` | DEVELOPER | Yes |
+| tickets | `transition_ticket_status` | DEVELOPER | Yes |
+| tickets | `get_ticket_transitions` | GUEST | No |
+| tickets | `list_ticket_comments` | GUEST | No |
+| tickets | `add_ticket_comment` | DEVELOPER | Yes |
+| sprints | `get_sprint_status` | GUEST | No |
+| knowledge_base | `search_knowledge_base` | GUEST | No |
+| knowledge_base | `semantic_search_kb` | GUEST | No |
+| issue_reports | `search_issue_reports` | GUEST | No |
+| issue_reports | `create_issue_report` | GUEST | Yes |
+| issue_reports | `add_reporter_to_issue_report` | GUEST | Yes |
+| issue_reports | `create_ticket_from_issue_reports` | DEVELOPER | Yes |
+| search | `global_search` | Authenticated | No |
+| productivity | `get_my_dashboard` | Authenticated | No |
+| productivity | `watch_ticket` | GUEST | Yes |
+| productivity | `unwatch_ticket` | GUEST | Yes |
+| files | `list_conversation_attachments` | Conversation owner | No |
+| files | `attach_file_to_ticket` | DEVELOPER | Yes |
+| files | `attach_file_to_issue_report` | GUEST | Yes |
+| interaction | `present_choices` | Authenticated | No |
+| interaction | `request_approval` | Authenticated | No |
+
+Mutating skills require `request_approval` before execution (except `watch_ticket` / `unwatch_ticket`).
+
 ### Class Hierarchy
 
 ```
 BaseSkill (ABC)
-├── ListMyProjectsSkill      → project_service.list_projects_for_user()
-├── SearchTicketsSkill        → ticket_service.list_tickets()
-├── GetTicketDetailsSkill     → ticket_service.get_ticket()
-├── GetSprintStatusSkill      → sprint_service.list_sprints() + get_sprint_stats()
-└── SearchKnowledgeBaseSkill  → KB full-text search (plainto_tsquery)
+├── builtin_skills.py       → projects, tickets, sprints, KB
+├── workflow_skills.py      → get_ticket_transitions
+├── issue_report_skills.py  → issue report triage
+├── productivity_skills.py  → search, dashboard, comments, watchers
+├── file_skills.py          → conversation file list/attach
+└── interaction_skills.py   → present_choices, request_approval
 
 SkillRegistry
 ├── register(skill)
@@ -168,6 +202,7 @@ class SkillContext:
     db: AsyncSession     # Current database session
     user: User           # Authenticated user from get_current_user
     params: dict         # Parsed tool call arguments
+    conversation_id: UUID | None = None  # Active AI chat conversation
 ```
 
 Each skill receives a `SkillContext` and returns a plain `dict` with structured results. The executor serializes the dict to JSON for the LLM's `role: "tool"` message.
@@ -228,13 +263,13 @@ resolve_effective_project_role(
 Execute skill with full service-layer access
 ```
 
-All five project-scoped skills require at minimum `ProjectRole.GUEST`. The `list_my_projects` skill uses `project_service.list_projects_for_user()` which has its own built-in permission filtering.
+All five project-scoped read skills require at minimum `ProjectRole.GUEST`. Write skills require `DEVELOPER` or higher. The `list_my_projects` and `get_my_dashboard` skills use built-in permission filtering. See the skill table above for the full RBAC matrix.
 
 ### Security Properties
 
 1. **Data isolation:** The agent can only return data the authenticated user has access to
 2. **No privilege escalation:** Skills use the same permission checks as REST endpoints
-3. **Read-only skills:** Phase 9 skills only read data; write operations are planned for Phase 10
+3. **Approval gate:** Mutating skills require explicit user approval via `request_approval`
 4. **Tool result sanitization:** Skill results are serialized as JSON strings in tool messages; the LLM summarizes them in natural language for the user
 
 ## SSE Event Flow (with Tools)
@@ -267,25 +302,15 @@ Event types (complete list):
 
 ## System Prompt Design
 
-Phase 9 extends the Phase 8 system prompt with tool awareness:
+Phase 9+ extends the Phase 8 system prompt with tool awareness, issue report triage, approval rules, KB search guidance, subtask creation, and productivity tools. The prompt is defined in `backend/app/services/ai_service.py` as `SYSTEM_PROMPT` and prepended to every conversation.
 
-```
-You are ProjectHub Assistant, an AI integrated into the ProjectHub 
-project management platform. You help users with their projects, 
-tickets, documentation, and workflows.
-
-You have access to tools that let you look up real project data. 
-Use them when the user asks about specific tickets, sprints, or 
-documentation. Always use tools to answer factual questions about 
-project data rather than guessing.
-
-When using tools, identify the project by its key (e.g., "PROJ"). 
-If the user doesn't specify a project, use list_my_projects first 
-to see what's available, then ask which project they mean.
-
-Be concise, helpful, and use markdown formatting in your responses 
-when it improves readability.
-```
+Key sections:
+- **Tools** — Always call tools immediately; use `list_my_projects` + `present_choices` when project is ambiguous
+- **Approval Required** — All mutating ticket, issue report, and comment tools
+- **Issue Reports** — Search → dedupe → create flow
+- **Subtasks** — `create_ticket` with `parent_ticket_number`
+- **Knowledge Base Search** — Semantic vs keyword search guidance
+- **Productivity Tools** — Global search, dashboard, comments, watchers, transitions
 
 ## Access Control Summary
 
@@ -300,7 +325,7 @@ when it improves readability.
 | Skill | Min Project Role |
 |-------|-----------------|
 | `list_my_projects` | Org membership (filtered by access) |
-| `search_tickets` | GUEST |
-| `get_ticket_details` | GUEST |
-| `get_sprint_status` | GUEST |
-| `search_knowledge_base` | GUEST |
+| `search_tickets`, `get_ticket_details`, `get_ticket_transitions`, `list_ticket_comments` | GUEST |
+| `create_ticket`, `update_ticket`, `transition_ticket_status`, `add_ticket_comment`, `create_ticket_from_issue_reports` | DEVELOPER |
+| `get_sprint_status`, `search_knowledge_base`, `semantic_search_kb`, `search_issue_reports`, `create_issue_report`, `add_reporter_to_issue_report`, `watch_ticket`, `unwatch_ticket` | GUEST |
+| `global_search`, `get_my_dashboard`, `present_choices`, `request_approval` | Authenticated |

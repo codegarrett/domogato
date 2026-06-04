@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
 
 import { useInlineDropdownAnchor } from '@/composables/useInlineDropdownAnchor'
 
@@ -32,7 +32,7 @@ const emit = defineEmits<{
 
   start: []
 
-  commit: []
+  commit: [value: string | null]
 
   cancel: []
 
@@ -100,7 +100,7 @@ function pick(value: string | null) {
 
   panelVisible.value = false
 
-  emit('commit')
+  void nextTick(() => emit('commit', value))
 
 }
 

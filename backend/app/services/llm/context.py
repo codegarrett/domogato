@@ -23,7 +23,11 @@ def estimate_tokens(text: str) -> int:
 def estimate_message_tokens(message: dict) -> int:
     """Estimate the token cost of a single chat message."""
     tokens = OVERHEAD_PER_MESSAGE
-    tokens += estimate_tokens(message.get("content") or "")
+    content = message.get("content") or ""
+    if isinstance(content, list):
+        tokens += estimate_tokens(json.dumps(content, default=str))
+    else:
+        tokens += estimate_tokens(content)
     if message.get("tool_calls"):
         tokens += estimate_tokens(json.dumps(message["tool_calls"], default=str))
     if message.get("role"):

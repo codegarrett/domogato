@@ -12,7 +12,9 @@ from app.core.permissions import require_system_admin
 from app.models.user import User
 from app.services.system_settings_service import (
     get_effective_auth_settings,
+    get_effective_embed_settings,
     update_auth_settings,
+    update_embed_settings,
 )
 
 router = APIRouter(prefix="/system-settings", tags=["system_settings"])
@@ -50,6 +52,15 @@ class TestOidcResponse(BaseModel):
     authorization_endpoint: str | None = None
     token_endpoint: str | None = None
     detail: str | None = None
+
+
+class EmbedSettingsUpdate(BaseModel):
+    external_agent_enabled: bool | None = None
+    external_agent_allowed_origins: list[str] | None = None
+
+
+class EmbedSettingsResponse(BaseModel):
+    settings: dict[str, AuthSettingResponse]
 
 
 def _format_settings(settings_dict: dict) -> AuthSettingsResponse:
@@ -130,3 +141,33 @@ async def test_oidc_connection(
             )
     except Exception as e:
         return TestOidcResponse(success=False, detail=str(e))
+
+
+@router.get("/embed", response_model=EmbedSettingsResponse)
+async def get_embed_settings(
+    admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get external agent embed settings."""
+    result = await get_effective_embed_settings(db)
+    return _format_settings(result)
+
+
+@router.put("/embed", response_model=EmbedSettingsResponse)
+async def put_embed_settings(
+    body: EmbedSettingsUpdate,
+    admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update external agent embed settings."""
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        result = await get_effective_embed_settings(db)
+        return _format_settings(result)
+
+    try:
+        result = await update_embed_settings(db, updates, updated_by=admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return _format_settings(result)

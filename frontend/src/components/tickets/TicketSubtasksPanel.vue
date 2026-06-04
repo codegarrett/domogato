@@ -114,10 +114,10 @@ async function commitAssignee(row: Ticket) {
   cancelEdit()
 }
 
-async function commitStatus(row: Ticket) {
+async function commitStatus(row: Ticket, chosenStatusId?: string | null) {
   const cell = editingCell.value
   if (!cell || cell.field !== 'workflow_status_id') return
-  const newStatusId = cell.value
+  const newStatusId = chosenStatusId ?? cell.value
   if (!newStatusId || newStatusId === row.workflow_status_id) {
     cancelEdit()
     return
@@ -244,7 +244,7 @@ onMounted(async () => {
             :resolve-status-style="resolveStatusStyle"
             compact
             @start="startEdit(child, 'workflow_status_id', child.workflow_status_id)"
-            @commit="commitStatus(child)"
+            @commit="(statusId) => commitStatus(child, statusId)"
             @cancel="cancelEdit"
           />
         </span>

@@ -23,13 +23,15 @@ def _cookie_max_age(token: str) -> int:
     return settings.LOCAL_JWT_EXPIRE_MINUTES * 60
 
 
-def set_auth_cookie(response: Response, token: str) -> None:
+def set_auth_cookie(response: Response, token: str, *, embed: bool = False) -> None:
+    secure = settings.APP_BASE_URL.lower().startswith("https")
+    samesite: str = "none" if embed and secure else "lax"
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=settings.APP_BASE_URL.lower().startswith("https"),
-        samesite="lax",
+        secure=secure if not embed else True,
+        samesite=samesite,
         path=COOKIE_PATH,
         max_age=_cookie_max_age(token),
     )

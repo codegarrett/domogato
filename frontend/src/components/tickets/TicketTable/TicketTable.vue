@@ -47,7 +47,7 @@ const emit = defineEmits<{
   toggleSelectAll: []
   startEdit: [ticket: Ticket, field: string, value: string | number | null]
   commitEdit: [ticket: Ticket]
-  commitStatus: [ticket: Ticket]
+  commitStatus: [ticket: Ticket, statusId: string | null]
   cancelEdit: []
   'update:editValue': [value: string | number | null]
   'update:storyPointsModel': [value: number | null]
@@ -124,7 +124,7 @@ const selectionEnabled = computed(() => props.selectedIds != null)
           @toggle-select="emit('toggleSelect', tk)"
           @start-edit="(field, value) => emit('startEdit', tk, field, value)"
           @commit-edit="emit('commitEdit', tk)"
-          @commit-status="emit('commitStatus', tk)"
+          @commit-status="(statusId) => emit('commitStatus', tk, statusId)"
           @cancel-edit="emit('cancelEdit')"
           @update:edit-value="emit('update:editValue', $event)"
           @update:story-points-model="emit('update:storyPointsModel', $event)"

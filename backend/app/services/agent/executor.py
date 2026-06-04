@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
+from uuid import UUID
+
 import structlog
 
 from app.models.user import User
@@ -37,9 +39,10 @@ async def _execute_skill(
     params: dict,
     db: AsyncSession,
     user: User,
+    conversation_id: UUID | None = None,
 ) -> dict:
     """Execute a single skill with error handling."""
-    ctx = SkillContext(db=db, user=user, params=params)
+    ctx = SkillContext(db=db, user=user, params=params, conversation_id=conversation_id)
     try:
         return await skill.execute(ctx)
     except SkillError as exc:
@@ -53,11 +56,29 @@ def _summarize_result(name: str, result: dict) -> str:
     """Generate a short summary of a tool result for SSE."""
     if "error" in result:
         return f"Error: {result['error']}"
+    if "attachments" in result:
+        return f"Found {result.get('total', len(result.get('attachments', [])))} attachment(s)"
+    if "comments" in result:
+        return f"Found {result.get('total', len(result['comments']))} comment(s)"
     if "total" in result:
         return f"Found {result['total']} result(s)"
     if "sprint" in result and result["sprint"]:
         sprint = result["sprint"]
         return f"Sprint '{sprint.get('name', '?')}' is {sprint.get('status', '?')}"
+    if "valid_next_statuses" in result:
+        count = len(result.get("valid_next_statuses", []))
+        return f"Status '{result.get('current_status', '?')}' — {count} valid transition(s)"
+    if "assigned_tickets" in result:
+        overdue = result.get("overdue_count", 0)
+        assigned = len(result.get("assigned_tickets", []))
+        return f"Dashboard: {assigned} assigned, {overdue} overdue"
+    if "watching" in result:
+        return result.get("message", "Watch status updated")
+    if "promoted" in result and result.get("promoted"):
+        return result.get("message", "File attached")
+    if result.get("created") and result.get("url"):
+        base = result.get("message", "Resource created")
+        return f"{base} — {result['url']}"
     if "message" in result:
         return result["message"]
     return "Completed"
@@ -70,6 +91,7 @@ async def run_agent_turn(
     db: AsyncSession,
     user: User,
     *,
+    conversation_id: UUID | None = None,
     max_tokens: int,
     context_window: int = 131072,
     temperature: float,
@@ -140,16 +162,28 @@ async def run_agent_turn(
                         "options": func_args.get("options", []),
                     })
                 elif func_name == "request_approval":
-                    yield _sse_event({
-                        "type": "approval_request",
+                    approval_payload = {
+                        "type": "approval",
+                        "status": "pending",
                         "action": func_args.get("action", ""),
                         "details": func_args.get("details", {}),
+                    }
+                    yield _sse_event({
+                        "type": "approval_request",
+                        "action": approval_payload["action"],
+                        "details": approval_payload["details"],
                     })
+                    interaction_msg = {
+                        "role": "interaction",
+                        "content": json.dumps(approval_payload),
+                    }
+                    tool_call_history.append(interaction_msg)
 
                 tool_msg = {
                     "role": "tool",
                     "tool_call_id": tc["id"],
                     "content": json.dumps({"status": "awaiting_user_response"}),
+                    "name": func_name,
                 }
                 messages.append(tool_msg)
                 tool_call_history.append(tool_msg)
@@ -166,13 +200,14 @@ async def run_agent_turn(
             if skill is None:
                 result = {"error": f"Unknown skill: {func_name}"}
             else:
-                result = await _execute_skill(skill, func_args, db, user)
+                result = await _execute_skill(skill, func_args, db, user, conversation_id)
 
             result_json = json.dumps(result, default=str)
             tool_msg = {
                 "role": "tool",
                 "tool_call_id": tc["id"],
                 "content": result_json,
+                "name": func_name,
             }
             messages.append(tool_msg)
             tool_call_history.append(tool_msg)

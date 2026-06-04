@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuth } from '@/composables/useAuth'
+import { isEmbedMode } from '@/utils/embedMode'
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -9,7 +10,7 @@ export async function syncSessionCookie(): Promise<void> {
   if (loggedOut.value || !accessToken.value) return
   await axios.post(
     `${baseUrl}/auth/session`,
-    {},
+    { embed: isEmbedMode() },
     { headers: { Authorization: `Bearer ${accessToken.value}` } },
   )
 }

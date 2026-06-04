@@ -10,7 +10,15 @@ from app.core import events
 from app.core.permissions import ProjectRole
 from app.models.issue_report import IssueReport, IssueReportReporter
 from app.models.user import User
-from app.services.agent.skills import BaseSkill, SkillContext, SkillPermissionError, check_project_access
+from app.services.agent.skills import (
+    BaseSkill,
+    SkillContext,
+    SkillPermissionError,
+    absolute_url,
+    check_project_access,
+    issue_report_path,
+    ticket_path,
+)
 from app.services import issue_report_service
 
 
@@ -106,7 +114,7 @@ class CreateIssueReportSkill(BaseSkill):
             },
             "description": {
                 "type": "string",
-                "description": "Detailed description of the issue",
+                "description": "Markdown-formatted detailed description of the issue",
             },
             "priority": {
                 "type": "string",
@@ -136,12 +144,17 @@ class CreateIssueReportSkill(BaseSkill):
             actor_id=str(ctx.user.id),
         )
 
+        path = issue_report_path(project.id, report.id)
+
         return {
             "created": True,
             "id": str(report.id),
             "title": report.title,
             "priority": report.priority,
             "status": report.status,
+            "project_id": str(project.id),
+            "path": path,
+            "url": absolute_url(path),
             "message": f"Issue report created: '{report.title}'",
         }
 
@@ -237,7 +250,10 @@ class CreateTicketFromIssueReportsSkill(BaseSkill):
             },
             "description": {
                 "type": "string",
-                "description": "Description for the ticket (auto-generated from reports if omitted)",
+                "description": (
+                    "Markdown-formatted description for the ticket "
+                    "(auto-generated from reports if omitted)"
+                ),
             },
             "ticket_type": {
                 "type": "string",
@@ -291,15 +307,21 @@ class CreateTicketFromIssueReportsSkill(BaseSkill):
             issue_report_ids=[str(rid) for rid in report_ids],
         )
 
+        ticket_key = f"{project.key}-{ticket.ticket_number}"
+        path = ticket_path(project.id, ticket_key)
+
         return {
             "created": True,
-            "ticket_key": f"{project.key}-{ticket.ticket_number}",
+            "ticket_key": ticket_key,
             "title": ticket.title,
             "type": ticket.ticket_type,
             "priority": ticket.priority,
             "linked_reports": linked_count,
+            "project_id": str(project.id),
+            "path": path,
+            "url": absolute_url(path),
             "message": (
-                f"Ticket {project.key}-{ticket.ticket_number} created from "
+                f"Ticket {ticket_key} created from "
                 f"{linked_count} issue report(s)."
             ),
         }

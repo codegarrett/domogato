@@ -30,6 +30,7 @@ from app.models.notification_preference import NotificationPreference
 from app.models.saved_view import SavedView
 from app.models.ai_conversation import AIConversation
 from app.models.ai_message import AIMessage
+from app.models.ai_conversation_attachment import AIConversationAttachment
 from app.models.ai_embedding import AIEmbedding
 from app.models.issue_report import (
     IssueReport,
@@ -82,6 +83,7 @@ __all__ = [
     "SavedView",
     "AIConversation",
     "AIMessage",
+    "AIConversationAttachment",
     "AIEmbedding",
     "IssueReport",
     "IssueReportAttachment",

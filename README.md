@@ -7,10 +7,11 @@ Open-source project management platform with integrated knowledge base and AI as
 ## Features
 
 - **Ticket Management** — Create, assign, prioritize, and track tickets with custom workflows
+- **Issue Reports** — Structured intake queue with similarity detection and promotion to tickets
 - **Kanban Boards** — Drag-and-drop boards with configurable columns per workflow status
 - **Sprints & Backlog** — Plan sprints, manage backlogs, track velocity with burndown charts
 - **Knowledge Base** — Nested wiki spaces with rich text editing, version history, and threaded comments
-- **AI Assistant** — Chat-based AI agent that can search your KB, create tickets, and answer questions
+- **AI Assistant** — Chat-based AI agent with 22 tools: search tickets/KB, create and update tickets, triage issue reports, global search, dashboard, comments, watchers, and workflow transitions
 - **Semantic Search** — Vector embeddings for KB content power natural language search
 - **Global Search** — Unified search across tickets, KB pages, and comments (Ctrl+K)
 - **Email Notifications** — Instant or digest email delivery with per-event preferences

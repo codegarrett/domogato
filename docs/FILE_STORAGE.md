@@ -62,6 +62,7 @@ Do **not** expose MinIO to the public internet for application file serving. Ngi
 | Issue report attachment | `POST /api/v1/projects/{project_id}/issue-reports/{report_id}/attachments` |
 | KB page attachment | `POST /api/v1/kb/pages/{page_id}/attachments` |
 | User avatar | `POST /api/v1/users/me/avatar` |
+| AI conversation (staging) | `POST /api/v1/ai/conversations/{conversation_id}/attachments` |
 
 **Response:** JSON metadata (`AttachmentRead`, `KBAttachmentRead`, etc.) — no `upload_url`. Issue report attachments include a `download_path` field (e.g. `/api/v1/issue-report-attachments/{id}/download`) for use with `assetUrl()` in the UI.
 
@@ -83,6 +84,7 @@ Legacy `http://minio:9000/...` URLs in report descriptions are rewritten to API 
 | Issue report attachment | `GET /api/v1/issue-report-attachments/{attachment_id}/download` |
 | KB attachment | `GET /api/v1/kb/attachments/{attachment_id}/download` |
 | User avatar | `GET /api/v1/users/{user_id}/avatar` |
+| AI conversation attachment | `GET /api/v1/ai/conversations/{conversation_id}/attachments/{attachment_id}/download` |
 
 **Response:** raw file bytes (not JSON with a URL).
 
@@ -102,6 +104,7 @@ Legacy `http://minio:9000/...` URLs in report descriptions are rewritten to API 
 projects/{project_id}/attachments/{uuid}_{filename}
 projects/{project_id}/kb/{space_id}/{page_id}/{uuid}_{filename}
 users/{user_id}/avatar/{uuid}_{filename}
+ai-conversations/{conversation_id}/{uuid}_{filename}
 ```
 
 ---

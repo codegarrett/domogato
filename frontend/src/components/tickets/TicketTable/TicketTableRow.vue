@@ -43,7 +43,7 @@ const emit = defineEmits<{
   toggleSelect: []
   startEdit: [field: string, value: string | number | null]
   commitEdit: []
-  commitStatus: []
+  commitStatus: [statusId: string | null]
   cancelEdit: []
   'update:editValue': [value: string | number | null]
   'update:storyPointsModel': [value: number | null]
@@ -215,7 +215,7 @@ watch(
           :resolve-status-style="resolveStatusStyle"
           compact
           @start="emit('startEdit', 'workflow_status_id', ticket.workflow_status_id)"
-          @commit="emit('commitStatus')"
+          @commit="(statusId) => emit('commitStatus', statusId)"
           @cancel="emit('cancelEdit')"
         />
       </div>

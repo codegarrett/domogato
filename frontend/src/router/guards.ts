@@ -1,5 +1,12 @@
 import type { NavigationGuardNext, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import {
+  clearEmbedMode,
+  embedLoginPath,
+  isEmbedMode,
+  isEmbedRoute,
+  setEmbedMode,
+} from '@/utils/embedMode'
 
 export async function authGuard(
   to: RouteLocationNormalized,
@@ -28,9 +35,39 @@ export async function authGuard(
       return
     }
 
-    if (to.path.startsWith('/auth')) {
+    if (isEmbedRoute(to.path)) {
+      setEmbedMode()
+    }
+
+    if (to.path.startsWith('/auth/embed')) {
       next()
       return
+    }
+
+    if (to.path === '/auth/silent-renew') {
+      next()
+      return
+    }
+
+    if (to.path.startsWith('/auth')) {
+      if (isEmbedMode() && to.path === '/auth/login') {
+        next(embedLoginPath(typeof to.query.returnTo === 'string' ? to.query.returnTo : undefined))
+        return
+      }
+      next()
+      return
+    }
+
+    if (isEmbedMode() && !isEmbedRoute(to.path) && to.path !== '/auth/callback') {
+      next('/embed/agent')
+      return
+    }
+
+    if (to.path.startsWith('/embed')) {
+      if (!authStore.authConfig?.external_agent_enabled) {
+        next()
+        return
+      }
     }
 
     if (authStore.isLoading && !authStore.isAuthenticated) {
@@ -38,10 +75,19 @@ export async function authGuard(
     }
 
     if (!authStore.isAuthenticated) {
+      if (to.path.startsWith('/embed')) {
+        next({
+          path: '/auth/embed/login',
+          query: { returnTo: to.fullPath },
+        })
+        return
+      }
       if (authStore.authMode === 'local') {
+        clearEmbedMode()
         next('/auth/login')
         return
       }
+      clearEmbedMode()
       await authStore.doLogin(to.fullPath)
       return
     }

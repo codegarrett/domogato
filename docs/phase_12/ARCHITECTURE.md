@@ -89,6 +89,8 @@ User: "The export feature is broken"
              └─► create_issue_report()
 ```
 
+The system prompt in `ai_service.py` encodes this flow (search → dedupe → approval → create) so the LLM follows it consistently without relying on skill descriptions alone.
+
 ## RBAC
 
 | Action | Minimum Role |

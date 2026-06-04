@@ -157,12 +157,17 @@
         </div>
         <div class="flex flex-column gap-1">
           <label>Category</label>
-          <Select v-model="editingStatus.category" :options="['to_do', 'in_progress', 'done']" />
+          <Select
+            v-model="editingStatus.category"
+            :options="['to_do', 'in_progress', 'done']"
+            @update:model-value="onEditStatusMetadataChange"
+          />
         </div>
         <div class="flex flex-column gap-1">
           <label>{{ $t('workflows.statusColor') }}</label>
           <div class="flex align-items-center gap-2">
             <input
+              :key="editingStatus.id"
               type="color"
               v-model="editingStatus.color"
               class="status-color-input"
@@ -177,11 +182,21 @@
         </div>
         <div class="flex gap-3 flex-wrap">
           <div class="flex align-items-center gap-2">
-            <Checkbox v-model="editingStatus.is_initial" :binary="true" inputId="editInitial" />
+            <Checkbox
+              v-model="editingStatus.is_initial"
+              :binary="true"
+              inputId="editInitial"
+              @update:model-value="onEditStatusMetadataChange"
+            />
             <label for="editInitial">Initial</label>
           </div>
           <div class="flex align-items-center gap-2">
-            <Checkbox v-model="editingStatus.is_terminal" :binary="true" inputId="editTerminal" />
+            <Checkbox
+              v-model="editingStatus.is_terminal"
+              :binary="true"
+              inputId="editTerminal"
+              @update:model-value="onEditStatusMetadataChange"
+            />
             <label for="editTerminal">Terminal</label>
           </div>
           <div class="flex align-items-center gap-2">
@@ -192,7 +207,7 @@
         <p class="text-xs text-color-secondary m-0">{{ $t('workflows.showOnBoardHint') }}</p>
       </div>
       <template #footer>
-        <Button label="Cancel" text @click="showEditStatus = false" />
+        <Button label="Cancel" text @click="closeEditStatusDialog" />
         <Button label="Save" icon="pi pi-check" @click="handleUpdateStatus" />
       </template>
     </Dialog>
@@ -256,6 +271,11 @@ const editingStatus = ref<{
 } | null>(null)
 const addColorTouched = ref(false)
 const editColorTouched = ref(false)
+const editMetadataSnapshot = ref<{
+  category: string
+  is_initial: boolean
+  is_terminal: boolean
+} | null>(null)
 
 const newStatus = ref({
   name: '',
@@ -289,17 +309,24 @@ watch(
   applyDefaultNewStatusColor,
 )
 
-watch(
-  () =>
-    editingStatus.value
-      ? [
-          editingStatus.value.category,
-          editingStatus.value.is_initial,
-          editingStatus.value.is_terminal,
-        ]
-      : null,
-  () => applyDefaultEditStatusColor(),
-)
+function onEditStatusMetadataChange() {
+  if (!editingStatus.value || !editMetadataSnapshot.value) return
+  const snap = editMetadataSnapshot.value
+  if (
+    editingStatus.value.category === snap.category
+    && editingStatus.value.is_initial === snap.is_initial
+    && editingStatus.value.is_terminal === snap.is_terminal
+  ) {
+    return
+  }
+  applyDefaultEditStatusColor()
+}
+
+function closeEditStatusDialog() {
+  showEditStatus.value = false
+  editingStatus.value = null
+  editMetadataSnapshot.value = null
+}
 
 function openAddStatus() {
   addColorTouched.value = false
@@ -384,15 +411,21 @@ async function handleStatusClick(status: WorkflowStatus) {
     }
     return
   }
+  const source = workflow.value?.statuses.find(s => s.id === status.id) ?? status
   editColorTouched.value = false
   editingStatus.value = {
-    id: status.id,
-    name: status.name,
-    category: status.category,
-    color: normalizeHexColor(status.color),
-    is_initial: status.is_initial,
-    is_terminal: status.is_terminal,
-    show_on_board: status.show_on_board,
+    id: source.id,
+    name: source.name,
+    category: source.category,
+    color: normalizeHexColor(source.color),
+    is_initial: source.is_initial,
+    is_terminal: source.is_terminal,
+    show_on_board: source.show_on_board,
+  }
+  editMetadataSnapshot.value = {
+    category: source.category,
+    is_initial: source.is_initial,
+    is_terminal: source.is_terminal,
   }
   showEditStatus.value = true
 }
@@ -418,13 +451,12 @@ async function handleUpdateStatus() {
   await updateStatus(editingStatus.value.id, {
     name: editingStatus.value.name,
     category: editingStatus.value.category,
-    color: editingStatus.value.color,
+    color: normalizeHexColor(editingStatus.value.color),
     is_initial: editingStatus.value.is_initial,
     is_terminal: editingStatus.value.is_terminal,
     show_on_board: editingStatus.value.show_on_board,
   })
-  showEditStatus.value = false
-  editingStatus.value = null
+  closeEditStatusDialog()
   await reload()
 }
 

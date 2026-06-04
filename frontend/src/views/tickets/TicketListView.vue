@@ -159,7 +159,7 @@
           @toggle-select-all="toggleSelectAllOnPage"
           @start-edit="(tk, field, value) => startEdit(tk, field, value)"
           @commit-edit="(tk) => commitEdit(tk)"
-          @commit-status="(tk) => commitStatusEdit(tk)"
+          @commit-status="(tk, statusId) => commitStatusEdit(tk, statusId)"
           @cancel-edit="cancelEdit"
           @update:edit-value="onEditValueUpdate"
           @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"

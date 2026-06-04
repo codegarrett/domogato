@@ -7,7 +7,7 @@ import Tag from 'primevue/tag'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import TicketTablePlanningSection from '@/components/tickets/TicketTable/TicketTablePlanningSection.vue'
-import { useTicketTableInlineEdit } from '@/composables/useTicketTableInlineEdit'
+import { useTicketTableInlineEdit, patchTicketInList } from '@/composables/useTicketTableInlineEdit'
 import { displayTicketKey } from '@/utils/displayTicketKey'
 import { useProjectTicketMeta } from '@/composables/useProjectTicketMeta'
 import { useToastService } from '@/composables/useToast'
@@ -133,10 +133,19 @@ const {
   commitStatusEdit,
 } = useTicketTableInlineEdit({
   onTicketUpdated: (updated) => {
-    const list = findTicketList(updated.id)
-    if (!list) return
-    const idx = list.findIndex((tk) => tk.id === updated.id)
-    if (idx >= 0) list[idx] = updated
+    if (backlogTickets.value.some((tk) => tk.id === updated.id)) {
+      patchTicketInList(backlogTickets, updated.id, updated)
+      return
+    }
+    for (const sid of Object.keys(sprintTickets.value)) {
+      const list = sprintTickets.value[sid]
+      if (list?.some((tk) => tk.id === updated.id)) {
+        sprintTickets.value[sid] = list.map((tk) =>
+          tk.id === updated.id ? updated : tk,
+        )
+        return
+      }
+    }
   },
 })
 
@@ -498,7 +507,7 @@ onMounted(loadData)
             @drag-end="onPlanningDragEnd"
             @start-edit="(tk, field, value) => startEdit(tk, field, value)"
             @commit-edit="(tk) => commitEdit(tk)"
-            @commit-status="(tk) => commitStatusEdit(tk)"
+            @commit-status="(tk, statusId) => commitStatusEdit(tk, statusId)"
             @cancel-edit="cancelEdit"
             @update:edit-value="onEditValueUpdate"
             @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"
@@ -545,7 +554,7 @@ onMounted(loadData)
           @drag-end="onPlanningDragEnd"
           @start-edit="(tk, field, value) => startEdit(tk, field, value)"
           @commit-edit="(tk) => commitEdit(tk)"
-          @commit-status="(tk) => commitStatusEdit(tk)"
+          @commit-status="(tk, statusId) => commitStatusEdit(tk, statusId)"
           @cancel-edit="cancelEdit"
           @update:edit-value="onEditValueUpdate"
           @update:story-points-model="(v) => { if (editingCell) editingCell.value = v }"

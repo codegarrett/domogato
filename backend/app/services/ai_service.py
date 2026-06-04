@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from datetime import datetime
 from uuid import UUID
 
 import structlog
@@ -13,7 +14,9 @@ from sqlalchemy.orm import selectinload
 from app.models.ai_conversation import AIConversation
 from app.models.ai_message import AIMessage
 from app.models.user import User
+from app.services import ai_attachment_service
 from app.services.llm import get_llm_provider
+from app.services.llm.vision import build_user_message_content
 from app.services.agent import registry as skill_registry
 from app.services.agent.executor import run_agent_turn
 
@@ -35,11 +38,47 @@ SYSTEM_PROMPT = (
     "then use present_choices to let them pick which project they mean.\n\n"
 
     "## Approval Required for Mutations\n"
-    "Before calling create_ticket, update_ticket, or transition_ticket_status, "
-    "you MUST first call request_approval with a clear summary of what will be "
-    "changed. Only proceed with the actual action after the user approves. "
-    "If the user rejects, acknowledge their decision and ask what they'd like "
-    "to do instead. Never perform a mutating action without approval.\n\n"
+    "Before calling any mutating tool, you MUST first call request_approval with "
+    "a clear summary of what will be changed. Mutating tools that require approval:\n"
+    "- create_ticket, update_ticket, transition_ticket_status\n"
+    "- create_issue_report, create_ticket_from_issue_reports\n"
+    "- add_ticket_comment\n"
+    "- attach_file_to_ticket, attach_file_to_issue_report\n"
+    "Only proceed with the actual action after the user approves. If the user "
+    "rejects, acknowledge their decision and ask what they'd like to do instead. "
+    "Never perform a mutating action without approval. Personal actions like "
+    "watch_ticket and unwatch_ticket do not require approval.\n\n"
+
+    "## Issue Reports\n"
+    "When a user reports a problem or bug, always search first:\n"
+    "1. Call search_issue_reports with the project key and relevant keywords.\n"
+    "2. If similar open/reviewing reports exist, use present_choices so the user "
+    "can pick a match, then call add_reporter_to_issue_report to consolidate.\n"
+    "3. If no match, ask clarifying questions if needed, then request_approval "
+    "and call create_issue_report.\n"
+    "4. To promote reports to a formal ticket (Developer+ role), use "
+    "request_approval then create_ticket_from_issue_reports.\n\n"
+
+    "## Subtasks\n"
+    "Subtasks are created with create_ticket using parent_ticket_number (the "
+    "parent ticket's number in the same project). Subtasks inherit sprint/epic "
+    "from the parent when not specified.\n\n"
+
+    "## Productivity Tools\n"
+    "Use global_search for cross-entity queries (tickets, KB pages, comments). "
+    "Use get_my_dashboard when the user asks what's on their plate, what's "
+    "overdue, or what they're watching. Use list_ticket_comments before "
+    "summarizing a ticket's discussion. Use watch_ticket when the user wants "
+    "to follow a ticket. Use get_ticket_transitions before transition_ticket_status "
+    "to see valid next statuses.\n\n"
+
+    "## Shared Files\n"
+    "When the user attaches files in chat, call list_conversation_attachments "
+    "to see what is available. For image attachments, describe what you see "
+    "(vision) and offer to attach relevant files to a ticket or issue report. "
+    "When creating a ticket or issue report, ask whether shared files should "
+    "be attached. Use request_approval before attach_file_to_ticket or "
+    "attach_file_to_issue_report.\n\n"
 
     "## Asking Clarifying Questions\n"
     "When the user's request could refer to multiple items (e.g., multiple "
@@ -50,6 +89,17 @@ SYSTEM_PROMPT = (
     "before proceeding. For example, if asked to 'create a ticket' but no "
     "description is given, ask what the ticket should cover. Only ask when "
     "genuinely needed — if the user already provided enough context, proceed.\n\n"
+
+    "## Descriptions\n"
+    "Ticket and issue report description fields support Markdown formatting "
+    "(headings, bullet lists, bold, code blocks). When creating or updating "
+    "descriptions, write well-structured markdown rather than plain unformatted "
+    "paragraphs.\n\n"
+
+    "## Created Resources\n"
+    "When a tool returns a `url` or `path` after creating a resource, include a "
+    "markdown link in your reply (e.g. [PROJ-42](url)). Always give the user a "
+    "direct link immediately after successful creation.\n\n"
 
     "## Knowledge Base Search\n"
     "You have two tools for searching the knowledge base:\n"
@@ -67,6 +117,26 @@ SYSTEM_PROMPT = (
 )
 
 MAX_TITLE_LENGTH = 80
+
+APPROVAL_APPROVE_PHRASES = frozenset({
+    "yes, go ahead",
+    "yes",
+    "y",
+    "approve",
+    "approved",
+    "go ahead",
+    "ok",
+    "okay",
+})
+APPROVAL_REJECT_PHRASES = frozenset({
+    "no, cancel that",
+    "no",
+    "n",
+    "reject",
+    "rejected",
+    "cancel",
+    "cancel that",
+})
 
 
 def _generate_title(text: str) -> str:
@@ -156,14 +226,68 @@ async def delete_conversation(
     conv = await get_conversation(db, conversation_id, user_id)
     if conv is None:
         return False
+    await ai_attachment_service.delete_all_conversation_attachments(db, conversation_id)
     await db.delete(conv)
     await db.flush()
     return True
 
 
+def _parse_approval_interaction(content: str) -> dict | None:
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    if data.get("type") == "approval":
+        return data
+    return None
+
+
+def _classify_approval_response(user_message: str) -> str | None:
+    normalized = user_message.strip().lower()
+    if normalized in APPROVAL_APPROVE_PHRASES:
+        return "approved"
+    if normalized in APPROVAL_REJECT_PHRASES:
+        return "rejected"
+    return None
+
+
+async def _resolve_pending_approval(
+    db: AsyncSession,
+    conversation_id: UUID,
+    user_message: str,
+    decided_at: datetime,
+) -> bool:
+    """Resolve the latest pending approval interaction from the user's reply."""
+    decision = _classify_approval_response(user_message)
+    if decision is None:
+        return False
+
+    q = (
+        select(AIMessage)
+        .where(
+            AIMessage.conversation_id == conversation_id,
+            AIMessage.role == "interaction",
+        )
+        .order_by(AIMessage.created_at.desc())
+    )
+    result = await db.execute(q)
+    for msg in result.scalars():
+        interaction = _parse_approval_interaction(msg.content)
+        if interaction is None or interaction.get("status") != "pending":
+            continue
+        interaction["status"] = decision
+        interaction["decided_at"] = decided_at.isoformat()
+        msg.content = json.dumps(interaction)
+        await db.flush()
+        return True
+    return False
+
+
 async def _build_llm_messages(
     db: AsyncSession,
     conversation_id: UUID,
+    *,
+    vision_for_latest_user: bool = True,
 ) -> list[dict]:
     """Load conversation history and prepend system prompt.
 
@@ -176,10 +300,26 @@ async def _build_llm_messages(
         .order_by(AIMessage.created_at)
     )
     result = await db.execute(q)
-    messages_db = result.scalars().all()
+    messages_db = list(result.scalars().all())
+
+    message_ids = [m.id for m in messages_db]
+    attachments_by_message = await ai_attachment_service.get_attachments_by_message_ids(
+        db, message_ids,
+    )
+
+    latest_user_msg_id = None
+    for msg in reversed(messages_db):
+        if msg.role == "user":
+            latest_user_msg_id = msg.id
+            break
+
+    from app.core.config import settings
+    vision_enabled = settings.LLM_VISION_ENABLED
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for msg in messages_db:
+        if msg.role == "interaction":
+            continue
         if msg.role == "assistant" and msg.tool_calls and isinstance(msg.tool_calls, list):
             messages.append({
                 "role": "assistant",
@@ -192,6 +332,22 @@ async def _build_llm_messages(
                 "tool_call_id": msg.tool_calls.get("tool_call_id", ""),
                 "content": msg.content,
             })
+        elif msg.role == "user" and vision_for_latest_user and msg.id == latest_user_msg_id:
+            attachments = attachments_by_message.get(msg.id, [])
+            if attachments and vision_enabled:
+                base_text = msg.content
+                summary_prefix = ai_attachment_service.format_attachment_summary(attachments)
+                if summary_prefix and summary_prefix in base_text:
+                    base_text = base_text.replace("\n\n" + summary_prefix, "").replace(summary_prefix, "").strip()
+                content = await build_user_message_content(
+                    base_text,
+                    attachments,
+                    vision_enabled=True,
+                    max_image_bytes=settings.LLM_VISION_MAX_IMAGE_BYTES,
+                )
+                messages.append({"role": "user", "content": content})
+            else:
+                messages.append({"role": msg.role, "content": msg.content})
         else:
             messages.append({"role": msg.role, "content": msg.content})
 
@@ -203,6 +359,7 @@ async def send_message_stream(
     user: User,
     conversation_id: UUID | None,
     user_message: str,
+    attachment_ids: list[UUID] | None = None,
 ) -> AsyncIterator[str]:
     """Process a chat message and yield SSE events.
 
@@ -235,6 +392,31 @@ async def send_message_stream(
     db.add(user_msg)
     await db.flush()
 
+    linked_attachments: list = []
+    if attachment_ids:
+        try:
+            linked_attachments = await ai_attachment_service.link_attachments_to_message(
+                db,
+                attachment_ids=attachment_ids,
+                message_id=user_msg.id,
+                conversation_id=conversation_id,
+                user_id=user.id,
+            )
+        except ai_attachment_service.AIAttachmentError as exc:
+            yield _sse_event({"type": "error", "message": str(exc)})
+            return
+        if linked_attachments:
+            summary = ai_attachment_service.format_attachment_summary(linked_attachments)
+            user_msg.content = f"{user_message}\n\n{summary}" if user_message.strip() else summary
+            await db.flush()
+
+    await _resolve_pending_approval(
+        db,
+        conversation_id,
+        user_message,
+        user_msg.created_at,
+    )
+
     llm_messages = await _build_llm_messages(db, conversation_id)
 
     from app.services.llm.context import compact_messages
@@ -251,6 +433,7 @@ async def send_message_stream(
         registry=skill_registry,
         db=db,
         user=user,
+        conversation_id=conversation_id,
         max_tokens=settings.LLM_MAX_TOKENS,
         context_window=settings.LLM_CONTEXT_WINDOW,
         temperature=settings.LLM_TEMPERATURE,
@@ -279,6 +462,12 @@ async def send_message_stream(
                 content=tc_msg.get("content") or "",
                 tool_calls=tc_msg.get("tool_calls"),
             ))
+        elif role == "interaction":
+            db.add(AIMessage(
+                conversation_id=conversation_id,
+                role="interaction",
+                content=tc_msg.get("content", ""),
+            ))
         elif role == "tool":
             db.add(AIMessage(
                 conversation_id=conversation_id,
@@ -286,7 +475,7 @@ async def send_message_stream(
                 content=tc_msg.get("content", ""),
                 tool_calls={
                     "tool_call_id": tc_msg.get("tool_call_id", ""),
-                    "name": "",
+                    "name": tc_msg.get("name", ""),
                 },
             ))
 

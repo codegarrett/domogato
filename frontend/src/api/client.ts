@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { useAuth } from '@/composables/useAuth'
 import { useToastService } from '@/composables/useToast'
+import { isEmbedMode, redirectToEmbedLogin } from '@/utils/embedMode'
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
@@ -38,7 +39,13 @@ apiClient.interceptors.response.use(
 
     if (status === 401) {
       const { isLocalMode, setLocalToken, loggedOut } = useAuth()
-      if (isLocalMode.value && !loggedOut.value) {
+      if (isEmbedMode()) {
+        if (!loggedOut.value) {
+          loggedOut.value = true
+          setLocalToken(null)
+          redirectToEmbedLogin()
+        }
+      } else if (isLocalMode.value && !loggedOut.value) {
         loggedOut.value = true
         setLocalToken(null)
         window.location.href = '/auth/login'

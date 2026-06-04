@@ -30,3 +30,7 @@ class AIMessage(Base, UUIDPrimaryKeyMixin):
     conversation: Mapped["AIConversation"] = relationship(
         "AIConversation", back_populates="messages",
     )
+    attachments: Mapped[list["AIConversationAttachment"]] = relationship(
+        "AIConversationAttachment",
+        back_populates="message",
+    )
