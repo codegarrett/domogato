@@ -19,6 +19,7 @@ from app.services.agent.skills import (
     kb_page_path,
 )
 from app.services import kb_service
+from app.tasks.embedding_tasks import schedule_kb_page_embedding
 
 
 async def _resolve_space(ctx: SkillContext, project_id: UUID):
@@ -192,6 +193,8 @@ class CreateKBPageSkill(BaseSkill):
             page_data,
             user_id=ctx.user.id,
         )
+
+        schedule_kb_page_embedding(str(page.id))
 
         path = kb_page_path(project.id, space.slug, page.slug)
         return {

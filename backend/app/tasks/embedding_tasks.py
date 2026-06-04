@@ -46,6 +46,10 @@ async def _build_page_metadata(db: AsyncSession, page, space) -> dict:
     }
 
 
+class PageNotReadyError(Exception):
+    """Raised when a KB page is not yet visible (e.g. transaction not committed)."""
+
+
 async def _embed_kb_page_async(page_id: str) -> None:
     from app.models.kb_page import KBPage
     from app.models.kb_space import KBSpace
@@ -61,7 +65,9 @@ async def _embed_kb_page_async(page_id: str) -> None:
             select(KBPage).where(KBPage.id == page_id)
         )
         page = result.scalar_one_or_none()
-        if page is None or page.is_deleted:
+        if page is None:
+            raise PageNotReadyError(f"KB page {page_id} not found")
+        if page.is_deleted:
             return
 
         result = await db.execute(
@@ -189,9 +195,23 @@ async def _delete_kb_embeddings_async(content_type: str, content_id: str) -> Non
         )
 
 
-@celery_app.task(name="embed_kb_page", ignore_result=True)
-def embed_kb_page(page_id: str) -> None:
-    _run_async(_embed_kb_page_async(page_id))
+@celery_app.task(
+    name="embed_kb_page",
+    bind=True,
+    ignore_result=True,
+    max_retries=5,
+    default_retry_delay=3,
+)
+def embed_kb_page(self, page_id: str) -> None:
+    try:
+        _run_async(_embed_kb_page_async(page_id))
+    except PageNotReadyError as exc:
+        raise self.retry(exc=exc) from exc
+
+
+def schedule_kb_page_embedding(page_id: str) -> None:
+    """Enqueue embedding generation, delayed so the caller's transaction can commit."""
+    embed_kb_page.apply_async(args=[page_id], countdown=3)
 
 
 @celery_app.task(name="embed_kb_attachment", ignore_result=True)

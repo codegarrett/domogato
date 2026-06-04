@@ -30,7 +30,7 @@ from app.schemas.kb import (
     RecentPageRead,
 )
 from app.services import kb_service, kb_story_service
-from app.tasks.embedding_tasks import embed_kb_page, delete_kb_embeddings
+from app.tasks.embedding_tasks import schedule_kb_page_embedding, delete_kb_embeddings
 
 router = APIRouter(tags=["knowledge-base"])
 
@@ -223,7 +223,7 @@ async def create_page(
     await _require_kb_role(db, space, user, ProjectRole.DEVELOPER)
     page = await kb_service.create_page(db, space_id, body, user_id=user.id)
     result = await _enrich_page_read(db, page)
-    embed_kb_page.delay(str(page.id))
+    schedule_kb_page_embedding(str(page.id))
     return result
 
 
@@ -255,7 +255,7 @@ async def update_page(
     await _require_kb_role(db, page, user, ProjectRole.DEVELOPER)
     updated = await kb_service.update_page(db, page, body, user_id=user.id)
     result = await _enrich_page_read(db, updated)
-    embed_kb_page.delay(str(updated.id))
+    schedule_kb_page_embedding(str(updated.id))
     return result
 
 

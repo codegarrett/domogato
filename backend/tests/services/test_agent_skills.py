@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 
+from unittest.mock import patch
+
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -305,7 +307,9 @@ async def test_list_kb_spaces(
 
 
 @pytest.mark.asyncio
+@patch("app.services.agent.kb_skills.schedule_kb_page_embedding")
 async def test_create_kb_page(
+    mock_schedule,
     db_session: AsyncSession, test_user: User,
 ):
     project, _, _ = await _setup_agent_project(db_session, test_user)
@@ -331,3 +335,6 @@ async def test_create_kb_page(
     assert result["space_slug"] == space.slug
     assert f"/projects/{project.id}/kb/{space.slug}/getting-started" in result["path"]
     assert result["url"].endswith(result["path"])
+    mock_schedule.assert_called_once()
+    scheduled_id = mock_schedule.call_args[0][0]
+    assert scheduled_id == result["page_id"]
