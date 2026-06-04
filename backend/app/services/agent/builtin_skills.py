@@ -912,11 +912,16 @@ class SemanticSearchKBSkill(BaseSkill):
         query_text = ctx.params["query"]
         limit = min(ctx.params.get("limit", 5), 10)
 
+        from app.services.embedding_category_service import get_category_by_slug
+
+        kb_category = await get_category_by_slug(ctx.db, project.id, "knowledge_base")
+        category_ids = [kb_category.id] if kb_category else None
+
         results = await vector_search(
             ctx.db,
             query_text=query_text,
             project_id=project.id,
-            content_types=["kb_page", "kb_attachment"],
+            category_ids=category_ids,
             limit=limit,
         )
 
@@ -939,6 +944,85 @@ class SemanticSearchKBSkill(BaseSkill):
             }
             if meta.get("source_type") == "attachment":
                 entry["source"] = f"attachment: {meta.get('filename', '')}"
+            formatted.append(entry)
+
+        return {
+            "results": formatted,
+            "total": len(formatted),
+            "project": project.key,
+            "query": query_text,
+        }
+
+
+class SearchProjectDocumentsSkill(BaseSkill):
+    name = "search_project_documents"
+    description = (
+        "Search project documents (ticket attachments and uploaded files) using "
+        "semantic/meaning-based search. Use when the user asks about content from "
+        "uploaded files, ticket attachments, or project documents rather than KB pages."
+    )
+    category = "knowledge_base"
+    parameters_schema = {
+        "type": "object",
+        "properties": {
+            "project_key": {
+                "type": "string",
+                "description": "The project key (e.g., 'PROJ')",
+            },
+            "query": {
+                "type": "string",
+                "description": "Natural language search query describing what you're looking for",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum number of results (default 5, max 10)",
+                "default": 5,
+            },
+        },
+        "required": ["project_key", "query"],
+    }
+
+    async def execute(self, ctx: SkillContext) -> dict:
+        from app.services.embedding_category_service import get_category_by_slug
+        from app.services.embedding_service import vector_search
+        from app.services.llm.factory import is_embedding_configured
+
+        project = await check_project_access(ctx.db, ctx.user, ctx.params["project_key"])
+
+        if not is_embedding_configured():
+            return {
+                "error": "Semantic search is not available — embedding provider is not configured.",
+            }
+
+        query_text = ctx.params["query"]
+        limit = min(ctx.params.get("limit", 5), 10)
+
+        docs_category = await get_category_by_slug(ctx.db, project.id, "documents")
+        category_ids = [docs_category.id] if docs_category else None
+
+        results = await vector_search(
+            ctx.db,
+            query_text=query_text,
+            project_id=project.id,
+            category_ids=category_ids,
+            limit=limit,
+        )
+
+        formatted = []
+        for r in results:
+            meta = r.get("metadata", {})
+            entry = {
+                "content": r["chunk_text"],
+                "similarity": r["similarity"],
+                "source_type": meta.get("source_type", r["content_type"]),
+            }
+            if meta.get("filename"):
+                entry["filename"] = meta["filename"]
+            if meta.get("title"):
+                entry["title"] = meta["title"]
+            if meta.get("ticket_id") and meta.get("ticket_number"):
+                entry["ticket"] = f"{meta.get('project_key', project.key)}-{meta['ticket_number']}"
+                entry["ticket_id"] = meta["ticket_id"]
             formatted.append(entry)
 
         return {

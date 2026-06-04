@@ -36,6 +36,18 @@
         <span class="stat-label">{{ t('admin.embeddings.uniqueSources') }}</span>
       </div>
       <div class="stat-card stat-card-wide">
+        <span class="stat-label mb-2">{{ t('admin.embeddings.byCategory') }}</span>
+        <div class="type-tags">
+          <Tag
+            v-for="cat in stats.by_category"
+            :key="cat.category_id"
+            :value="`${cat.category_name}: ${cat.count}`"
+            severity="secondary"
+          />
+          <span v-if="!stats.by_category.length" class="muted">—</span>
+        </div>
+      </div>
+      <div class="stat-card stat-card-wide">
         <span class="stat-label mb-2">{{ t('admin.embeddings.byContentType') }}</span>
         <div class="type-tags">
           <Tag
@@ -56,6 +68,16 @@
         option-label="label"
         option-value="value"
         :placeholder="t('admin.embeddings.allProjects')"
+        show-clear
+        class="filter-select"
+        @change="onFilterChange"
+      />
+      <Select
+        v-model="filterCategoryId"
+        :options="categoryFilterOptions"
+        option-label="label"
+        option-value="value"
+        :placeholder="t('admin.embeddings.allCategories')"
         show-clear
         class="filter-select"
         @change="onFilterChange"
@@ -99,6 +121,11 @@
           {{ data.project_name || '—' }}
         </template>
       </Column>
+      <Column :header="t('admin.embeddings.category')" style="min-width: 8rem">
+        <template #body="{ data }">
+          {{ data.category_name || data.category_slug || '—' }}
+        </template>
+      </Column>
       <Column :header="t('admin.embeddings.contentType')" field="content_type" style="width: 8rem">
         <template #body="{ data }">
           <Tag :value="data.content_type" severity="info" />
@@ -135,6 +162,136 @@
 
     <div class="settings-card mt-4">
       <div class="card-header">
+        <h2>{{ t('admin.embeddings.categoriesTitle') }}</h2>
+        <p class="muted">{{ t('admin.embeddings.categoriesDescription') }}</p>
+      </div>
+      <div class="semantic-toolbar mb-3">
+        <Select
+          v-model="categoriesProjectId"
+          :options="projectSelectOptions"
+          option-label="label"
+          option-value="value"
+          :placeholder="t('admin.embeddings.selectProject')"
+          class="filter-select"
+          @change="loadCategories"
+        />
+        <Button
+          :label="t('admin.embeddings.createCategory')"
+          icon="pi pi-plus"
+          :disabled="!categoriesProjectId"
+          @click="showCategoryDialog = true"
+        />
+      </div>
+      <DataTable
+        v-if="categories.length"
+        :value="categories"
+        size="small"
+        class="text-sm"
+      >
+        <Column :header="t('admin.embeddings.categorySlug')" field="slug" />
+        <Column :header="t('admin.embeddings.categoryName')" field="name" />
+        <Column :header="t('admin.embeddings.categoryType')">
+          <template #body="{ data }">
+            {{ data.is_system ? t('admin.embeddings.systemCategory') : t('admin.embeddings.customCategory') }}
+          </template>
+        </Column>
+        <Column :header="t('admin.embeddings.chunks')" field="chunk_count" style="width: 6rem" />
+        <Column style="width: 5rem">
+          <template #body="{ data }">
+            <Button
+              v-if="!data.is_system"
+              icon="pi pi-trash"
+              size="small"
+              text
+              severity="danger"
+              @click="confirmDeleteCategory(data)"
+            />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+
+    <div class="settings-card mt-4">
+      <div class="card-header">
+        <h2>{{ t('admin.embeddings.documentsTitle') }}</h2>
+        <p class="muted">{{ t('admin.embeddings.documentsDescription') }}</p>
+      </div>
+      <div class="semantic-toolbar mb-3">
+        <Select
+          v-model="documentsProjectId"
+          :options="projectSelectOptions"
+          option-label="label"
+          option-value="value"
+          :placeholder="t('admin.embeddings.selectProject')"
+          class="filter-select"
+          @change="onDocumentsProjectChange"
+        />
+        <Select
+          v-model="uploadCategoryId"
+          :options="documentCategoryOptions"
+          option-label="label"
+          option-value="value"
+          :placeholder="t('admin.embeddings.selectCategory')"
+          class="filter-select"
+          :disabled="!documentsProjectId"
+        />
+        <InputText
+          v-model="uploadTitle"
+          :placeholder="t('admin.embeddings.documentTitle')"
+          class="filter-select"
+        />
+        <input ref="fileInputRef" type="file" class="hidden-file" @change="onFileSelected" />
+        <Button
+          :label="t('admin.embeddings.chooseFile')"
+          icon="pi pi-file"
+          text
+          :disabled="!documentsProjectId"
+          @click="fileInputRef?.click()"
+        />
+        <Button
+          :label="t('admin.embeddings.uploadDocument')"
+          icon="pi pi-upload"
+          :loading="uploadLoading"
+          :disabled="!documentsProjectId || !uploadCategoryId || !selectedFile"
+          @click="uploadDocument"
+        />
+      </div>
+      <DataTable
+        v-if="documents.length"
+        :value="documents"
+        size="small"
+        class="text-sm"
+      >
+        <Column :header="t('admin.embeddings.category')" field="category_name" />
+        <Column :header="t('admin.embeddings.documentTitle')" field="title" />
+        <Column :header="t('admin.embeddings.source')" field="filename" />
+        <Column :header="t('common.created')">
+          <template #body="{ data }">
+            {{ formatDate(data.created_at) }}
+          </template>
+        </Column>
+        <Column style="width: 8rem">
+          <template #body="{ data }">
+            <Button
+              icon="pi pi-sync"
+              size="small"
+              text
+              @click="reindexDocument(data)"
+            />
+            <Button
+              icon="pi pi-trash"
+              size="small"
+              text
+              severity="danger"
+              @click="confirmDeleteDocument(data)"
+            />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+
+    <div class="settings-card mt-4">
+      <div class="card-header">
         <h2>{{ t('admin.embeddings.semanticSearch') }}</h2>
         <p class="muted">{{ t('admin.embeddings.semanticSearchDescription') }}</p>
       </div>
@@ -146,6 +303,17 @@
           option-value="value"
           :placeholder="t('admin.embeddings.selectProject')"
           class="filter-select"
+        />
+        <Select
+          v-model="semanticCategoryId"
+          :options="semanticCategoryOptions"
+          option-label="label"
+          option-value="value"
+          :placeholder="t('admin.embeddings.allCategories')"
+          show-clear
+          class="filter-select"
+          :disabled="!semanticProjectId"
+          @change="loadSemanticCategories"
         />
         <Select
           v-model="semanticContentType"
@@ -209,6 +377,16 @@
           option-value="value"
           :placeholder="t('admin.embeddings.selectProject')"
           class="filter-select"
+          @change="loadReindexCategories"
+        />
+        <Select
+          v-model="reindexCategorySlug"
+          :options="reindexCategoryOptions"
+          option-label="label"
+          option-value="value"
+          :placeholder="t('admin.embeddings.reindexCategoryDefault')"
+          class="filter-select"
+          :disabled="!reindexProjectId"
         />
         <Button
           :label="t('admin.embeddings.reindexProject')"
@@ -220,6 +398,28 @@
         />
       </div>
     </div>
+
+    <Dialog
+      v-model:visible="showCategoryDialog"
+      :header="t('admin.embeddings.createCategory')"
+      modal
+      :style="{ width: '28rem' }"
+    >
+      <div class="flex flex-column gap-3">
+        <InputText v-model="newCategorySlug" :placeholder="t('admin.embeddings.categorySlug')" />
+        <InputText v-model="newCategoryName" :placeholder="t('admin.embeddings.categoryName')" />
+        <InputText v-model="newCategoryDescription" :placeholder="t('admin.embeddings.categoryDescription')" />
+      </div>
+      <template #footer>
+        <Button :label="t('common.cancel')" text @click="showCategoryDialog = false" />
+        <Button
+          :label="t('common.save')"
+          :loading="categorySaving"
+          :disabled="!newCategorySlug.trim() || !newCategoryName.trim()"
+          @click="saveCategory"
+        />
+      </template>
+    </Dialog>
 
     <Dialog
       v-model:visible="showDetailDialog"
@@ -302,11 +502,19 @@ import {
   reindexContent,
   reindexProject,
   semanticSearchEmbeddings,
+  listEmbeddingCategories,
+  createEmbeddingCategory,
+  deleteEmbeddingCategory,
+  listEmbeddingDocuments,
+  uploadEmbeddingDocument,
+  deleteEmbeddingDocument,
   sourceLabel,
   kbPageRoute,
   type EmbeddingListItem,
   type EmbeddingDetail,
   type EmbeddingStats,
+  type EmbeddingCategory,
+  type EmbeddingDocument,
   type SemanticSearchResult,
   type ProjectOption,
 } from '@/api/embeddings'
@@ -325,16 +533,39 @@ const limit = ref(50)
 const loading = ref(false)
 const searchQuery = ref('')
 const filterProjectId = ref<string | null>(null)
+const filterCategoryId = ref<string | null>(null)
+const filterCategories = ref<EmbeddingCategory[]>([])
 const filterContentType = ref<string | null>(null)
+
+const categoriesProjectId = ref<string | null>(null)
+const categories = ref<EmbeddingCategory[]>([])
+const showCategoryDialog = ref(false)
+const newCategorySlug = ref('')
+const newCategoryName = ref('')
+const newCategoryDescription = ref('')
+const categorySaving = ref(false)
+
+const documentsProjectId = ref<string | null>(null)
+const uploadCategoryId = ref<string | null>(null)
+const uploadTitle = ref('')
+const selectedFile = ref<File | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const documents = ref<EmbeddingDocument[]>([])
+const uploadLoading = ref(false)
+const documentCategories = ref<EmbeddingCategory[]>([])
 
 const projects = ref<ProjectOption[]>([])
 const semanticProjectId = ref<string | null>(null)
+const semanticCategoryId = ref<string | null>(null)
+const semanticCategories = ref<EmbeddingCategory[]>([])
 const semanticContentType = ref<string | null>(null)
 const semanticQuery = ref('')
 const semanticLimit = ref(10)
 const semanticResults = ref<SemanticSearchResult[]>([])
 const semanticLoading = ref(false)
 const reindexProjectId = ref<string | null>(null)
+const reindexCategorySlug = ref<string | null>('knowledge_base')
+const reindexCategories = ref<EmbeddingCategory[]>([])
 const reindexLoading = ref(false)
 
 const showDetailDialog = ref(false)
@@ -360,6 +591,26 @@ const projectSelectOptions = computed(() =>
 
 const projectOptions = computed(() => [
   ...projectSelectOptions.value,
+])
+
+const categoryFilterOptions = computed(() =>
+  filterCategories.value.map((c) => ({ label: c.name, value: c.id })),
+)
+
+const documentCategoryOptions = computed(() =>
+  documentCategories.value.map((c) => ({ label: c.name, value: c.id })),
+)
+
+const semanticCategoryOptions = computed(() =>
+  semanticCategories.value.map((c) => ({ label: c.name, value: c.id })),
+)
+
+const reindexCategoryOptions = computed(() => [
+  { label: t('admin.embeddings.categoryKnowledgeBase'), value: 'knowledge_base' },
+  { label: t('admin.embeddings.categoryDocuments'), value: 'documents' },
+  ...reindexCategories.value
+    .filter((c) => !c.is_system)
+    .map((c) => ({ label: c.name, value: c.slug })),
 ])
 
 const detailKbLink = computed(() => {
@@ -421,6 +672,7 @@ async function loadEmbeddings() {
       offset: offset.value,
       limit: limit.value,
       project_id: filterProjectId.value || undefined,
+      category_id: filterCategoryId.value || undefined,
       content_type: filterContentType.value || undefined,
       q: searchQuery.value || undefined,
     })
@@ -429,6 +681,141 @@ async function loadEmbeddings() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadCategories() {
+  if (!categoriesProjectId.value) {
+    categories.value = []
+    return
+  }
+  try {
+    categories.value = await listEmbeddingCategories(categoriesProjectId.value)
+  } catch {
+    categories.value = []
+  }
+}
+
+async function onDocumentsProjectChange() {
+  uploadCategoryId.value = null
+  selectedFile.value = null
+  if (!documentsProjectId.value) {
+    documentCategories.value = []
+    documents.value = []
+    return
+  }
+  try {
+    documentCategories.value = await listEmbeddingCategories(documentsProjectId.value)
+    const res = await listEmbeddingDocuments({ project_id: documentsProjectId.value, limit: 100 })
+    documents.value = res.items
+  } catch {
+    documentCategories.value = []
+    documents.value = []
+  }
+}
+
+async function loadReindexCategories() {
+  if (!reindexProjectId.value) {
+    reindexCategories.value = []
+    return
+  }
+  try {
+    reindexCategories.value = await listEmbeddingCategories(reindexProjectId.value)
+  } catch {
+    reindexCategories.value = []
+  }
+}
+
+async function loadSemanticCategories() {
+  semanticCategoryId.value = null
+  if (!semanticProjectId.value) {
+    semanticCategories.value = []
+    return
+  }
+  try {
+    semanticCategories.value = await listEmbeddingCategories(semanticProjectId.value)
+  } catch {
+    semanticCategories.value = []
+  }
+}
+
+function onFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  selectedFile.value = input.files?.[0] ?? null
+}
+
+async function uploadDocument() {
+  if (!documentsProjectId.value || !uploadCategoryId.value || !selectedFile.value) return
+  uploadLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('project_id', documentsProjectId.value)
+    formData.append('category_id', uploadCategoryId.value)
+    if (uploadTitle.value.trim()) formData.append('title', uploadTitle.value.trim())
+    formData.append('file', selectedFile.value)
+    await uploadEmbeddingDocument(formData)
+    toast.showSuccess(t('common.success'), t('admin.embeddings.uploadDocumentDone'))
+    uploadTitle.value = ''
+    selectedFile.value = null
+    if (fileInputRef.value) fileInputRef.value.value = ''
+    await onDocumentsProjectChange()
+    await refreshAll()
+  } finally {
+    uploadLoading.value = false
+  }
+}
+
+async function saveCategory() {
+  if (!categoriesProjectId.value) return
+  categorySaving.value = true
+  try {
+    await createEmbeddingCategory({
+      project_id: categoriesProjectId.value,
+      slug: newCategorySlug.value.trim(),
+      name: newCategoryName.value.trim(),
+      description: newCategoryDescription.value.trim() || undefined,
+    })
+    showCategoryDialog.value = false
+    newCategorySlug.value = ''
+    newCategoryName.value = ''
+    newCategoryDescription.value = ''
+    toast.showSuccess(t('common.success'), t('admin.embeddings.createCategoryDone'))
+    await loadCategories()
+  } finally {
+    categorySaving.value = false
+  }
+}
+
+function confirmDeleteCategory(cat: EmbeddingCategory) {
+  openConfirm(
+    t('admin.embeddings.deleteCategoryTitle'),
+    t('admin.embeddings.deleteCategoryConfirm', { name: cat.name }),
+    'danger',
+    async () => {
+      await deleteEmbeddingCategory(cat.id)
+      toast.showSuccess(t('common.success'), t('admin.embeddings.deleteCategoryDone'))
+      await loadCategories()
+      await refreshAll()
+    },
+  )
+}
+
+function confirmDeleteDocument(doc: EmbeddingDocument) {
+  openConfirm(
+    t('admin.embeddings.deleteDocumentTitle'),
+    t('admin.embeddings.deleteDocumentConfirm', { name: doc.title }),
+    'danger',
+    async () => {
+      await deleteEmbeddingDocument(doc.id)
+      toast.showSuccess(t('common.success'), t('admin.embeddings.deleteDocumentDone'))
+      await onDocumentsProjectChange()
+      await refreshAll()
+    },
+  )
+}
+
+async function reindexDocument(doc: EmbeddingDocument) {
+  await reindexContent('embedding_document', doc.id)
+  toast.showSuccess(t('common.success'), t('admin.embeddings.reindexSourceDone'))
 }
 
 async function refreshAll() {
@@ -445,6 +832,14 @@ function debouncedSearch() {
 
 function onFilterChange() {
   offset.value = 0
+  if (filterProjectId.value) {
+    listEmbeddingCategories(filterProjectId.value)
+      .then((cats) => { filterCategories.value = cats })
+      .catch(() => { filterCategories.value = [] })
+  } else {
+    filterCategories.value = []
+    filterCategoryId.value = null
+  }
   loadEmbeddings()
 }
 
@@ -544,8 +939,12 @@ function confirmReindexProject() {
     async () => {
       reindexLoading.value = true
       try {
-        const res = await reindexProject(reindexProjectId.value!)
-        if (res.pages_queued === 0 && res.attachments_queued === 0) {
+        const res = await reindexProject(
+          reindexProjectId.value!,
+          reindexCategorySlug.value || undefined,
+        )
+        const totalQueued = res.pages_queued + res.attachments_queued + res.documents_queued
+        if (totalQueued === 0) {
           toast.showWarn(
             t('admin.embeddings.reindexProjectTitle'),
             t('admin.embeddings.reindexProjectEmpty'),
@@ -556,6 +955,7 @@ function confirmReindexProject() {
             t('admin.embeddings.reindexProjectDone', {
               pages: res.pages_queued,
               attachments: res.attachments_queued,
+              documents: res.documents_queued,
             }),
           )
         }
@@ -573,6 +973,7 @@ async function runSemanticSearch() {
     const res = await semanticSearchEmbeddings({
       query: semanticQuery.value.trim(),
       project_id: semanticProjectId.value,
+      category_id: semanticCategoryId.value || undefined,
       content_types: semanticContentType.value ? [semanticContentType.value] : undefined,
       limit: semanticLimit.value,
     })
@@ -706,6 +1107,9 @@ async function runSemanticSearch() {
 }
 .embeddings-table :deep(.p-datatable-tbody > tr) {
   cursor: pointer;
+}
+.hidden-file {
+  display: none;
 }
 @media (max-width: 768px) {
   .stats-grid {

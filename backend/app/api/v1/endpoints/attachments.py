@@ -16,11 +16,14 @@ from app.models.user import User
 from app.schemas.attachment import AttachmentRead
 from app.schemas.common import PaginatedResponse
 from app.services import attachment_service, project_service, ticket_service
+from app.services.embedding_constants import is_embeddable_file
+from app.services.llm.factory import is_embedding_configured
 from app.services.storage_service import (
     ALLOWED_CONTENT_TYPES,
     MAX_FILE_SIZE,
     StorageUnavailableError,
 )
+from app.tasks.embedding_tasks import delete_kb_embeddings, schedule_ticket_attachment_embedding
 from app.utils.file_responses import streaming_s3_response
 
 router = APIRouter(tags=["attachments"])
@@ -111,6 +114,9 @@ async def create_attachment(
         actor_name=user.display_name,
     )
 
+    if is_embedding_configured() and is_embeddable_file(content_type, file.filename):
+        schedule_ticket_attachment_embedding(str(attachment.id))
+
     return AttachmentRead.model_validate(attachment)
 
 
@@ -180,6 +186,8 @@ async def delete_attachment(
     deleted = await attachment_service.delete_attachment(db, attachment_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Attachment not found")
+
+    delete_kb_embeddings.delay("ticket_attachment", str(attachment_id))
 
     await events.publish(
         events.EVENT_ATTACHMENT_DELETED,

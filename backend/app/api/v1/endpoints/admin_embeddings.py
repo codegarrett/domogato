@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
@@ -11,9 +11,12 @@ from app.core.permissions import require_system_admin
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
 from app.schemas.embedding_admin import (
+    CreateEmbeddingCategoryRequest,
     DeleteContentEmbeddingsRequest,
     DeleteEmbeddingsOut,
+    EmbeddingCategoryOut,
     EmbeddingDetailOut,
+    EmbeddingDocumentOut,
     EmbeddingListItem,
     EmbeddingReindexOut,
     EmbeddingStatsOut,
@@ -33,11 +36,86 @@ async def get_stats(
     return await embedding_admin_service.get_embedding_stats(db)
 
 
+@router.get("/categories", response_model=list[EmbeddingCategoryOut])
+async def list_categories(
+    project_id: UUID = Query(...),
+    _admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    return await embedding_admin_service.list_embedding_categories(db, project_id)
+
+
+@router.post("/categories", response_model=EmbeddingCategoryOut, status_code=201)
+async def create_category(
+    body: CreateEmbeddingCategoryRequest,
+    _admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    return await embedding_admin_service.create_embedding_category(db, body)
+
+
+@router.delete("/categories/{category_id}", status_code=204)
+async def delete_category(
+    category_id: UUID,
+    _admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    await embedding_admin_service.delete_embedding_category(db, category_id)
+
+
+@router.get("/documents", response_model=PaginatedResponse[EmbeddingDocumentOut])
+async def list_documents(
+    project_id: UUID = Query(...),
+    category_id: UUID | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    _admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    items, total = await embedding_admin_service.list_embedding_documents(
+        db,
+        project_id=project_id,
+        category_id=category_id,
+        offset=offset,
+        limit=limit,
+    )
+    return PaginatedResponse(items=items, total=total, offset=offset, limit=limit)
+
+
+@router.post("/documents", response_model=EmbeddingDocumentOut, status_code=201)
+async def upload_document(
+    project_id: UUID = Form(...),
+    category_id: UUID = Form(...),
+    title: str | None = Form(None),
+    file: UploadFile = File(...),
+    admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    return await embedding_admin_service.upload_embedding_document(
+        db,
+        project_id=project_id,
+        category_id=category_id,
+        title=title,
+        file=file,
+        uploaded_by_id=admin.id,
+    )
+
+
+@router.delete("/documents/{document_id}", response_model=DeleteEmbeddingsOut)
+async def delete_document(
+    document_id: UUID,
+    _admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    return await embedding_admin_service.delete_embedding_document(db, document_id)
+
+
 @router.get("", response_model=PaginatedResponse[EmbeddingListItem])
 async def list_embeddings(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     project_id: UUID | None = Query(None),
+    category_id: UUID | None = Query(None),
     content_type: str | None = Query(None),
     q: str | None = Query(None, description="Search chunk text and metadata"),
     _admin: User = require_system_admin(),
@@ -48,6 +126,7 @@ async def list_embeddings(
         offset=offset,
         limit=limit,
         project_id=project_id,
+        category_id=category_id,
         content_type=content_type,
         q=q,
     )
@@ -64,6 +143,7 @@ async def semantic_search(
         db,
         query=body.query,
         project_id=body.project_id,
+        category_id=body.category_id,
         content_types=body.content_types,
         limit=body.limit,
     )
@@ -88,10 +168,13 @@ async def delete_content_embeddings(
 )
 async def reindex_project(
     project_id: UUID,
+    category_slug: str | None = Query(None),
     _admin: User = require_system_admin(),
     db: AsyncSession = Depends(get_db),
 ):
-    return await embedding_admin_service.reindex_project(db, project_id)
+    return await embedding_admin_service.reindex_project(
+        db, project_id, category_slug=category_slug
+    )
 
 
 @router.post(

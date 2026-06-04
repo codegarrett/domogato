@@ -20,6 +20,7 @@ def _register_builtin_skills() -> None:
         GetSprintStatusSkill,
         SearchKnowledgeBaseSkill,
         SemanticSearchKBSkill,
+        SearchProjectDocumentsSkill,
         CreateTicketSkill,
         UpdateTicketSkill,
         TransitionTicketStatusSkill,
@@ -55,6 +56,7 @@ def _register_builtin_skills() -> None:
     registry.register(GetSprintStatusSkill())
     registry.register(SearchKnowledgeBaseSkill())
     registry.register(SemanticSearchKBSkill())
+    registry.register(SearchProjectDocumentsSkill())
     registry.register(ListKBSpacesSkill())
     registry.register(CreateKBPageSkill())
     registry.register(CreateTicketSkill())

@@ -13,6 +13,7 @@ from app.models.kb_page import KBPage
 from app.models.kb_space import KBSpace
 from app.models.project import Project
 from app.models.organization import Organization
+from app.services.embedding_category_service import ensure_system_categories
 
 DUMMY_VECTOR = [0.0] * 1536
 
@@ -27,8 +28,11 @@ async def _seed_embedding(
     chunk_text: str = "Sample chunk text about authentication",
     metadata: dict | None = None,
 ) -> AIEmbedding:
+    cats = await ensure_system_categories(db, project.id)
+    category = cats["knowledge_base"]
     embedding = AIEmbedding(
         project_id=project.id,
+        category_id=category.id,
         content_type=content_type,
         content_id=content_id or uuid.uuid4(),
         chunk_index=chunk_index,
@@ -78,6 +82,7 @@ class TestAdminEmbeddingsStatsAndList:
         assert stats["total_chunks"] == 2
         assert stats["unique_sources"] == 1
         assert stats["by_content_type"]["kb_page"] == 2
+        assert len(stats["by_category"]) >= 1
         assert len(stats["by_project"]) == 1
         assert stats["by_project"][0]["project_name"] == test_project.name
 
@@ -87,6 +92,7 @@ class TestAdminEmbeddingsStatsAndList:
         assert data["total"] == 2
         assert len(data["items"]) == 2
         assert "chunk_text_preview" in data["items"][0]
+        assert "category_slug" in data["items"][0]
         assert "embedding" not in data["items"][0]
 
     @pytest.mark.asyncio
@@ -268,7 +274,7 @@ class TestAdminEmbeddingsReindex:
         data = resp.json()
         assert data["pages_queued"] == 1
         assert data["attachments_queued"] == 0
-        mock_task.delay.assert_called_once_with(str(test_project.id))
+        mock_task.delay.assert_called_once_with(str(test_project.id), None)
 
     @pytest.mark.asyncio
     async def test_reindex_content_kb_page(

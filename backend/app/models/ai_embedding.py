@@ -19,6 +19,12 @@ class AIEmbedding(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=True,
         index=True,
     )
+    category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("embedding_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     content_type: Mapped[str] = mapped_column(String(50), nullable=False)
     content_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -28,4 +34,5 @@ class AIEmbedding(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __table_args__ = (
         Index("ix_ai_embeddings_content", "content_type", "content_id"),
+        Index("ix_ai_embeddings_project_category", "project_id", "category_id"),
     )

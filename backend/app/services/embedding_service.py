@@ -22,6 +22,7 @@ async def embed_and_store(
     db: AsyncSession,
     *,
     project_id: UUID,
+    category_id: UUID,
     content_type: str,
     content_id: UUID,
     text_content: str,
@@ -96,6 +97,7 @@ async def embed_and_store(
             pending_rows.append(
                 AIEmbedding(
                     project_id=project_id,
+                    category_id=category_id,
                     content_type=content_type,
                     content_id=content_id,
                     chunk_index=batch_start + i,
@@ -143,6 +145,7 @@ async def vector_search(
     *,
     query_text: str,
     project_id: UUID,
+    category_ids: list[UUID] | None = None,
     content_types: list[str] | None = None,
     limit: int = 5,
 ) -> list[dict]:
@@ -163,10 +166,13 @@ async def vector_search(
 
     vector_str = "[" + ",".join(str(v) for v in query_vector) + "]"
 
-    type_filter = ""
-    if content_types:
+    scope_filter = ""
+    if category_ids:
+        placeholders = ", ".join(f"'{cid}'" for cid in category_ids)
+        scope_filter = f"AND category_id IN ({placeholders})"
+    elif content_types:
         placeholders = ", ".join(f"'{ct}'" for ct in content_types)
-        type_filter = f"AND content_type IN ({placeholders})"
+        scope_filter = f"AND content_type IN ({placeholders})"
 
     sql = text(f"""
         SELECT
@@ -179,7 +185,7 @@ async def vector_search(
             1 - (embedding <=> :vector_param) AS similarity
         FROM ai_embeddings
         WHERE project_id = :project_id
-        {type_filter}
+        {scope_filter}
         ORDER BY embedding <=> :vector_param
         LIMIT :limit_param
     """)
