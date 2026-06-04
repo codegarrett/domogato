@@ -20,6 +20,7 @@ from app.services.agent.skills import (
     SkillRegistry,
 )
 from app.services.agent.interaction_skills import INTERACTION_TOOLS
+from app.services.agent.debug_events import maybe_debug_sse
 from app.services.llm.base import BaseLLMProvider, LLMError
 from app.services.llm.context import compact_messages
 
@@ -198,6 +199,11 @@ async def run_agent_turn(
                 }
                 messages.append(tool_msg)
                 tool_call_history.append(tool_msg)
+                if dbg := maybe_debug_sse(user, "interaction_paused", {
+                    "tool": func_name,
+                    "arguments": func_args,
+                }):
+                    yield dbg
                 interaction_triggered = True
                 break
 
@@ -228,6 +234,12 @@ async def run_agent_turn(
                 "name": func_name,
                 "summary": _summarize_result(func_name, result),
             })
+            if dbg := maybe_debug_sse(user, "tool_executed", {
+                "name": func_name,
+                "arguments": func_args,
+                "result": result,
+            }):
+                yield dbg
 
         if interaction_triggered:
             content = response.content or ""

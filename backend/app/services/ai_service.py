@@ -19,6 +19,7 @@ from app.services.llm import get_llm_provider
 from app.services.llm.vision import build_user_message_content
 from app.services.agent import registry as skill_registry
 from app.services.agent.executor import run_agent_turn
+from app.services.agent.debug_events import maybe_debug_sse
 
 logger = structlog.get_logger()
 
@@ -191,6 +192,11 @@ APPROVAL_REJECT_PHRASES = frozenset({
     "cancel that",
 })
 
+PENDING_ACTION_MESSAGES = {
+    "en": "Please review the request above and approve or reject to continue.",
+    "es": "Revisa la solicitud anterior y aprueba o rechaza para continuar.",
+}
+
 
 def _generate_title(text: str) -> str:
     """Create a short title from the first user message."""
@@ -304,6 +310,35 @@ def _classify_approval_response(user_message: str) -> str | None:
     return None
 
 
+async def _sync_interaction_tool_message(
+    db: AsyncSession,
+    conversation_id: UUID,
+    tool_name: str,
+    tool_content: dict,
+) -> None:
+    """Update the pending interaction tool result so the LLM sees the user's decision."""
+    q = (
+        select(AIMessage)
+        .where(
+            AIMessage.conversation_id == conversation_id,
+            AIMessage.role == "tool",
+        )
+        .order_by(AIMessage.created_at.desc())
+    )
+    result = await db.execute(q)
+    for tool_msg in result.scalars():
+        tc = tool_msg.tool_calls
+        if not isinstance(tc, dict) or tc.get("name") != tool_name:
+            continue
+        try:
+            existing = json.loads(tool_msg.content)
+        except json.JSONDecodeError:
+            existing = {}
+        if existing.get("status") == "awaiting_user_response":
+            tool_msg.content = json.dumps(tool_content)
+            return
+
+
 async def _resolve_pending_approval(
     db: AsyncSession,
     conversation_id: UUID,
@@ -331,6 +366,16 @@ async def _resolve_pending_approval(
         interaction["status"] = decision
         interaction["decided_at"] = decided_at.isoformat()
         msg.content = json.dumps(interaction)
+        await _sync_interaction_tool_message(
+            db,
+            conversation_id,
+            "request_approval",
+            {
+                "status": decision,
+                "action": interaction.get("action"),
+                "details": interaction.get("details", {}),
+            },
+        )
         await db.flush()
         return True
     return False
@@ -388,6 +433,16 @@ async def _resolve_pending_choice(
         interaction["selected_option"] = selected
         interaction["decided_at"] = decided_at.isoformat()
         msg.content = json.dumps(interaction)
+        await _sync_interaction_tool_message(
+            db,
+            conversation_id,
+            "present_choices",
+            {
+                "status": "answered",
+                "selected_option": selected,
+                "question": interaction.get("question"),
+            },
+        )
         await db.flush()
         return True
     return False
@@ -536,6 +591,18 @@ async def send_message_stream(
         user_msg.created_at,
     )
 
+    if dbg := maybe_debug_sse(
+        user,
+        "user_message_received",
+        {
+            "conversation_id": str(conversation_id),
+            "locale": user_locale,
+            "message": user_message,
+            "attachment_count": len(attachment_ids or []),
+        },
+    ):
+        yield dbg
+
     llm_messages = await _build_llm_messages(
         db, conversation_id, locale=user_locale,
     )
@@ -546,6 +613,13 @@ async def send_message_stream(
         context_window=settings.LLM_CONTEXT_WINDOW,
         max_tokens=settings.LLM_MAX_TOKENS,
     )
+
+    if dbg := maybe_debug_sse(
+        user,
+        "llm_context_built",
+        {"message_count": len(llm_messages), "locale": user_locale},
+    ):
+        yield dbg
 
     agent_result = None
     async for sse_str in run_agent_turn(
@@ -566,6 +640,8 @@ async def send_message_stream(
             yield sse_str
 
     if agent_result is None:
+        if dbg := maybe_debug_sse(user, "agent_turn_failed", {"reason": "no_agent_done"}):
+            yield dbg
         return
 
     full_content = agent_result.get("content", "")
@@ -573,6 +649,27 @@ async def send_message_stream(
     prompt_tokens = agent_result.get("prompt_tokens")
     completion_tokens = agent_result.get("completion_tokens")
     tool_call_history = agent_result.get("tool_call_history", [])
+
+    has_interaction = any(m.get("role") == "interaction" for m in tool_call_history)
+    if not full_content.strip() and has_interaction:
+        full_content = PENDING_ACTION_MESSAGES.get(
+            user_locale, PENDING_ACTION_MESSAGES["en"],
+        )
+        yield _sse_event({"type": "chunk", "content": full_content})
+
+    if dbg := maybe_debug_sse(
+        user,
+        "agent_turn_complete",
+        {
+            "content_length": len(full_content),
+            "tool_messages": len(tool_call_history),
+            "has_interaction": has_interaction,
+            "model": model_name,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+        },
+    ):
+        yield dbg
 
     for tc_msg in tool_call_history:
         role = tc_msg.get("role")

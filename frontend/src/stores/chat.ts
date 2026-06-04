@@ -38,6 +38,24 @@ import {
 
 import { getLocale } from '@/i18n'
 
+import { useAuthStore } from '@/stores/auth'
+
+
+
+export interface ChatDebugLogEntry {
+
+  id: string
+
+  timestamp: string
+
+  source: 'client' | 'server'
+
+  event: string
+
+  data: unknown
+
+}
+
 
 
 export const useChatStore = defineStore('chat', () => {
@@ -69,6 +87,50 @@ export const useChatStore = defineStore('chat', () => {
   const view = ref<'list' | 'chat'>('list')
 
   let shouldReloadAfterStream = false
+
+  const debugLogs = ref<ChatDebugLogEntry[]>([])
+
+  const debugLogOpen = ref(false)
+
+
+
+  function appendDebugLog(source: 'client' | 'server', event: string, data: unknown) {
+
+    const authStore = useAuthStore()
+
+    if (!authStore.isSystemAdmin) return
+
+    debugLogs.value.push({
+
+      id: crypto.randomUUID(),
+
+      timestamp: new Date().toISOString(),
+
+      source,
+
+      event,
+
+      data,
+
+    })
+
+  }
+
+
+
+  function clearDebugLogs() {
+
+    debugLogs.value = []
+
+  }
+
+
+
+  function openDebugLog() {
+
+    debugLogOpen.value = true
+
+  }
 
 
 
@@ -313,6 +375,18 @@ export const useChatStore = defineStore('chat', () => {
 
     if (isStreaming.value || (!trimmed && !hasAttachments)) return
 
+    appendDebugLog('client', 'send_message_start', {
+
+      conversation_id: activeConversationId.value,
+
+      message: trimmed,
+
+      attachment_count: pendingAttachments.value.length,
+
+      locale: getLocale(),
+
+    })
+
     const attachmentSnapshot = [...pendingAttachments.value]
 
     const attachmentIds = attachmentSnapshot.map((a) => a.id)
@@ -370,6 +444,16 @@ export const useChatStore = defineStore('chat', () => {
         getLocale(),
 
         (event: SSEEvent) => {
+
+          if (event.type === 'debug') {
+
+            appendDebugLog('server', event.event || 'debug', event.data ?? event)
+
+          } else {
+
+            appendDebugLog('client', `sse:${event.type}`, event)
+
+          }
 
           switch (event.type) {
 
@@ -512,6 +596,8 @@ export const useChatStore = defineStore('chat', () => {
 
             case 'error':
 
+              appendDebugLog('client', 'stream_error', { message: event.message })
+
               streamingContent.value = ''
 
               streamingReasoning.value = ''
@@ -526,7 +612,13 @@ export const useChatStore = defineStore('chat', () => {
 
       )
 
-    } catch {
+    } catch (err) {
+
+      appendDebugLog('client', 'send_message_failed', {
+
+        error: err instanceof Error ? err.message : String(err),
+
+      })
 
       streamingContent.value = ''
 
@@ -545,6 +637,12 @@ export const useChatStore = defineStore('chat', () => {
           const detail = await getConversation(activeConversationId.value)
 
           messages.value = detail.messages
+
+          appendDebugLog('client', 'conversation_reloaded', {
+
+            message_count: detail.messages.length,
+
+          })
 
         } catch {
 
@@ -661,6 +759,16 @@ export const useChatStore = defineStore('chat', () => {
     deleteConversation,
 
     toggle,
+
+    debugLogs,
+
+    debugLogOpen,
+
+    appendDebugLog,
+
+    clearDebugLogs,
+
+    openDebugLog,
 
   }
 

@@ -21,6 +21,14 @@
         @change="onChatLocaleChange"
       />
       <Button
+        v-if="authStore.isSystemAdmin && chatStore.view === 'chat'"
+        icon="pi pi-code"
+        text
+        size="small"
+        :aria-label="$t('ai.viewLogs')"
+        @click="chatStore.openDebugLog()"
+      />
+      <Button
         v-if="chatStore.view === 'list'"
         icon="pi pi-plus"
         text
@@ -143,12 +151,33 @@
         </div>
       </div>
 
+      <ChatPendingActionBar
+        v-if="pendingApprovalInteraction"
+        :interaction="pendingApprovalInteraction"
+        :disabled="chatStore.isStreaming"
+        @approve="chatStore.respondToApproval(true)"
+        @reject="chatStore.respondToApproval(false)"
+      />
+      <ChatPendingActionBar
+        v-else-if="pendingChoiceInteraction"
+        :interaction="pendingChoiceInteraction"
+        :disabled="chatStore.isStreaming"
+        @select="chatStore.respondToChoice($event)"
+      />
+
       <ChatInput
         :disabled="chatStore.isStreaming"
         @send="chatStore.sendMessage($event)"
       />
     </div>
     </div>
+
+    <ChatDebugLogModal
+      v-if="authStore.isSystemAdmin"
+      v-model:visible="chatStore.debugLogOpen"
+      :logs="chatStore.debugLogs"
+      @clear="chatStore.clearDebugLogs()"
+    />
   </div>
 </template>
 
@@ -165,6 +194,8 @@ import ChatMessage from '@/components/chat/ChatMessage.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import ChatApprovalCard from '@/components/chat/ChatApprovalCard.vue'
 import ChatChoiceCard from '@/components/chat/ChatChoiceCard.vue'
+import ChatPendingActionBar from '@/components/chat/ChatPendingActionBar.vue'
+import ChatDebugLogModal from '@/components/chat/ChatDebugLogModal.vue'
 import ChatWelcome from '@/components/chat/ChatWelcome.vue'
 import { parseApprovalInteraction, parseChoiceInteraction, type ApprovalInteraction, type ChoiceInteraction, type Message } from '@/api/ai'
 
@@ -208,6 +239,27 @@ const showWelcome = computed(
     && !chatStore.streamingContent
     && !chatStore.isStreaming,
 )
+
+const pendingApprovalInteraction = computed((): ApprovalInteraction | null => {
+  for (let i = chatStore.messages.length - 1; i >= 0; i -= 1) {
+    const msg = chatStore.messages[i]
+    if (msg.role !== 'interaction') continue
+    const data = parseApprovalInteraction(msg.content)
+    if (data?.status === 'pending') return data
+  }
+  return null
+})
+
+const pendingChoiceInteraction = computed((): ChoiceInteraction | null => {
+  if (pendingApprovalInteraction.value) return null
+  for (let i = chatStore.messages.length - 1; i >= 0; i -= 1) {
+    const msg = chatStore.messages[i]
+    if (msg.role !== 'interaction') continue
+    const data = parseChoiceInteraction(msg.content)
+    if (data?.status === 'pending') return data
+  }
+  return null
+})
 
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
   list_my_projects: 'ai.toolListProjects',

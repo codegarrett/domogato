@@ -50,6 +50,12 @@ async def test_resolve_pending_approval_updates_interaction(
     })
     db_session.add(AIMessage(
         conversation_id=conversation.id,
+        role="tool",
+        content=json.dumps({"status": "awaiting_user_response"}),
+        tool_calls={"tool_call_id": "call_approval", "name": "request_approval"},
+    ))
+    db_session.add(AIMessage(
+        conversation_id=conversation.id,
         role="interaction",
         content=pending_content,
     ))
@@ -73,6 +79,16 @@ async def test_resolve_pending_approval_updates_interaction(
     data = json.loads(msg.content)
     assert data["status"] == "approved"
     assert data["decided_at"] == decided_at.isoformat()
+
+    tool_msg = (await db_session.execute(
+        select(AIMessage).where(
+            AIMessage.conversation_id == conversation.id,
+            AIMessage.role == "tool",
+        )
+    )).scalar_one()
+    tool_data = json.loads(tool_msg.content)
+    assert tool_data["status"] == "approved"
+    assert tool_data["action"] == "Create ticket"
 
 
 @pytest.mark.asyncio

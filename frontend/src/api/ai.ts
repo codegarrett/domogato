@@ -224,6 +224,8 @@ export interface SSEEvent {
 
     | 'approval_request'
 
+    | 'debug'
+
   conversation_id?: string
 
   content?: string
@@ -251,6 +253,12 @@ export interface SSEEvent {
   action?: string
 
   details?: Record<string, unknown>
+
+  timestamp?: string
+
+  event?: string
+
+  data?: Record<string, unknown>
 
 }
 
