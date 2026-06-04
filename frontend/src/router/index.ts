@@ -222,6 +222,11 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminAuthView.vue'),
         },
         {
+          path: 'admin/embeddings',
+          name: 'admin-embeddings',
+          component: () => import('@/views/admin/AdminEmbeddingsView.vue'),
+        },
+        {
           path: 'admin/embed',
           name: 'admin-embed',
           component: () => import('@/views/admin/AdminEmbedView.vue'),

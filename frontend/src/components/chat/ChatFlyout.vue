@@ -5,7 +5,7 @@
     class="chat-flyout"
     :style="{ width: '420px' }"
     :modal="false"
-    :dismissable="true"
+    :dismissable="!chatStore.debugLogOpen"
     :show-close-icon="true"
   >
     <ChatPanel />

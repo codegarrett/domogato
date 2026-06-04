@@ -134,6 +134,14 @@ export const useChatStore = defineStore('chat', () => {
 
 
 
+  function closeDebugLog() {
+
+    debugLogOpen.value = false
+
+  }
+
+
+
   const isConfigured = computed(() => aiConfig.value?.is_configured ?? false)
 
 
@@ -688,6 +696,10 @@ export const useChatStore = defineStore('chat', () => {
 
     isOpen.value = !isOpen.value
 
+    if (!isOpen.value) {
+      debugLogOpen.value = false
+    }
+
     if (isOpen.value && aiConfig.value === null) {
 
       loadConfig()
@@ -769,6 +781,8 @@ export const useChatStore = defineStore('chat', () => {
     clearDebugLogs,
 
     openDebugLog,
+
+    closeDebugLog,
 
   }
 

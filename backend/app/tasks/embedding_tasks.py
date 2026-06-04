@@ -222,3 +222,59 @@ def embed_kb_attachment(attachment_id: str, page_id: str) -> None:
 @celery_app.task(name="delete_kb_embeddings", ignore_result=True)
 def delete_kb_embeddings(content_type: str, content_id: str) -> None:
     _run_async(_delete_kb_embeddings_async(content_type, content_id))
+
+
+async def _reindex_project_embeddings_async(project_id: str) -> None:
+    from app.models.kb_attachment import KBPageAttachment
+    from app.models.kb_page import KBPage
+    from app.models.kb_space import KBSpace
+
+    factory = _get_async_session_factory()
+    async with factory() as db:
+        page_rows = (
+            await db.execute(
+                select(KBPage.id)
+                .join(KBSpace, KBSpace.id == KBPage.space_id)
+                .where(
+                    KBSpace.project_id == project_id,
+                    KBPage.is_deleted.is_(False),
+                    KBPage.content_markdown.isnot(None),
+                    KBPage.content_markdown != "",
+                )
+            )
+        ).all()
+        page_ids = [row[0] for row in page_rows]
+
+        attachment_rows = (
+            await db.execute(
+                select(KBPageAttachment.id, KBPageAttachment.page_id).where(
+                    KBPageAttachment.page_id.in_(page_ids)
+                )
+            )
+        ).all() if page_ids else []
+
+    pages_queued = 0
+    for i, page_id in enumerate(page_ids):
+        embed_kb_page.apply_async(args=[str(page_id)], countdown=3 + i)
+        pages_queued += 1
+
+    attachments_queued = 0
+    base_countdown = 3 + pages_queued
+    for i, (attachment_id, page_id) in enumerate(attachment_rows):
+        embed_kb_attachment.apply_async(
+            args=[str(attachment_id), str(page_id)],
+            countdown=base_countdown + i,
+        )
+        attachments_queued += 1
+
+    logger.info(
+        "project_embeddings_reindex_queued",
+        project_id=project_id,
+        pages_queued=pages_queued,
+        attachments_queued=attachments_queued,
+    )
+
+
+@celery_app.task(name="reindex_project_embeddings", ignore_result=True)
+def reindex_project_embeddings(project_id: str) -> None:
+    _run_async(_reindex_project_embeddings_async(project_id))

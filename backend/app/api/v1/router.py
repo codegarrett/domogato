@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     activity,
+    admin_embeddings,
     ai,
     attachments,
     auth,
@@ -86,3 +87,4 @@ api_v1_router.include_router(dashboard.router)
 api_v1_router.include_router(issue_reports.router)
 api_v1_router.include_router(public_issue_reports.router)
 api_v1_router.include_router(ai.router)
+api_v1_router.include_router(admin_embeddings.router)

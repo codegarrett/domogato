@@ -170,14 +170,13 @@
         @send="chatStore.sendMessage($event)"
       />
     </div>
-    </div>
-
     <ChatDebugLogModal
       v-if="authStore.isSystemAdmin"
       v-model:visible="chatStore.debugLogOpen"
       :logs="chatStore.debugLogs"
       @clear="chatStore.clearDebugLogs()"
     />
+    </div>
   </div>
 </template>
 
@@ -402,6 +401,7 @@ watch(
 }
 
 .chat-panel-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;

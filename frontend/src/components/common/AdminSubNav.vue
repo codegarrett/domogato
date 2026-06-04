@@ -25,6 +25,14 @@
       {{ t('admin.authentication') }}
     </router-link>
     <router-link
+      to="/admin/embeddings"
+      class="sub-nav-link"
+      :class="{ active: route.path === '/admin/embeddings' }"
+    >
+      <i class="pi pi-database" />
+      {{ t('admin.embeddingsNav') }}
+    </router-link>
+    <router-link
       to="/admin/embed"
       class="sub-nav-link"
       :class="{ active: route.path === '/admin/embed' }"
