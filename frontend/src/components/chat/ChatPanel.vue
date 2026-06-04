@@ -243,7 +243,7 @@ const showWelcome = computed(
 const pendingApprovalInteraction = computed((): ApprovalInteraction | null => {
   for (let i = chatStore.messages.length - 1; i >= 0; i -= 1) {
     const msg = chatStore.messages[i]
-    if (msg.role !== 'interaction') continue
+    if (!msg || msg.role !== 'interaction') continue
     const data = parseApprovalInteraction(msg.content)
     if (data?.status === 'pending') return data
   }
@@ -254,7 +254,7 @@ const pendingChoiceInteraction = computed((): ChoiceInteraction | null => {
   if (pendingApprovalInteraction.value) return null
   for (let i = chatStore.messages.length - 1; i >= 0; i -= 1) {
     const msg = chatStore.messages[i]
-    if (msg.role !== 'interaction') continue
+    if (!msg || msg.role !== 'interaction') continue
     const data = parseChoiceInteraction(msg.content)
     if (data?.status === 'pending') return data
   }
