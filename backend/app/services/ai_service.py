@@ -18,7 +18,7 @@ from app.services import ai_attachment_service
 from app.services.llm.context import compact_messages, sanitize_tool_messages
 from app.services.llm.vision import build_user_message_content
 from app.services.llm import get_llm_provider
-from app.services.agent import registry as skill_registry
+from app.services.agent.registry_builder import build_skill_registry
 from app.services.agent.executor import run_agent_turn
 from app.services.agent.debug_events import maybe_debug_sse
 
@@ -119,6 +119,9 @@ SYSTEM_PROMPT = (
     "deployment process?' — even when the exact words don't appear in the docs.\n"
     "- **search_project_documents**: Semantic search over ticket attachments and "
     "uploaded project documents (not KB pages).\n\n"
+    "## Calculator\n"
+    "Use **calculator** for precise arithmetic (percentages, totals, dates-as-numbers). "
+    "Do not do mental math when accuracy matters.\n\n"
     "When a user asks about documentation or knowledge base content, prefer "
     "semantic_search_kb first for broad questions. For uploaded files or ticket "
     "attachments, use search_project_documents. If it returns no results or "
@@ -633,10 +636,11 @@ async def send_message_stream(
         yield dbg
 
     agent_result = None
+    user_registry = await build_skill_registry(db, user)
     async for sse_str in run_agent_turn(
         provider=provider,
         messages=llm_messages,
-        registry=skill_registry,
+        registry=user_registry,
         db=db,
         user=user,
         conversation_id=conversation_id,

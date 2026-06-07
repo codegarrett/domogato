@@ -25,6 +25,14 @@
       {{ t('admin.authentication') }}
     </router-link>
     <router-link
+      to="/admin/agent-skills"
+      class="sub-nav-link"
+      :class="{ active: route.path === '/admin/agent-skills' }"
+    >
+      <i class="pi pi-bolt" />
+      {{ t('admin.agentSkillsNav') }}
+    </router-link>
+    <router-link
       to="/admin/embeddings"
       class="sub-nav-link"
       :class="{ active: route.path === '/admin/embeddings' }"

@@ -12,7 +12,8 @@ from app.services.agent.skills import (
 registry = SkillRegistry()
 
 
-def _register_builtin_skills() -> None:
+def register_builtin_skills(reg: SkillRegistry | None = None) -> None:
+    target = reg if reg is not None else registry
     from app.services.agent.builtin_skills import (
         ListMyProjectsSkill,
         SearchTicketsSkill,
@@ -50,37 +51,40 @@ def _register_builtin_skills() -> None:
         AttachFileToIssueReportSkill,
     )
     from app.services.agent.kb_skills import ListKBSpacesSkill, CreateKBPageSkill
-    registry.register(ListMyProjectsSkill())
-    registry.register(SearchTicketsSkill())
-    registry.register(GetTicketDetailsSkill())
-    registry.register(GetSprintStatusSkill())
-    registry.register(SearchKnowledgeBaseSkill())
-    registry.register(SemanticSearchKBSkill())
-    registry.register(SearchProjectDocumentsSkill())
-    registry.register(ListKBSpacesSkill())
-    registry.register(CreateKBPageSkill())
-    registry.register(CreateTicketSkill())
-    registry.register(UpdateTicketSkill())
-    registry.register(TransitionTicketStatusSkill())
-    registry.register(GetTicketTransitionsSkill())
-    registry.register(PresentChoicesSkill())
-    registry.register(RequestApprovalSkill())
-    registry.register(SearchIssueReportsSkill())
-    registry.register(CreateIssueReportSkill())
-    registry.register(AddReporterToIssueReportSkill())
-    registry.register(CreateTicketFromIssueReportsSkill())
-    registry.register(GlobalSearchSkill())
-    registry.register(GetMyDashboardSkill())
-    registry.register(ListTicketCommentsSkill())
-    registry.register(AddTicketCommentSkill())
-    registry.register(WatchTicketSkill())
-    registry.register(UnwatchTicketSkill())
-    registry.register(ListConversationAttachmentsSkill())
-    registry.register(AttachFileToTicketSkill())
-    registry.register(AttachFileToIssueReportSkill())
+    from app.services.agent.utility_skills import CalculatorSkill
+
+    target.register(ListMyProjectsSkill())
+    target.register(SearchTicketsSkill())
+    target.register(GetTicketDetailsSkill())
+    target.register(GetSprintStatusSkill())
+    target.register(SearchKnowledgeBaseSkill())
+    target.register(SemanticSearchKBSkill())
+    target.register(SearchProjectDocumentsSkill())
+    target.register(ListKBSpacesSkill())
+    target.register(CreateKBPageSkill())
+    target.register(CreateTicketSkill())
+    target.register(UpdateTicketSkill())
+    target.register(TransitionTicketStatusSkill())
+    target.register(GetTicketTransitionsSkill())
+    target.register(PresentChoicesSkill())
+    target.register(RequestApprovalSkill())
+    target.register(SearchIssueReportsSkill())
+    target.register(CreateIssueReportSkill())
+    target.register(AddReporterToIssueReportSkill())
+    target.register(CreateTicketFromIssueReportsSkill())
+    target.register(GlobalSearchSkill())
+    target.register(GetMyDashboardSkill())
+    target.register(ListTicketCommentsSkill())
+    target.register(AddTicketCommentSkill())
+    target.register(WatchTicketSkill())
+    target.register(UnwatchTicketSkill())
+    target.register(ListConversationAttachmentsSkill())
+    target.register(AttachFileToTicketSkill())
+    target.register(AttachFileToIssueReportSkill())
+    target.register(CalculatorSkill())
 
 
-_register_builtin_skills()
+register_builtin_skills()
 
 __all__ = [
     "BaseSkill",
@@ -96,4 +100,5 @@ __all__ = [
     "resolve_sprint_id_by_name",
     "resolve_epic_id_by_title",
     "registry",
+    "register_builtin_skills",
 ]

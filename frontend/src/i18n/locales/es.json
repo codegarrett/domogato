@@ -30,7 +30,9 @@
     "back": "Atrás",
     "saved": "Guardado",
     "saveFailed": "Error al guardar",
-    "error": "Error"
+    "error": "Error",
+    "yes": "Sí",
+    "no": "No"
   },
   "nav": {
     "menu": "MENÚ",
@@ -667,6 +669,12 @@
     "embedSnippetDescription": "Agrega este iframe a tu aplicación externa.",
     "embedSettingsSaved": "Configuración del agente externo guardada exitosamente.",
     "embeddingsNav": "Embeddings",
+    "agentSkillsNav": "Skills del agente",
+    "agentSkills": {
+      "title": "Skills del agente",
+      "globalTitle": "Skills globales personalizados",
+      "globalDescription": "Skills disponibles para todos los usuarios con acceso a proyectos. Las URLs y secretos se definen aquí — el agente no puede hacer peticiones HTTP arbitrarias."
+    },
     "embeddings": {
       "title": "Embeddings",
       "notConfigured": "El proveedor de embeddings no está configurado. Establece EMBEDDING_PROVIDER y EMBEDDING_MODEL para habilitar la generación y búsqueda semántica.",
@@ -1007,6 +1015,29 @@
     "welcomeTaskSearchKBMessage": "Ayúdame a encontrar algo en la base de conocimiento.",
     "welcomeTaskListProjects": "Listar mis proyectos",
     "welcomeTaskListProjectsMessage": "Lista los proyectos a los que tengo acceso."
+  },
+  "agentSkills": {
+    "projectTitle": "Skills personalizados del agente",
+    "projectDescription": "Define skills en markdown con pasos HTTP para este proyecto. Los secretos se almacenan por separado y se referencian como {{secret:NOMBRE}} en las URLs.",
+    "newSkill": "Nuevo skill",
+    "editSkill": "Editar skill",
+    "slug": "Slug",
+    "toolName": "Nombre de herramienta",
+    "name": "Nombre",
+    "displayName": "Nombre para mostrar",
+    "enabled": "Habilitado",
+    "noSkills": "Aún no hay skills personalizados.",
+    "validate": "Validar",
+    "validSkill": "Skill válido (herramienta: {tool})",
+    "saved": "Skill guardado",
+    "deleted": "Skill eliminado",
+    "deleteConfirm": "¿Eliminar skill \"{slug}\"?",
+    "secretsTitle": "Secretos del agente",
+    "secretsDescription": "Valores con nombre para placeholders {{secret:CLAVE}} en definiciones de skills.",
+    "secretKey": "Clave del secreto",
+    "secretValue": "Valor del secreto",
+    "saveSecret": "Guardar secreto",
+    "secretSaved": "Secreto guardado"
   },
   "embed": {
     "disabledTitle": "Agente externo no disponible",

@@ -79,7 +79,7 @@ def _ctx(db: AsyncSession, user: User, params: dict) -> SkillContext:
 
 @pytest.mark.asyncio
 async def test_registry_has_expected_skill_count():
-    assert len(registry) == 27
+    assert len(registry) == 29
 
 
 @pytest.mark.asyncio

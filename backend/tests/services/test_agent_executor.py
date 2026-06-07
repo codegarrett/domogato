@@ -298,3 +298,73 @@ async def test_executor_tool_start_and_result(
     types = [p["type"] for p in parsed]
     assert "tool_start" in types
     assert "tool_result" in types
+
+
+@pytest.mark.asyncio
+async def test_executor_calculator_tool(
+    db_session: AsyncSession, test_user: User,
+):
+    mock_provider = MagicMock()
+    mock_provider.model = "test-model"
+
+    tool_response = MagicMock(
+        content=None,
+        tool_calls=[{
+            "id": "call_calc",
+            "type": "function",
+            "function": {
+                "name": "calculator",
+                "arguments": json.dumps({"expression": "6 * 7"}),
+            },
+        }],
+        prompt_tokens=10,
+        completion_tokens=5,
+        model="test-model",
+    )
+    final_response = MagicMock(
+        content=None,
+        tool_calls=None,
+        prompt_tokens=10,
+        completion_tokens=5,
+        model="test-model",
+    )
+
+    call_count = 0
+
+    async def mock_chat(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return tool_response
+        return final_response
+
+    async def mock_stream(*args, **kwargs):
+        yield StreamEvent(content="The result is 42.")
+        yield StreamEvent(is_done=True, model="test-model", prompt_tokens=20, completion_tokens=10)
+
+    mock_provider.chat_completion = AsyncMock(side_effect=mock_chat)
+    mock_provider.chat_completion_stream_with_usage = mock_stream
+
+    events: list[str] = []
+    async for event in run_agent_turn(
+        provider=mock_provider,
+        messages=[{"role": "user", "content": "what is 6 times 7"}],
+        registry=registry,
+        db=db_session,
+        user=test_user,
+        max_tokens=100,
+        temperature=0.0,
+        max_tool_rounds=3,
+    ):
+        events.append(event)
+
+    parsed = [json.loads(e.removeprefix("data: ").strip()) for e in events]
+    types = [p["type"] for p in parsed]
+    assert "tool_start" in types
+    assert "tool_result" in types
+
+    done_event = next(p for p in parsed if p["type"] == "_agent_done")
+    tool_msgs = [m for m in done_event["tool_call_history"] if m.get("role") == "tool"]
+    assert len(tool_msgs) == 1
+    result = json.loads(tool_msgs[0]["content"])
+    assert result["result"] == 42

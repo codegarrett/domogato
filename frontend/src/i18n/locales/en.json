@@ -30,7 +30,9 @@
     "back": "Back",
     "saved": "Saved",
     "saveFailed": "Save failed",
-    "error": "Error"
+    "error": "Error",
+    "yes": "Yes",
+    "no": "No"
   },
   "nav": {
     "menu": "MENU",
@@ -667,6 +669,12 @@
     "embedSnippetDescription": "Add this iframe to your external application.",
     "embedSettingsSaved": "External agent settings saved successfully.",
     "embeddingsNav": "Embeddings",
+    "agentSkillsNav": "Agent Skills",
+    "agentSkills": {
+      "title": "Agent Skills",
+      "globalTitle": "Global custom skills",
+      "globalDescription": "Skills available to all users with project access. URLs and secrets are defined here — the agent cannot make ad-hoc HTTP requests."
+    },
     "embeddings": {
       "title": "Embeddings",
       "notConfigured": "Embedding provider is not configured. Set EMBEDDING_PROVIDER and EMBEDDING_MODEL to enable generation and semantic search.",
@@ -1007,6 +1015,29 @@
     "welcomeTaskSearchKBMessage": "Help me find something in the knowledge base.",
     "welcomeTaskListProjects": "List my projects",
     "welcomeTaskListProjectsMessage": "List the projects I have access to."
+  },
+  "agentSkills": {
+    "projectTitle": "Custom agent skills",
+    "projectDescription": "Define markdown skills with HTTP steps for this project. Secrets are stored separately and referenced as {{secret:NAME}} in skill URLs.",
+    "newSkill": "New skill",
+    "editSkill": "Edit skill",
+    "slug": "Slug",
+    "toolName": "Tool name",
+    "name": "Name",
+    "displayName": "Display name",
+    "enabled": "Enabled",
+    "noSkills": "No custom skills yet.",
+    "validate": "Validate",
+    "validSkill": "Valid skill (tool: {tool})",
+    "saved": "Skill saved",
+    "deleted": "Skill deleted",
+    "deleteConfirm": "Delete skill \"{slug}\"?",
+    "secretsTitle": "Agent secrets",
+    "secretsDescription": "Named values for {{secret:KEY}} placeholders in skill definitions.",
+    "secretKey": "Secret key",
+    "secretValue": "Secret value",
+    "saveSecret": "Save secret",
+    "secretSaved": "Secret saved"
   },
   "embed": {
     "disabledTitle": "External agent unavailable",

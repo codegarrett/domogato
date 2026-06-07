@@ -34,6 +34,7 @@ from app.models.ai_conversation_attachment import AIConversationAttachment
 from app.models.ai_embedding import AIEmbedding
 from app.models.embedding_category import EmbeddingCategory
 from app.models.embedding_document import EmbeddingDocument
+from app.models.agent_skill_definition import AgentSkillDefinition
 from app.models.issue_report import (
     IssueReport,
     IssueReportAttachment,
@@ -89,6 +90,7 @@ __all__ = [
     "AIEmbedding",
     "EmbeddingCategory",
     "EmbeddingDocument",
+    "AgentSkillDefinition",
     "IssueReport",
     "IssueReportAttachment",
     "IssueReportReporter",

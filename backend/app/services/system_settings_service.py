@@ -276,3 +276,44 @@ async def needs_setup(db: AsyncSession) -> bool:
     if settings.INITIAL_ADMIN_EMAIL:
         return False
     return not await has_system_admin(db)
+
+
+AGENT_SKILL_SETTING_KEYS = ["agent_skill_secrets"]
+
+AGENT_SKILL_DEFAULTS: dict[str, Any] = {
+    "agent_skill_secrets": {},
+}
+
+
+async def get_agent_skill_db_settings(db: AsyncSession) -> dict[str, Any]:
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key.in_(AGENT_SKILL_SETTING_KEYS))
+    )
+    rows = result.scalars().all()
+    return {row.key: row.value for row in rows}
+
+
+async def get_agent_skill_settings(db: AsyncSession) -> dict[str, Any]:
+    db_settings = await get_agent_skill_db_settings(db)
+    result = dict(AGENT_SKILL_DEFAULTS)
+    result.update(db_settings)
+    return result
+
+
+async def set_agent_skill_settings(
+    db: AsyncSession,
+    updates: dict[str, Any],
+    updated_by: UUID | None = None,
+) -> dict[str, Any]:
+    for key, value in updates.items():
+        if key not in AGENT_SKILL_SETTING_KEYS:
+            continue
+        stmt = pg_insert(SystemSetting).values(
+            key=key, value=value, updated_by=updated_by, updated_at=func.now()
+        ).on_conflict_do_update(
+            index_elements=["key"],
+            set_={"value": value, "updated_by": updated_by, "updated_at": func.now()},
+        )
+        await db.execute(stmt)
+    await db.flush()
+    return await get_agent_skill_settings(db)
