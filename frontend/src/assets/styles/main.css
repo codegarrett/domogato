@@ -13,6 +13,7 @@
   --diff-remove-bg: #fce7f3;
   --diff-remove-color: #9f1239;
   --code-bg: var(--p-surface-100);
+  --code-color: var(--p-text-color);
   --app-hover-bg: var(--p-surface-50);
   --app-card-alt-bg: var(--p-surface-50);
   --app-border-color: var(--p-surface-100);
@@ -25,7 +26,8 @@
   --diff-add-color: #86efac;
   --diff-remove-bg: rgba(244, 63, 94, 0.15);
   --diff-remove-color: #fda4af;
-  --code-bg: rgba(255, 255, 255, 0.06);
+  --code-bg: rgba(255, 255, 255, 0.08);
+  --code-color: var(--p-text-color);
   --app-hover-bg: rgba(255, 255, 255, 0.06);
   --app-card-alt-bg: rgba(255, 255, 255, 0.04);
   --app-border-color: rgba(255, 255, 255, 0.1);

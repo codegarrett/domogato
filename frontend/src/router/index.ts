@@ -157,6 +157,16 @@ const router = createRouter({
           component: () => import('@/views/settings/AuditLogView.vue'),
         },
         {
+          path: 'projects/:projectId/agents/skills',
+          name: 'project-agent-skills',
+          component: () => import('@/views/projects/ProjectAgentSkillsView.vue'),
+        },
+        {
+          path: 'projects/:projectId/agents/secrets',
+          name: 'project-agent-secrets',
+          component: () => import('@/views/projects/ProjectAgentSecretsView.vue'),
+        },
+        {
           path: 'projects/:projectId/settings',
           name: 'project-settings',
           component: () => import('@/views/projects/ProjectSettingsView.vue'),
@@ -197,6 +207,16 @@ const router = createRouter({
           component: () => import('@/views/settings/WorkflowDetailView.vue'),
         },
         {
+          path: 'docs',
+          name: 'docs',
+          component: () => import('@/views/docs/DocumentationIndexView.vue'),
+        },
+        {
+          path: 'docs/agent-skills',
+          name: 'docs-agent-skills',
+          component: () => import('@/views/docs/DocumentationAgentSkillsView.vue'),
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('@/views/profile/UserProfileView.vue'),
@@ -225,6 +245,11 @@ const router = createRouter({
           path: 'admin/agent-skills',
           name: 'admin-agent-skills',
           component: () => import('@/views/admin/AdminAgentSkillsView.vue'),
+        },
+        {
+          path: 'admin/agent-skills/secrets',
+          name: 'admin-agent-secrets',
+          component: () => import('@/views/admin/AdminAgentSecretsView.vue'),
         },
         {
           path: 'admin/embeddings',

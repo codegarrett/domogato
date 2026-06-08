@@ -122,5 +122,17 @@ class TestProjectAgentSkillsCrud:
         assert keys_resp.status_code == 200
         assert "TOKEN" in keys_resp.json()["keys"]
 
+        reveal_resp = await client.get(f"{base}/agent-skills-secrets/TOKEN")
+        assert reveal_resp.status_code == 200
+        assert reveal_resp.json()["value"] == "secret-value"
+
+        update_resp = await client.put(
+            f"{base}/agent-skills-secrets",
+            json={"key": "TOKEN", "value": "updated-value"},
+        )
+        assert update_resp.status_code == 204
+        reveal_resp = await client.get(f"{base}/agent-skills-secrets/TOKEN")
+        assert reveal_resp.json()["value"] == "updated-value"
+
         del_resp = await client.delete(f"{base}/agent-skills/my-skill")
         assert del_resp.status_code == 204

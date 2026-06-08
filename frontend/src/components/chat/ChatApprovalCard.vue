@@ -102,8 +102,8 @@ const decisionLabel = computed(() => {
 .chat-approval-card {
   margin: 0.5rem 0;
   border-radius: 0.5rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-200));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   overflow: hidden;
 }
 
@@ -182,7 +182,7 @@ const decisionLabel = computed(() => {
   display: flex;
   gap: 0.5rem;
   padding: 0.625rem 0.75rem;
-  border-top: 1px solid var(--p-surface-border, var(--p-surface-100));
+  border-top: 1px solid var(--app-border-color, var(--p-content-border-color));
 }
 
 .chat-approval-btn {
@@ -191,8 +191,8 @@ const decisionLabel = computed(() => {
   gap: 0.375rem;
   padding: 0.4375rem 0.75rem;
   border-radius: 1rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-300));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   color: var(--p-text-color);
   font-size: 0.8125rem;
   font-family: inherit;
@@ -216,12 +216,12 @@ const decisionLabel = computed(() => {
 .chat-approval-btn--reject {
   background: transparent;
   color: var(--p-text-muted-color);
-  border-color: var(--p-surface-border, var(--p-surface-300));
+  border-color: var(--app-border-color, var(--p-content-border-color));
 }
 
 .chat-approval-btn--reject:hover {
-  background: var(--p-red-50, #fef2f2);
-  color: var(--p-red-600, #dc2626);
-  border-color: var(--p-red-300, #fca5a5);
+  background: color-mix(in srgb, var(--p-red-500, #ef4444) 12%, transparent);
+  color: var(--p-red-500, #ef4444);
+  border-color: var(--p-red-500, #ef4444);
 }
 </style>

@@ -257,6 +257,20 @@
             </li>
           </ul>
 
+          <p class="sidebar-section-label mt-3">{{ $t('nav.documentation') }}</p>
+          <ul class="sidebar-nav">
+            <li>
+              <router-link
+                to="/docs"
+                class="nav-item"
+                :class="{ active: route.path.startsWith('/docs') }"
+              >
+                <i class="pi pi-book" />
+                {{ $t('nav.documentation') }}
+              </router-link>
+            </li>
+          </ul>
+
           <p class="sidebar-section-label mt-3">{{ $t('nav.settings') }}</p>
           <ul class="sidebar-nav">
             <li>
@@ -398,6 +412,7 @@ watch(currentLocale, (value) => setLocale(value))
 const userMenuItems = computed(() => {
   const items: any[] = [
     { label: t('nav.profile'), icon: 'pi pi-user', command: () => router.push('/profile') },
+    { label: t('nav.documentation'), icon: 'pi pi-book', command: () => router.push('/docs') },
     { label: t('nav.settings'), icon: 'pi pi-cog', command: () => router.push('/settings') },
   ]
   if (authStore.isSystemAdmin) {
@@ -493,6 +508,16 @@ function getProjectCategories(projectId: string): SidebarCategory[] {
       icon: 'pi pi-book',
       type: 'kb',
       children: [],
+    },
+    {
+      key: 'agents',
+      label: t('nav.agents'),
+      icon: 'pi pi-sparkles',
+      type: 'group',
+      children: [
+        { key: 'skills', label: t('nav.agentSkills'), to: `/projects/${projectId}/agents/skills`, icon: 'pi pi-bolt' },
+        { key: 'secrets', label: t('nav.agentSecrets'), to: `/projects/${projectId}/agents/secrets`, icon: 'pi pi-key' },
+      ],
     },
     {
       key: 'integrations',
@@ -731,6 +756,9 @@ function autoExpandCategoryForRoute(projectId: string) {
   }
   if (path.includes('/webhooks')) {
     expandedCategories.add(categoryKey(projectId, 'integrations'))
+  }
+  if (path.includes('/agents')) {
+    expandedCategories.add(categoryKey(projectId, 'agents'))
   }
 }
 

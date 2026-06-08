@@ -7,15 +7,13 @@
     </div>
 
     <div class="settings-card">
-      <AgentSkillsEditor
-        :title="t('admin.agentSkills.globalTitle')"
-        :description="t('admin.agentSkills.globalDescription')"
-        :load-skills="listGlobalAgentSkills"
-        :load-skill="getGlobalAgentSkill"
-        :save-skill-api="upsertGlobalAgentSkill"
-        :delete-skill-api="deleteGlobalAgentSkill"
-        :validate-api="validateGlobalAgentSkill"
-        :generate-skill-api="generateGlobalAgentSkill"
+      <AgentSecretsEditor
+        :title="t('agentSkills.secretsTitle')"
+        :description="t('agentSkills.secretsDescription')"
+        :load-secrets="listGlobalAgentSecrets"
+        :save-secret-api="setGlobalAgentSecret"
+        :reveal-secret-api="revealGlobalAgentSecret"
+        :delete-secret-api="deleteGlobalAgentSecret"
       />
     </div>
   </div>
@@ -25,14 +23,12 @@
 import { useI18n } from 'vue-i18n'
 import AdminSubNav from '@/components/common/AdminSubNav.vue'
 import AdminAgentSkillsSubNav from '@/components/common/AdminAgentSkillsSubNav.vue'
-import AgentSkillsEditor from '@/components/admin/AgentSkillsEditor.vue'
+import AgentSecretsEditor from '@/components/admin/AgentSecretsEditor.vue'
 import {
-  listGlobalAgentSkills,
-  getGlobalAgentSkill,
-  upsertGlobalAgentSkill,
-  deleteGlobalAgentSkill,
-  validateGlobalAgentSkill,
-  generateGlobalAgentSkill,
+  listGlobalAgentSecrets,
+  setGlobalAgentSecret,
+  revealGlobalAgentSecret,
+  deleteGlobalAgentSecret,
 } from '@/api/agentSkills'
 
 const { t } = useI18n()

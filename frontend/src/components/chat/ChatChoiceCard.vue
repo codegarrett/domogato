@@ -108,8 +108,8 @@ const decisionLabel = computed(() => {
 .chat-choice-card {
   margin: 0.5rem 0;
   border-radius: 0.5rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-200));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   overflow: hidden;
 }
 
@@ -180,8 +180,8 @@ const decisionLabel = computed(() => {
   align-items: center;
   padding: 0.4375rem 0.75rem;
   border-radius: 1rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-300));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   color: var(--p-text-color);
   font-size: 0.8125rem;
   font-family: inherit;
@@ -190,9 +190,9 @@ const decisionLabel = computed(() => {
 }
 
 .chat-choice-btn:hover {
-  background: var(--p-primary-50, #eff6ff);
-  border-color: var(--p-primary-300, #93c5fd);
-  color: var(--p-primary-700, #1d4ed8);
+  background: var(--app-hover-bg);
+  border-color: var(--p-primary-color);
+  color: var(--p-primary-color);
 }
 
 .chat-choice-btn--other {

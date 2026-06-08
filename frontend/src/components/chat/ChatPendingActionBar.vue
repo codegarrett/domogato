@@ -121,8 +121,8 @@ const detail = computed(() => {
 .chat-pending-action-btn {
   padding: 0.4375rem 0.75rem;
   border-radius: 1rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-300));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   color: var(--p-text-color);
   font-size: 0.8125rem;
   font-family: inherit;

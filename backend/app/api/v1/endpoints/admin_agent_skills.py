@@ -10,17 +10,22 @@ from app.models.user import User
 from app.schemas.agent_skill import (
     AgentSecretDelete,
     AgentSecretSet,
+    AgentSecretValue,
     AgentSecretsRead,
     AgentSkillDetail,
+    AgentSkillGenerateRequest,
+    AgentSkillGenerateResponse,
     AgentSkillListItem,
     AgentSkillUpsert,
     AgentSkillValidateRequest,
     AgentSkillValidateResponse,
 )
 from app.services import agent_skill_service
+from app.services.agent_skill_generate_service import generate_agent_skill_md
 from app.services.agent_skill_parser import parse_agent_skill_md
 from app.services.agent_skill_secrets import (
     delete_global_secret,
+    get_global_secret_value,
     list_global_secret_keys,
     set_global_secret,
 )
@@ -78,6 +83,19 @@ async def list_global_agent_skills(
     return items
 
 
+@router.post("/generate", response_model=AgentSkillGenerateResponse)
+async def generate_global_agent_skill(
+    body: AgentSkillGenerateRequest,
+    _admin: User = require_system_admin(),
+):
+    result = await generate_agent_skill_md(
+        prompt=body.prompt,
+        current_content_md=body.current_content_md,
+        display_name=body.display_name,
+    )
+    return AgentSkillGenerateResponse(**result)
+
+
 @router.post("/validate", response_model=AgentSkillValidateResponse)
 async def validate_global_agent_skill(
     body: AgentSkillValidateRequest,
@@ -102,6 +120,19 @@ async def list_global_agent_secrets(
 ):
     keys = await list_global_secret_keys(db)
     return AgentSecretsRead(keys=keys)
+
+
+@router.get("/secrets/{key}", response_model=AgentSecretValue)
+async def reveal_global_agent_secret(
+    key: str,
+    _admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    normalized = key.strip().upper()
+    value = await get_global_secret_value(db, normalized)
+    if value is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Secret not found")
+    return AgentSecretValue(key=normalized, value=value)
 
 
 @router.put("/secrets", status_code=status.HTTP_204_NO_CONTENT)

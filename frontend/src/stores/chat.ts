@@ -84,7 +84,7 @@ export const useChatStore = defineStore('chat', () => {
 
   const isLoading = ref(false)
 
-  const view = ref<'list' | 'chat'>('list')
+  const view = ref<'list' | 'chat'>('chat')
 
   let shouldReloadAfterStream = false
 
@@ -247,6 +247,14 @@ export const useChatStore = defineStore('chat', () => {
     streamingContent.value = ''
 
     streamingReasoning.value = ''
+
+  }
+
+
+
+  function openConversationList() {
+
+    view.value = 'list'
 
   }
 
@@ -678,7 +686,7 @@ export const useChatStore = defineStore('chat', () => {
 
       if (activeConversationId.value === id) {
 
-        goToList()
+        newConversation()
 
       }
 
@@ -709,6 +717,18 @@ export const useChatStore = defineStore('chat', () => {
     if (isOpen.value) {
 
       loadConversations()
+
+      if (view.value === 'list') {
+
+        view.value = 'chat'
+
+      }
+
+      if (!activeConversationId.value && messages.value.length === 0 && !isStreaming.value) {
+
+        newConversation()
+
+      }
 
     }
 
@@ -755,6 +775,8 @@ export const useChatStore = defineStore('chat', () => {
     newConversation,
 
     goToList,
+
+    openConversationList,
 
     ensureConversation,
 

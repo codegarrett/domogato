@@ -88,3 +88,13 @@ async def delete_project_secret(db: AsyncSession, project_id: UUID, key: str) ->
 async def list_project_secret_keys(db: AsyncSession, project_id: UUID) -> list[str]:
     secrets = await get_project_secrets(db, project_id)
     return sorted(secrets.keys())
+
+
+async def get_global_secret_value(db: AsyncSession, key: str) -> str | None:
+    secrets = await get_global_secrets(db)
+    return secrets.get(key)
+
+
+async def get_project_secret_value(db: AsyncSession, project_id: UUID, key: str) -> str | None:
+    secrets = await get_project_secrets(db, project_id)
+    return secrets.get(key)

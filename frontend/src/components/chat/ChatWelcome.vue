@@ -5,6 +5,16 @@
     </div>
     <h2 class="chat-welcome-greeting">{{ greeting }}</h2>
     <p class="chat-welcome-prompt">{{ $t('ai.welcomePrompt') }}</p>
+    <button
+      v-if="showContinuePrevious"
+      type="button"
+      class="chat-welcome-continue"
+      :disabled="disabled"
+      @click="$emit('continuePrevious')"
+    >
+      <i class="pi pi-history" />
+      <span>{{ $t('ai.continuePreviousChat') }}</span>
+    </button>
     <p class="chat-welcome-tasks-label">{{ $t('ai.welcomeCommonTasks') }}</p>
     <ul class="chat-welcome-tasks">
       <li v-for="task in tasks" :key="task.key">
@@ -29,10 +39,12 @@ import { useAuthStore } from '@/stores/auth'
 
 defineProps<{
   disabled?: boolean
+  showContinuePrevious?: boolean
 }>()
 
 defineEmits<{
   select: [message: string]
+  continuePrevious: []
 }>()
 
 const { t } = useI18n()
@@ -120,6 +132,38 @@ const tasks = computed(() => [
   max-width: 18rem;
 }
 
+.chat-welcome-continue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 999px;
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.chat-welcome-continue:hover:not(:disabled) {
+  border-color: var(--p-primary-color);
+  background: var(--app-hover-bg);
+}
+
+.chat-welcome-continue:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-welcome-continue i {
+  color: var(--p-primary-color);
+  font-size: 0.875rem;
+}
+
 .chat-welcome-tasks-label {
   margin: 0 0 0.625rem;
   align-self: stretch;
@@ -148,8 +192,8 @@ const tasks = computed(() => [
   width: 100%;
   padding: 0.625rem 0.75rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-200));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   color: var(--p-text-color);
   font-size: 0.8125rem;
   font-family: inherit;
@@ -160,7 +204,7 @@ const tasks = computed(() => [
 
 .chat-welcome-task:hover:not(:disabled) {
   border-color: var(--p-primary-color);
-  background: color-mix(in srgb, var(--p-primary-color) 6%, transparent);
+  background: var(--app-hover-bg);
 }
 
 .chat-welcome-task:disabled {

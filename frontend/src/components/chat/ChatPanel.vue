@@ -3,14 +3,24 @@
     <div class="chat-panel-shell">
     <div class="chat-panel-header">
       <Button
-        v-if="chatStore.view === 'chat'"
+        v-if="chatStore.view === 'chat' && !showWelcome"
         icon="pi pi-arrow-left"
         text
         size="small"
         :aria-label="$t('ai.back')"
         @click="chatStore.goToList()"
       />
-      <span class="chat-panel-title">{{ $t('ai.assistant') }}</span>
+      <Button
+        v-if="chatStore.view === 'list'"
+        icon="pi pi-arrow-left"
+        text
+        size="small"
+        :aria-label="$t('ai.back')"
+        @click="onBackToWelcome()"
+      />
+      <span class="chat-panel-title">
+        {{ chatStore.view === 'list' ? $t('ai.conversations') : $t('ai.assistant') }}
+      </span>
       <Select
         v-model="chatLocale"
         :options="localeOptions"
@@ -28,14 +38,6 @@
         :aria-label="$t('ai.viewLogs')"
         @click="chatStore.openDebugLog()"
       />
-      <Button
-        v-if="chatStore.view === 'list'"
-        icon="pi pi-plus"
-        text
-        size="small"
-        :aria-label="$t('ai.newConversation')"
-        @click="chatStore.newConversation()"
-      />
     </div>
 
     <!-- Conversation list -->
@@ -46,29 +48,37 @@
       <div v-else-if="chatStore.conversations.length === 0" class="chat-flyout-empty">
         {{ $t('ai.noConversations') }}
       </div>
-      <div
-        v-for="conv in chatStore.conversations"
-        v-else
-        :key="conv.id"
-        class="chat-conv-item"
-        @click="chatStore.openConversation(conv.id)"
-      >
-        <div class="chat-conv-item-body">
-          <span class="chat-conv-title">{{ conv.title || 'Untitled' }}</span>
-          <span class="chat-conv-meta">
-            <span v-if="conv.model" class="chat-conv-model">{{ conv.model }}</span>
-            <span class="chat-conv-time">{{ formatRelative(conv.updated_at) }}</span>
-          </span>
+      <template v-else>
+        <div
+          v-for="conv in visibleConversations"
+          :key="conv.id"
+          class="chat-conv-item"
+          @click="chatStore.openConversation(conv.id)"
+        >
+          <div class="chat-conv-item-body">
+            <span class="chat-conv-title">{{ conv.title || 'Untitled' }}</span>
+            <span class="chat-conv-meta">
+              <span class="chat-conv-time">{{ formatRelative(conv.updated_at) }}</span>
+            </span>
+          </div>
+          <Button
+            icon="pi pi-trash"
+            text
+            severity="danger"
+            size="small"
+            class="chat-conv-delete"
+            @click.stop="chatStore.deleteConversation(conv.id)"
+          />
         </div>
         <Button
-          icon="pi pi-trash"
+          v-if="hasHiddenConversations && !showAllConversations"
+          :label="$t('ai.showOlderConversations')"
           text
-          severity="danger"
           size="small"
-          class="chat-conv-delete"
-          @click.stop="chatStore.deleteConversation(conv.id)"
+          class="chat-show-older-btn"
+          @click="showAllConversations = true"
         />
-      </div>
+      </template>
     </div>
 
     <!-- Active chat -->
@@ -77,7 +87,9 @@
         <ChatWelcome
           v-if="showWelcome"
           :disabled="chatStore.isStreaming"
+          :show-continue-previous="chatStore.conversations.length > 0"
           @select="chatStore.sendMessage($event)"
+          @continue-previous="onContinuePrevious()"
         />
         <template v-for="msg in chatStore.messages" :key="msg.id">
           <!-- Hide assistant messages that only contain tool_calls (no visible content) -->
@@ -207,6 +219,28 @@ const chatStore = useChatStore()
 const authStore = useAuthStore()
 const messagesContainer = ref<HTMLElement>()
 const reasoningExpanded = ref(true)
+const showAllConversations = ref(false)
+
+const RECENT_CONVERSATION_LIMIT = 3
+
+const visibleConversations = computed(() => {
+  if (showAllConversations.value) return chatStore.conversations
+  return chatStore.conversations.slice(0, RECENT_CONVERSATION_LIMIT)
+})
+
+const hasHiddenConversations = computed(
+  () => chatStore.conversations.length > RECENT_CONVERSATION_LIMIT,
+)
+
+function onContinuePrevious() {
+  showAllConversations.value = false
+  chatStore.openConversationList()
+}
+
+function onBackToWelcome() {
+  showAllConversations.value = false
+  chatStore.newConversation()
+}
 
 const localeOptions = [
   { label: 'English', value: 'en' },
@@ -357,6 +391,15 @@ function scrollToBottom() {
 }
 
 watch(
+  () => chatStore.view,
+  (nextView) => {
+    if (nextView === 'list') {
+      showAllConversations.value = false
+    }
+  },
+)
+
+watch(
   () => chatStore.messages.length,
   () => scrollToBottom(),
 )
@@ -449,6 +492,8 @@ watch(
 }
 
 .chat-flyout-list {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem;
@@ -503,14 +548,6 @@ watch(
   color: var(--p-text-muted-color);
 }
 
-.chat-conv-model {
-  background: var(--p-surface-ground, var(--p-surface-50));
-  padding: 0 0.25rem;
-  border-radius: 3px;
-  font-weight: 600;
-  font-size: 0.6875rem;
-}
-
 .chat-conv-delete {
   opacity: 0;
   transition: opacity 0.12s;
@@ -518,6 +555,11 @@ watch(
 
 .chat-conv-item:hover .chat-conv-delete {
   opacity: 1;
+}
+
+.chat-show-older-btn {
+  align-self: center;
+  margin-top: 0.25rem;
 }
 
 .chat-flyout-chat {
@@ -686,8 +728,8 @@ watch(
 /* Interaction prompts */
 .chat-interaction {
   padding: 0.75rem;
-  border-top: 1px solid var(--p-surface-border, var(--p-surface-200));
-  background: var(--p-surface-ground, var(--p-surface-50));
+  border-top: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
 }
 
 .chat-interaction-question {
@@ -709,8 +751,8 @@ watch(
   gap: 0.375rem;
   padding: 0.4375rem 0.75rem;
   border-radius: 1rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-300));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   color: var(--p-text-color);
   font-size: 0.8125rem;
   font-family: inherit;
@@ -730,9 +772,9 @@ watch(
 }
 
 .chat-interaction-btn--other:hover {
-  background: var(--p-surface-100);
+  background: var(--app-hover-bg);
   color: var(--p-text-color);
-  border-color: var(--p-surface-border, var(--p-surface-400));
+  border-color: var(--app-border-color, var(--p-content-border-color));
 }
 
 .chat-interaction-other {
@@ -745,10 +787,10 @@ watch(
   flex: 1;
   padding: 0.4375rem 0.625rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-300));
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
   font-size: 0.8125rem;
   font-family: inherit;
-  background: var(--p-surface-card, #fff);
+  background: var(--p-content-background);
   color: var(--p-text-color);
   outline: none;
 }

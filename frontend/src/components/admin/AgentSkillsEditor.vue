@@ -8,6 +8,8 @@
       <Button :label="t('agentSkills.newSkill')" icon="pi pi-plus" size="small" @click="openNewSkill" />
     </div>
 
+    <p v-if="loadError" class="text-sm text-red-500 mt-3 mb-0">{{ loadError }}</p>
+
     <DataTable v-if="skills.length" :value="skills" size="small" class="text-sm mt-3">
       <Column :header="t('agentSkills.slug')" field="slug" />
       <Column :header="t('agentSkills.toolName')" field="tool_name" />
@@ -26,25 +28,26 @@
     </DataTable>
     <p v-else class="text-sm text-color-secondary mt-3 mb-0">{{ t('agentSkills.noSkills') }}</p>
 
-    <div class="secrets-block mt-4">
-      <div class="font-semibold mb-1">{{ t('agentSkills.secretsTitle') }}</div>
-      <p class="text-sm text-color-secondary mt-0 mb-2">{{ t('agentSkills.secretsDescription') }}</p>
-      <div class="flex gap-2 flex-wrap mb-2">
-        <Tag v-for="key in secretKeys" :key="key" :value="key" severity="secondary" />
-        <span v-if="!secretKeys.length" class="text-sm text-color-secondary">—</span>
-      </div>
-      <div class="flex gap-2 flex-wrap align-items-center">
-        <InputText v-model="newSecretKey" :placeholder="t('agentSkills.secretKey')" class="secret-input" />
-        <InputText v-model="newSecretValue" type="password" :placeholder="t('agentSkills.secretValue')" class="secret-input" />
-        <Button :label="t('agentSkills.saveSecret')" size="small" :disabled="!newSecretKey || !newSecretValue" @click="saveSecret" />
-      </div>
-    </div>
-
     <Dialog v-model:visible="editorOpen" :header="editorTitle" modal :style="{ width: '48rem' }">
       <div class="flex flex-column gap-3">
         <InputText v-model="editSlug" :placeholder="t('agentSkills.slug')" :disabled="!!editingSlug" />
         <InputText v-model="editName" :placeholder="t('agentSkills.displayName')" />
-        <Textarea v-model="editContent" rows="18" class="w-full font-mono text-sm" />
+        <div class="markdown-field">
+          <div class="markdown-field-header">
+            <span class="text-sm font-semibold">{{ t('agentSkills.markdownLabel') }}</span>
+            <Button
+              v-tooltip.top="aiWandTooltip"
+              icon="pi pi-sparkles"
+              text
+              rounded
+              size="small"
+              :disabled="!chatStore.isConfigured || aiGenerating"
+              :aria-label="t('agentSkills.aiGenerate')"
+              @click="openAiDialog"
+            />
+          </div>
+          <Textarea v-model="editContent" rows="18" class="w-full font-mono text-sm" />
+        </div>
         <Message v-if="validateErrors.length" severity="error" :closable="false">
           {{ validateErrors.join('; ') }}
         </Message>
@@ -56,6 +59,35 @@
         <Button :label="t('agentSkills.validate')" text @click="runValidate" />
         <Button :label="t('common.cancel')" text @click="editorOpen = false" />
         <Button :label="t('common.save')" :loading="saving" @click="saveSkill" />
+      </template>
+    </Dialog>
+
+    <Dialog
+      v-model:visible="aiDialogOpen"
+      :header="t('agentSkills.aiGenerateTitle')"
+      modal
+      :style="{ width: '32rem' }"
+    >
+      <p class="text-sm text-color-secondary mt-0 mb-3">{{ t('agentSkills.aiGenerateHint') }}</p>
+      <Textarea
+        v-model="aiPrompt"
+        rows="5"
+        class="w-full"
+        :placeholder="t('agentSkills.aiGeneratePrompt')"
+        autofocus
+      />
+      <Message v-if="aiError" severity="error" :closable="false" class="mt-3">
+        {{ aiError }}
+      </Message>
+      <template #footer>
+        <Button :label="t('common.cancel')" text @click="aiDialogOpen = false" />
+        <Button
+          :label="t('agentSkills.aiGenerate')"
+          icon="pi pi-sparkles"
+          :loading="aiGenerating"
+          :disabled="!aiPrompt.trim()"
+          @click="runAiGenerate"
+        />
       </template>
     </Dialog>
   </div>
@@ -72,9 +104,14 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import Message from 'primevue/message'
-import type { AgentSkillListItem } from '@/api/agentSkills'
+import type {
+  AgentSkillGenerateRequest,
+  AgentSkillGenerateResponse,
+  AgentSkillListItem,
+} from '@/api/agentSkills'
 import { DEFAULT_SKILL_TEMPLATE } from '@/api/agentSkills'
 import { useToastService } from '@/composables/useToast'
+import { useChatStore } from '@/stores/chat'
 
 const props = defineProps<{
   title: string
@@ -84,15 +121,14 @@ const props = defineProps<{
   saveSkillApi: (slug: string, payload: { name: string; content_md: string; enabled: boolean }) => Promise<unknown>
   deleteSkillApi: (slug: string) => Promise<void>
   validateApi: (contentMd: string) => Promise<{ valid: boolean; errors: string[]; tool_name?: string | null }>
-  loadSecrets: () => Promise<{ keys: string[] }>
-  saveSecretApi: (key: string, value: string) => Promise<void>
+  generateSkillApi: (payload: AgentSkillGenerateRequest) => Promise<AgentSkillGenerateResponse>
 }>()
 
 const { t } = useI18n()
 const toast = useToastService()
+const chatStore = useChatStore()
 
 const skills = ref<AgentSkillListItem[]>([])
-const secretKeys = ref<string[]>([])
 const editorOpen = ref(false)
 const editingSlug = ref<string | null>(null)
 const editSlug = ref('')
@@ -102,16 +138,28 @@ const saving = ref(false)
 const validateErrors = ref<string[]>([])
 const validateOk = ref(false)
 const validatedToolName = ref<string | null>(null)
-const newSecretKey = ref('')
-const newSecretValue = ref('')
+const loadError = ref<string | null>(null)
+const aiDialogOpen = ref(false)
+const aiPrompt = ref('')
+const aiGenerating = ref(false)
+const aiError = ref<string | null>(null)
 
 const editorTitle = computed(() =>
   editingSlug.value ? t('agentSkills.editSkill') : t('agentSkills.newSkill'),
 )
 
+const aiWandTooltip = computed(() =>
+  chatStore.isConfigured ? t('agentSkills.aiGenerate') : t('agentSkills.aiNotConfigured'),
+)
+
 async function refresh() {
-  skills.value = await props.loadSkills()
-  secretKeys.value = (await props.loadSecrets()).keys
+  loadError.value = null
+  try {
+    skills.value = await props.loadSkills()
+  } catch (err: unknown) {
+    loadError.value = err instanceof Error ? err.message : t('common.error')
+    skills.value = []
+  }
 }
 
 onMounted(refresh)
@@ -135,6 +183,50 @@ async function editSkill(slug: string) {
   validateErrors.value = []
   validateOk.value = false
   editorOpen.value = true
+}
+
+function openAiDialog() {
+  if (!chatStore.isConfigured) {
+    toast.showWarn(t('common.error'), t('agentSkills.aiNotConfigured'))
+    return
+  }
+  aiPrompt.value = ''
+  aiError.value = null
+  aiDialogOpen.value = true
+}
+
+async function runAiGenerate() {
+  const prompt = aiPrompt.value.trim()
+  if (!prompt) return
+  aiGenerating.value = true
+  aiError.value = null
+  try {
+    const result = await props.generateSkillApi({
+      prompt,
+      current_content_md: editContent.value.trim() || null,
+      display_name: editName.value.trim() || null,
+    })
+    editContent.value = result.content_md
+    if (result.suggested_name && !editName.value.trim()) {
+      editName.value = result.suggested_name
+    }
+    if (!editingSlug.value && result.tool_name && !editSlug.value.trim()) {
+      editSlug.value = result.tool_name.replace(/_/g, '-')
+    }
+    validateErrors.value = result.errors
+    validateOk.value = result.valid
+    validatedToolName.value = result.tool_name ?? null
+    aiDialogOpen.value = false
+    if (result.valid) {
+      toast.showSuccess(t('common.success'), t('agentSkills.aiGenerated'))
+    } else {
+      toast.showWarn(t('common.error'), t('agentSkills.aiGeneratedWithErrors'))
+    }
+  } catch (err: unknown) {
+    aiError.value = err instanceof Error ? err.message : t('common.error')
+  } finally {
+    aiGenerating.value = false
+  }
 }
 
 async function runValidate() {
@@ -169,15 +261,6 @@ function confirmDelete(slug: string) {
     await refresh()
   })
 }
-
-async function saveSecret() {
-  if (!newSecretKey.value || !newSecretValue.value) return
-  await props.saveSecretApi(newSecretKey.value.trim(), newSecretValue.value)
-  newSecretKey.value = ''
-  newSecretValue.value = ''
-  toast.showSuccess(t('common.success'), t('agentSkills.secretSaved'))
-  secretKeys.value = (await props.loadSecrets()).keys
-}
 </script>
 
 <style scoped>
@@ -187,12 +270,11 @@ async function saveSecret() {
   align-items: flex-start;
   gap: 1rem;
 }
-.secrets-block {
-  border-top: 1px solid var(--app-border-color, var(--p-surface-200));
-  padding-top: 1rem;
-}
-.secret-input {
-  min-width: 10rem;
+.markdown-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.375rem;
 }
 .font-mono {
   font-family: ui-monospace, monospace;

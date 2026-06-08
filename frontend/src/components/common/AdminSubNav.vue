@@ -27,7 +27,7 @@
     <router-link
       to="/admin/agent-skills"
       class="sub-nav-link"
-      :class="{ active: route.path === '/admin/agent-skills' }"
+      :class="{ active: route.path.startsWith('/admin/agent-skills') }"
     >
       <i class="pi pi-bolt" />
       {{ t('admin.agentSkillsNav') }}

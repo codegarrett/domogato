@@ -12,17 +12,22 @@ from app.models.user import User
 from app.schemas.agent_skill import (
     AgentSecretDelete,
     AgentSecretSet,
+    AgentSecretValue,
     AgentSecretsRead,
     AgentSkillDetail,
+    AgentSkillGenerateRequest,
+    AgentSkillGenerateResponse,
     AgentSkillListItem,
     AgentSkillUpsert,
     AgentSkillValidateRequest,
     AgentSkillValidateResponse,
 )
 from app.services import agent_skill_service
+from app.services.agent_skill_generate_service import generate_agent_skill_md
 from app.services.agent_skill_parser import parse_agent_skill_md
 from app.services.agent_skill_secrets import (
     delete_project_secret,
+    get_project_secret_value,
     list_project_secret_keys,
     set_project_secret,
 )
@@ -82,6 +87,23 @@ async def list_project_agent_skills(
 
 
 @router.post(
+    "/projects/{project_id}/agent-skills/generate",
+    response_model=AgentSkillGenerateResponse,
+)
+async def generate_project_agent_skill(
+    project_id: UUID,
+    body: AgentSkillGenerateRequest,
+    _role=require_project_role(ProjectRole.MAINTAINER),
+):
+    result = await generate_agent_skill_md(
+        prompt=body.prompt,
+        current_content_md=body.current_content_md,
+        display_name=body.display_name,
+    )
+    return AgentSkillGenerateResponse(**result)
+
+
+@router.post(
     "/projects/{project_id}/agent-skills/validate",
     response_model=AgentSkillValidateResponse,
 )
@@ -110,6 +132,20 @@ async def list_project_agent_secrets(
 ):
     keys = await list_project_secret_keys(db, project_id)
     return AgentSecretsRead(keys=keys)
+
+
+@router.get("/projects/{project_id}/agent-skills-secrets/{key}", response_model=AgentSecretValue)
+async def reveal_project_agent_secret(
+    project_id: UUID,
+    key: str,
+    _role=require_project_role(ProjectRole.MAINTAINER),
+    db: AsyncSession = Depends(get_db),
+):
+    normalized = key.strip().upper()
+    value = await get_project_secret_value(db, project_id, normalized)
+    if value is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Secret not found")
+    return AgentSecretValue(key=normalized, value=value)
 
 
 @router.put("/projects/{project_id}/agent-skills-secrets", status_code=status.HTTP_204_NO_CONTENT)

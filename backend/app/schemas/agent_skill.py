@@ -46,6 +46,20 @@ class AgentSkillValidateResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class AgentSkillGenerateRequest(BaseModel):
+    prompt: str = Field(..., min_length=3, max_length=4000)
+    current_content_md: str | None = None
+    display_name: str | None = Field(None, max_length=255)
+
+
+class AgentSkillGenerateResponse(BaseModel):
+    content_md: str
+    suggested_name: str | None = None
+    valid: bool
+    tool_name: str | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
 class AgentSecretsRead(BaseModel):
     keys: list[str]
 
@@ -57,3 +71,8 @@ class AgentSecretSet(BaseModel):
 
 class AgentSecretDelete(BaseModel):
     key: str = Field(..., min_length=1, max_length=100, pattern=r"^[A-Z][A-Z0-9_]{0,99}$")
+
+
+class AgentSecretValue(BaseModel):
+    key: str
+    value: str

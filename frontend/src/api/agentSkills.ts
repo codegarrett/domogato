@@ -29,8 +29,27 @@ export interface AgentSkillValidateResponse {
   errors: string[]
 }
 
+export interface AgentSkillGenerateRequest {
+  prompt: string
+  current_content_md?: string | null
+  display_name?: string | null
+}
+
+export interface AgentSkillGenerateResponse {
+  content_md: string
+  suggested_name?: string | null
+  valid: boolean
+  tool_name?: string | null
+  errors: string[]
+}
+
 export interface AgentSecretsRead {
   keys: string[]
+}
+
+export interface AgentSecretValue {
+  key: string
+  value: string
 }
 
 const DEFAULT_SKILL_TEMPLATE = `---
@@ -99,6 +118,17 @@ export async function validateProjectAgentSkill(projectId: string, contentMd: st
   return data
 }
 
+export async function generateProjectAgentSkill(
+  projectId: string,
+  payload: AgentSkillGenerateRequest,
+) {
+  const { data } = await apiClient.post<AgentSkillGenerateResponse>(
+    `/projects/${projectId}/agent-skills/generate`,
+    payload,
+  )
+  return data
+}
+
 export async function listProjectAgentSecrets(projectId: string) {
   const { data } = await apiClient.get<AgentSecretsRead>(
     `/projects/${projectId}/agent-skills-secrets`,
@@ -112,6 +142,13 @@ export async function setProjectAgentSecret(
   value: string,
 ) {
   await apiClient.put(`/projects/${projectId}/agent-skills-secrets`, { key, value })
+}
+
+export async function revealProjectAgentSecret(projectId: string, key: string) {
+  const { data } = await apiClient.get<AgentSecretValue>(
+    `/projects/${projectId}/agent-skills-secrets/${encodeURIComponent(key)}`,
+  )
+  return data
 }
 
 export async function deleteProjectAgentSecret(projectId: string, key: string) {
@@ -148,6 +185,14 @@ export async function validateGlobalAgentSkill(contentMd: string) {
   return data
 }
 
+export async function generateGlobalAgentSkill(payload: AgentSkillGenerateRequest) {
+  const { data } = await apiClient.post<AgentSkillGenerateResponse>(
+    '/admin/agent-skills/generate',
+    payload,
+  )
+  return data
+}
+
 export async function listGlobalAgentSecrets() {
   const { data } = await apiClient.get<AgentSecretsRead>('/admin/agent-skills/secrets')
   return data
@@ -155,6 +200,13 @@ export async function listGlobalAgentSecrets() {
 
 export async function setGlobalAgentSecret(key: string, value: string) {
   await apiClient.put('/admin/agent-skills/secrets', { key, value })
+}
+
+export async function revealGlobalAgentSecret(key: string) {
+  const { data } = await apiClient.get<AgentSecretValue>(
+    `/admin/agent-skills/secrets/${encodeURIComponent(key)}`,
+  )
+  return data
 }
 
 export async function deleteGlobalAgentSecret(key: string) {

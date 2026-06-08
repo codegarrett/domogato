@@ -74,20 +74,6 @@
         </div>
       </div>
 
-      <div class="settings-card">
-        <AgentSkillsEditor
-          :title="t('agentSkills.projectTitle')"
-          :description="t('agentSkills.projectDescription')"
-          :load-skills="() => listProjectAgentSkills(projectId)"
-          :load-skill="(slug) => getProjectAgentSkill(projectId, slug)"
-          :save-skill-api="(slug, payload) => upsertProjectAgentSkill(projectId, slug, payload)"
-          :delete-skill-api="(slug) => deleteProjectAgentSkill(projectId, slug)"
-          :validate-api="(contentMd) => validateProjectAgentSkill(projectId, contentMd)"
-          :load-secrets="() => listProjectAgentSecrets(projectId)"
-          :save-secret-api="(key, value) => setProjectAgentSecret(projectId, key, value)"
-        />
-      </div>
-
       <!-- Danger Zone: Purge Project Data (org/project admin only) -->
       <div v-if="canAdministerProject" class="settings-card danger-card">
         <div class="font-semibold mb-1" style="color: var(--p-red-500)">{{ t('projects.dangerZone') }}</div>
@@ -125,16 +111,6 @@ import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import ToggleSwitch from 'primevue/toggleswitch'
-import AgentSkillsEditor from '@/components/admin/AgentSkillsEditor.vue'
-import {
-  listProjectAgentSkills,
-  getProjectAgentSkill,
-  upsertProjectAgentSkill,
-  deleteProjectAgentSkill,
-  validateProjectAgentSkill,
-  listProjectAgentSecrets,
-  setProjectAgentSecret,
-} from '@/api/agentSkills'
 import {
   getProject,
   getProjectSettings,
@@ -275,7 +251,7 @@ async function copyKey() {
 
 <style scoped>
 .project-settings-page {
-  max-width: 960px;
+  max-width: 640px;
 }
 .page-title {
   font-size: 1.5rem;

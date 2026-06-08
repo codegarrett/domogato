@@ -92,8 +92,8 @@ async function copyLogs() {
   width: 100%;
   max-height: 100%;
   border-radius: 0.5rem;
-  border: 1px solid var(--p-surface-border, var(--p-surface-200));
-  background: var(--p-surface-card, #fff);
+  border: 1px solid var(--app-border-color, var(--p-content-border-color));
+  background: var(--p-content-background);
   box-shadow: 0 8px 32px rgb(0 0 0 / 18%);
   overflow: hidden;
 }
@@ -104,7 +104,7 @@ async function copyLogs() {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--p-surface-border, var(--p-surface-100));
+  border-bottom: 1px solid var(--app-border-color, var(--p-content-border-color));
 }
 
 .chat-debug-title {
