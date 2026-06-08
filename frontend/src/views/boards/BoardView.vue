@@ -28,8 +28,11 @@ import {
   normalizeHexColor,
   workflowColumnHeaderStyle,
 } from '@/utils/workflowColors'
+import Menu from 'primevue/menu'
+import { useAccessibility } from '@/composables/useAccessibility'
 
 const route = useRoute()
+const { keyboardDragAlternatives, boardKeyboardNav } = useAccessibility()
 const router = useRouter()
 const { t } = useI18n()
 const toast = useToastService()
@@ -45,6 +48,9 @@ const loading = ref(false)
 const rebuilding = ref(false)
 const draggingTicket = ref<BoardTicket | null>(null)
 const dragOverColumn = ref<string | null>(null)
+const moveMenuRef = ref()
+const moveMenuTicket = ref<BoardTicket | null>(null)
+const focusedCardId = ref<string | null>(null)
 
 const sprints = ref<Sprint[]>([])
 const selectedSprintId = ref<string | null>(null)
@@ -360,14 +366,7 @@ function onDragLeave() {
   dragOverColumn.value = null
 }
 
-async function onDrop(statusId: string, event: DragEvent) {
-  event.preventDefault()
-  dragOverColumn.value = null
-  if (!draggingTicket.value) return
-
-  const ticket = draggingTicket.value
-  draggingTicket.value = null
-
+async function moveTicketToStatus(ticket: BoardTicket, statusId: string) {
   const currentCol = columns.value.find((c) =>
     c.tickets.some((t) => t.id === ticket.id),
   )
@@ -377,6 +376,45 @@ async function onDrop(statusId: string, event: DragEvent) {
     await moveTicket(ticket.id, statusId)
     await refreshTickets()
   } catch { /* global interceptor */ }
+}
+
+async function onDrop(statusId: string, event: DragEvent) {
+  event.preventDefault()
+  dragOverColumn.value = null
+  if (!draggingTicket.value) return
+
+  const ticket = draggingTicket.value
+  draggingTicket.value = null
+  await moveTicketToStatus(ticket, statusId)
+}
+
+function openMoveMenu(ticket: BoardTicket, event: Event) {
+  moveMenuTicket.value = ticket
+  moveMenuRef.value?.toggle(event)
+}
+
+const moveMenuItems = computed(() => {
+  const ticket = moveMenuTicket.value
+  if (!ticket) return []
+  const currentCol = columns.value.find((c) =>
+    c.tickets.some((t) => t.id === ticket.id),
+  )
+  return columns.value
+    .filter((col) => currentCol?.workflow_status_id !== col.workflow_status_id)
+    .map((col) => ({
+      label: col.name,
+      command: () => {
+        void moveTicketToStatus(ticket, col.workflow_status_id)
+      },
+    }))
+})
+
+function onCardKeydown(ticket: BoardTicket, event: KeyboardEvent) {
+  if (!boardKeyboardNav.value) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    goToTicket(ticket)
+  }
 }
 
 function goToTicket(ticket: BoardTicket) {
@@ -590,13 +628,29 @@ onUnmounted(() => {
                 v-for="ticket in col.tickets"
                 :key="ticket.id"
                 class="ticket-card surface-card border-round shadow-1 p-3 mb-2 cursor-pointer"
+                :class="{ 'ticket-card--focused': boardKeyboardNav && focusedCardId === ticket.id }"
                 draggable="true"
+                :tabindex="boardKeyboardNav ? 0 : undefined"
+                :aria-label="`${ticket.ticket_key}: ${ticket.title}`"
                 @dragstart="onDragStart(ticket, $event)"
                 @click="goToTicket(ticket)"
+                @focus="focusedCardId = ticket.id"
+                @keydown="onCardKeydown(ticket, $event)"
               >
-                <div class="flex align-items-center gap-2 mb-1">
-                  <Tag :value="ticket.ticket_key" severity="info" class="text-xs" />
-                  <i :class="[priorityIcon(ticket.priority), priorityClass(ticket.priority)]" style="font-size: 0.8rem" />
+                <div class="flex align-items-center justify-content-between gap-2 mb-1">
+                  <div class="flex align-items-center gap-2">
+                    <Tag :value="ticket.ticket_key" severity="info" class="text-xs" />
+                    <i :class="[priorityIcon(ticket.priority), priorityClass(ticket.priority)]" style="font-size: 0.8rem" aria-hidden="true" />
+                  </div>
+                  <Button
+                    v-if="keyboardDragAlternatives"
+                    icon="pi pi-arrows-alt"
+                    text
+                    rounded
+                    size="small"
+                    :aria-label="$t('a11y.moveTicket')"
+                    @click.stop="openMoveMenu(ticket, $event)"
+                  />
                 </div>
                 <div class="text-sm font-medium mb-2 ticket-card-title">{{ ticket.title }}</div>
                 <div class="flex align-items-center justify-content-between">
@@ -625,10 +679,17 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <Menu ref="moveMenuRef" :model="moveMenuItems" popup />
   </div>
 </template>
 
 <style scoped>
+.ticket-card--focused {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+}
+
 .board-container {
   padding-bottom: 1rem;
   max-width: 100%;

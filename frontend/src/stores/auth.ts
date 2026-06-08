@@ -4,6 +4,7 @@ import { useAuth } from '@/composables/useAuth'
 import apiClient from '@/api/client'
 import { setLocale } from '@/i18n'
 import { useUiStore } from '@/stores/ui'
+import { useAccessibilityStore } from '@/stores/accessibility'
 import { syncSessionCookie, clearSessionCookie } from '@/utils/sessionCookie'
 import { isEmbedMode, embedLoginPath } from '@/utils/embedMode'
 import axios from 'axios'
@@ -15,6 +16,7 @@ export interface AuthConfig {
   oidc: { issuer_url: string; client_id: string } | null
   external_agent_enabled?: boolean
   external_agent_url?: string | null
+  accessibility?: Record<string, unknown> | null
 }
 
 export interface UserProfile {
@@ -86,6 +88,11 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await axios.get(`${baseUrl}/auth/config`)
       authConfig.value = response.data
       setAuthMode(response.data.auth_mode)
+      const a11yStore = useAccessibilityStore()
+      a11yStore.setPlatformConfig(
+        response.data.accessibility as Record<string, unknown> | undefined,
+      )
+      a11yStore.applyDocumentClasses()
       return response.data
     } catch (e: any) {
       configError.value = 'Failed to load auth configuration'
@@ -141,6 +148,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (typeof prefs.locale === 'string' && (prefs.locale === 'en' || prefs.locale === 'es')) {
       setLocale(prefs.locale)
     }
+    const a11yStore = useAccessibilityStore()
+    a11yStore.setUserPreferences(prefs)
   }
 
   async function doLocalLogin(email: string, password: string): Promise<void> {

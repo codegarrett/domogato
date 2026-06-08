@@ -10,8 +10,10 @@ import 'primeicons/primeicons.css'
 
 import App from './App.vue'
 import router from './router'
-import i18n from './i18n'
+import i18n, { getLocale, setLocale } from './i18n'
 import './assets/styles/main.css'
+import './assets/styles/a11y.css'
+import { useAccessibilityStore } from '@/stores/accessibility'
 
 const ProjectHubPreset = definePreset(Aura, {
   semantic: {
@@ -90,5 +92,13 @@ app.use(PrimeVue, {
 })
 app.use(ToastService)
 app.use(ConfirmationService)
+
+const a11yStore = useAccessibilityStore()
+a11yStore.init()
+
+const bootLocale = getLocale()
+if (bootLocale === 'en' || bootLocale === 'es') {
+  setLocale(bootLocale)
+}
 
 app.mount('#app')

@@ -6,6 +6,8 @@ import Button from 'primevue/button'
 import DatePicker from 'primevue/datepicker'
 import BarChart from '@/components/charts/BarChart.vue'
 import PieChart from '@/components/charts/PieChart.vue'
+import ChartWithDataTable from '@/components/charts/ChartWithDataTable.vue'
+import { useAccessibility } from '@/composables/useAccessibility'
 import StackedAreaChart from '@/components/charts/StackedAreaChart.vue'
 import ScatterChart from '@/components/charts/ScatterChart.vue'
 import {
@@ -21,6 +23,7 @@ import {
 
 const route = useRoute()
 const { t } = useI18n()
+const { chartDataTables } = useAccessibility()
 const projectId = route.params.projectId as string
 
 const summary = ref<ProjectSummary | null>(null)
@@ -75,6 +78,21 @@ const typeChartData = computed(() => {
       backgroundColor: TYPE_COLORS.slice(0, entries.length),
     }],
   }
+})
+
+const priorityTableRows = computed(() => {
+  if (!summary.value) return []
+  return Object.entries(summary.value.by_priority).map(([k, v]) => [k, v])
+})
+
+const typeTableRows = computed(() => {
+  if (!summary.value) return []
+  return Object.entries(summary.value.by_type).map(([k, v]) => [k, v])
+})
+
+const velocityTableRows = computed(() => {
+  if (!velocity.value) return []
+  return velocity.value.entries.map((e) => [e.sprint_name, e.velocity])
 })
 
 const velocityChartData = computed(() => {
@@ -229,18 +247,34 @@ onMounted(loadReports)
           <div class="surface-card p-4 border-round shadow-1">
             <div class="text-sm font-semibold text-color-secondary mb-3">{{ $t('reports.byPriority') }}</div>
             <div v-if="Object.keys(summary.by_priority).length === 0" class="text-color-secondary text-sm">{{ $t('reports.noData') }}</div>
-            <div v-else style="height: 240px">
-              <PieChart :data="priorityChartData" />
-            </div>
+            <ChartWithDataTable
+              v-else
+              :title="$t('reports.byPriority')"
+              :show-data-table="chartDataTables"
+              :table-columns="[$t('reports.priority'), $t('reports.count')]"
+              :table-rows="priorityTableRows"
+            >
+              <div style="height: 240px">
+                <PieChart :data="priorityChartData" />
+              </div>
+            </ChartWithDataTable>
           </div>
         </div>
         <div class="col-12 lg:col-6">
           <div class="surface-card p-4 border-round shadow-1">
             <div class="text-sm font-semibold text-color-secondary mb-3">{{ $t('reports.byType') }}</div>
             <div v-if="Object.keys(summary.by_type).length === 0" class="text-color-secondary text-sm">{{ $t('reports.noData') }}</div>
-            <div v-else style="height: 240px">
-              <PieChart :data="typeChartData" />
-            </div>
+            <ChartWithDataTable
+              v-else
+              :title="$t('reports.byType')"
+              :show-data-table="chartDataTables"
+              :table-columns="[$t('reports.type'), $t('reports.count')]"
+              :table-rows="typeTableRows"
+            >
+              <div style="height: 240px">
+                <PieChart :data="typeChartData" />
+              </div>
+            </ChartWithDataTable>
           </div>
         </div>
       </div>
@@ -251,9 +285,17 @@ onMounted(loadReports)
           <div class="surface-card p-4 border-round shadow-1">
             <div class="text-sm font-semibold text-color-secondary mb-3">{{ $t('reports.velocity') }}</div>
             <div v-if="!velocityChartData" class="text-color-secondary text-sm">{{ $t('reports.noData') }}</div>
-            <div v-else style="height: 300px">
-              <BarChart :data="velocityChartData" />
-            </div>
+            <ChartWithDataTable
+              v-else
+              :title="$t('reports.velocity')"
+              :show-data-table="chartDataTables"
+              :table-columns="[$t('reports.sprint'), $t('reports.velocity')]"
+              :table-rows="velocityTableRows"
+            >
+              <div style="height: 300px">
+                <BarChart :data="velocityChartData" />
+              </div>
+            </ChartWithDataTable>
             <div v-if="velocity" class="text-sm text-color-secondary mt-2">
               {{ $t('reports.averageVelocity') }}: <strong>{{ velocity.average }} SP</strong>
             </div>

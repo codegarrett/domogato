@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed, useId } from 'vue'
 import { useRouter } from 'vue-router'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -15,8 +15,14 @@ interface SearchResult {
 }
 
 const router = useRouter()
+const titleId = useId()
+const searchId = useId()
+const listboxId = useId()
 
 const visible = ref(false)
+const activeDescendantId = computed(() =>
+  results.value.length > 0 ? `cmd-result-${selectedIndex.value}` : undefined,
+)
 const query = ref('')
 const results = ref<SearchResult[]>([])
 const loading = ref(false)
@@ -126,14 +132,21 @@ defineExpose({ open })
     :style="{ width: '36rem', maxWidth: '95vw' }"
     contentClass="p-0"
     class="cmd-palette-dialog"
+    :aria-labelledby="titleId"
   >
-    <div class="cmd-palette" @keydown="onKeydown">
+    <div class="cmd-palette" role="combobox" aria-expanded="true" @keydown="onKeydown">
+      <h2 :id="titleId" class="sr-only">{{ $t('search.placeholder') }}</h2>
       <div class="cmd-palette-search">
-        <i class="pi pi-search cmd-palette-search-icon" />
+        <i class="pi pi-search cmd-palette-search-icon" aria-hidden="true" />
+        <label :for="searchId" class="sr-only">{{ $t('search.placeholder') }}</label>
         <InputText
+          :id="searchId"
           v-model="query"
           :placeholder="$t('search.placeholder')"
           class="cmd-palette-input w-full"
+          role="searchbox"
+          :aria-controls="listboxId"
+          :aria-activedescendant="activeDescendantId"
           autofocus
         />
         <kbd class="cmd-palette-kbd">ESC</kbd>
@@ -143,12 +156,20 @@ defineExpose({ open })
         <i class="pi pi-spin pi-spinner" />
       </div>
 
-      <div v-else-if="results.length > 0" class="cmd-palette-results">
+      <div
+        v-else-if="results.length > 0"
+        :id="listboxId"
+        class="cmd-palette-results"
+        role="listbox"
+      >
         <div
           v-for="(r, i) in results"
+          :id="`cmd-result-${i}`"
           :key="r.id + '-' + i"
           class="cmd-palette-result"
+          role="option"
           :class="{ selected: i === selectedIndex }"
+          :aria-selected="i === selectedIndex"
           @click="navigate(r)"
           @mouseenter="selectedIndex = i"
         >
@@ -196,11 +217,16 @@ defineExpose({ open })
 .cmd-palette-input :deep(input),
 .cmd-palette-input :deep(.p-inputtext) {
   border: none;
-  outline: none;
   box-shadow: none;
   font-size: 0.9375rem;
   padding: 0.25rem 0;
   background: transparent;
+}
+
+.cmd-palette-input :deep(input:focus-visible),
+.cmd-palette-input :deep(.p-inputtext:focus-visible) {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 1px;
 }
 
 .cmd-palette-kbd {

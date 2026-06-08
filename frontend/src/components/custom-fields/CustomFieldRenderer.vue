@@ -18,6 +18,8 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: unknown): void
 }>()
 
+const fieldId = computed(() => `cf-${props.definition.id}`)
+
 const localValue = ref<unknown>(props.modelValue)
 
 watch(() => props.modelValue, (v) => {
@@ -66,20 +68,22 @@ const checkboxValue = computed({
 <template>
   <div class="custom-field-renderer">
     <template v-if="definition.field_type === 'text'">
+      <label :for="fieldId" class="text-sm font-medium block mb-1">{{ definition.name }}</label>
       <InputText
+        :id="fieldId"
         :modelValue="(localValue as string) ?? ''"
         @update:modelValue="onUpdate"
-        :placeholder="definition.name"
         :disabled="disabled"
         class="w-full"
       />
     </template>
 
     <template v-else-if="definition.field_type === 'number'">
+      <label :for="fieldId" class="text-sm font-medium block mb-1">{{ definition.name }}</label>
       <InputNumber
+        :inputId="fieldId"
         :modelValue="(localValue as number) ?? null"
         @update:modelValue="onUpdate"
-        :placeholder="definition.name"
         :disabled="disabled"
         class="w-full"
         :useGrouping="false"
@@ -87,9 +91,10 @@ const checkboxValue = computed({
     </template>
 
     <template v-else-if="definition.field_type === 'date'">
+      <label :for="fieldId" class="text-sm font-medium block mb-1">{{ definition.name }}</label>
       <DatePicker
+        :inputId="fieldId"
         v-model="dateValue"
-        :placeholder="definition.name"
         :disabled="disabled"
         dateFormat="yy-mm-dd"
         class="w-full"
@@ -97,13 +102,14 @@ const checkboxValue = computed({
     </template>
 
     <template v-else-if="definition.field_type === 'select'">
+      <label :for="fieldId" class="text-sm font-medium block mb-1">{{ definition.name }}</label>
       <Select
+        :inputId="fieldId"
         :modelValue="(localValue as string) ?? null"
         @update:modelValue="onUpdate"
         :options="selectOptions"
         optionLabel="label"
         optionValue="value"
-        :placeholder="definition.name"
         :disabled="disabled"
         :showClear="!definition.is_required"
         class="w-full"
@@ -111,23 +117,25 @@ const checkboxValue = computed({
     </template>
 
     <template v-else-if="definition.field_type === 'multi_select'">
+      <label :for="fieldId" class="text-sm font-medium block mb-1">{{ definition.name }}</label>
       <MultiSelect
+        :inputId="fieldId"
         :modelValue="(localValue as string[]) ?? []"
         @update:modelValue="onUpdate"
         :options="selectOptions"
         optionLabel="label"
         optionValue="value"
-        :placeholder="definition.name"
         :disabled="disabled"
         class="w-full"
       />
     </template>
 
     <template v-else-if="definition.field_type === 'url'">
+      <label :for="fieldId" class="text-sm font-medium block mb-1">{{ definition.name }}</label>
       <InputText
+        :id="fieldId"
         :modelValue="(localValue as string) ?? ''"
         @update:modelValue="onUpdate"
-        :placeholder="'https://...'"
         :disabled="disabled"
         class="w-full"
         type="url"
@@ -140,17 +148,18 @@ const checkboxValue = computed({
           v-model="checkboxValue"
           :disabled="disabled"
           :binary="true"
-          :inputId="`cf-${definition.id}`"
+          :inputId="fieldId"
         />
-        <label :for="`cf-${definition.id}`" class="text-sm">{{ definition.name }}</label>
+        <label :for="fieldId" class="text-sm">{{ definition.name }}</label>
       </div>
     </template>
 
     <template v-else-if="definition.field_type === 'user'">
+      <label :for="fieldId" class="text-sm font-medium block mb-1">{{ definition.name }}</label>
       <InputText
+        :id="fieldId"
         :modelValue="(localValue as string) ?? ''"
         @update:modelValue="onUpdate"
-        :placeholder="definition.name"
         :disabled="disabled"
         class="w-full"
       />

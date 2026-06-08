@@ -13,7 +13,9 @@ from app.core.password import hash_password, verify_password, validate_password_
 from app.models.user import User
 from app.services.system_settings_service import (
     get_effective_auth_settings,
+    get_effective_accessibility_settings,
     get_effective_embed_settings,
+    get_public_accessibility_config,
     needs_setup,
 )
 
@@ -50,6 +52,7 @@ class AuthConfigResponse(BaseModel):
     oidc: dict | None = None
     external_agent_enabled: bool = False
     external_agent_url: str | None = None
+    accessibility: dict | None = None
 
 
 class SessionRequest(BaseModel):
@@ -88,6 +91,11 @@ async def get_auth_config(db: AsyncSession = Depends(get_db)):
     embed_settings = await get_effective_embed_settings(db)
     external_enabled = bool(embed_settings["external_agent_enabled"].value)
 
+    a11y_settings = await get_effective_accessibility_settings(db)
+    a11y_config = get_public_accessibility_config(a11y_settings)
+    if not a11y_config.get("accessibility_enabled", True):
+        a11y_config = {k: v for k, v in a11y_config.items() if k == "accessibility_enabled"}
+
     return AuthConfigResponse(
         auth_mode=auth_mode,
         needs_setup=setup_needed,
@@ -95,6 +103,7 @@ async def get_auth_config(db: AsyncSession = Depends(get_db)):
         oidc=oidc_info,
         external_agent_enabled=external_enabled,
         external_agent_url="/embed/agent" if external_enabled else None,
+        accessibility=a11y_config,
     )
 
 

@@ -48,6 +48,14 @@
       <i class="pi pi-window-maximize" />
       {{ t('admin.externalAgent') }}
     </router-link>
+    <router-link
+      to="/admin/accessibility"
+      class="sub-nav-link"
+      :class="{ active: route.path === '/admin/accessibility' }"
+    >
+      <i class="pi pi-eye" />
+      {{ t('admin.accessibilityNav') }}
+    </router-link>
   </nav>
 </template>
 

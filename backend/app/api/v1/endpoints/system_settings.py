@@ -12,8 +12,10 @@ from app.core.permissions import require_system_admin
 from app.models.user import User
 from app.services.system_settings_service import (
     get_effective_auth_settings,
+    get_effective_accessibility_settings,
     get_effective_embed_settings,
     update_auth_settings,
+    update_accessibility_settings,
     update_embed_settings,
 )
 
@@ -60,6 +62,29 @@ class EmbedSettingsUpdate(BaseModel):
 
 
 class EmbedSettingsResponse(BaseModel):
+    settings: dict[str, AuthSettingResponse]
+
+
+class AccessibilitySettingsUpdate(BaseModel):
+    accessibility_enabled: bool | None = None
+    accessibility_compliance_target: str | None = None
+    accessibility_skip_link_enabled: bool | None = None
+    accessibility_landmark_labels_enabled: bool | None = None
+    accessibility_keyboard_drag_alternatives: bool | None = None
+    accessibility_board_keyboard_nav: bool | None = None
+    accessibility_timeline_keyboard_nav: bool | None = None
+    accessibility_respect_reduced_motion: bool | None = None
+    accessibility_enhanced_focus_indicators: bool | None = None
+    accessibility_high_contrast_available: bool | None = None
+    accessibility_live_region_verbosity: str | None = None
+    accessibility_chart_data_tables: bool | None = None
+    accessibility_allow_user_motion_override: bool | None = None
+    accessibility_allow_user_contrast_override: bool | None = None
+    accessibility_allow_user_live_region_override: bool | None = None
+    accessibility_ci_audit_level: str | None = None
+
+
+class AccessibilitySettingsResponse(BaseModel):
     settings: dict[str, AuthSettingResponse]
 
 
@@ -167,6 +192,36 @@ async def put_embed_settings(
 
     try:
         result = await update_embed_settings(db, updates, updated_by=admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return _format_settings(result)
+
+
+@router.get("/accessibility", response_model=AccessibilitySettingsResponse)
+async def get_accessibility_settings(
+    admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get accessibility platform settings."""
+    result = await get_effective_accessibility_settings(db)
+    return _format_settings(result)
+
+
+@router.put("/accessibility", response_model=AccessibilitySettingsResponse)
+async def put_accessibility_settings(
+    body: AccessibilitySettingsUpdate,
+    admin: User = require_system_admin(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update accessibility platform settings."""
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        result = await get_effective_accessibility_settings(db)
+        return _format_settings(result)
+
+    try:
+        result = await update_accessibility_settings(db, updates, updated_by=admin.id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

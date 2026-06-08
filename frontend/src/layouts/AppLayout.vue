@@ -1,8 +1,20 @@
 <template>
   <div class="app-layout">
-    <header class="app-header">
+    <a
+      v-if="skipLinkEnabled"
+      href="#main-content"
+      class="skip-link"
+    >
+      {{ $t('a11y.skipToMain') }}
+    </a>
+    <header class="app-header" role="banner">
       <div class="app-header-left">
-        <Button icon="pi pi-bars" text @click="sidebarVisible = !sidebarVisible" />
+        <Button
+          icon="pi pi-bars"
+          text
+          :aria-label="$t('a11y.toggleSidebar')"
+          @click="sidebarVisible = !sidebarVisible"
+        />
         <span class="app-title">{{ $t('nav.appName') }}</span>
         <OrgSwitcher />
       </div>
@@ -26,12 +38,18 @@
         <span v-if="authStore.currentUser" class="user-name">
           {{ authStore.currentUser.display_name }}
         </span>
-        <Avatar
-          :label="authStore.currentUser?.display_name?.charAt(0)?.toUpperCase() ?? '?'"
-          shape="circle"
-          class="header-avatar"
+        <button
+          type="button"
+          class="header-avatar-btn"
+          :aria-label="$t('a11y.userMenu')"
           @click="menuRef.toggle($event)"
-        />
+        >
+          <Avatar
+            :label="authStore.currentUser?.display_name?.charAt(0)?.toUpperCase() ?? '?'"
+            shape="circle"
+            class="header-avatar"
+          />
+        </button>
         <Menu ref="menuRef" :model="userMenuItems" :popup="true" />
       </div>
     </header>
@@ -42,7 +60,10 @@
         class="app-sidebar"
         :style="{ width: sidebarWidth + 'px' }"
       >
-        <nav class="sidebar-inner">
+        <nav
+          class="sidebar-inner"
+          :aria-label="landmarkLabelsEnabled ? $t('a11y.sidebarNav') : undefined"
+        >
           <p class="sidebar-section-label">{{ $t('nav.menu') }}</p>
           <ul class="sidebar-nav">
             <li>
@@ -287,7 +308,7 @@
         />
       </aside>
 
-      <main class="app-main">
+      <main id="main-content" class="app-main" tabindex="-1">
         <ProjectSubNav />
         <router-view />
       </main>
@@ -356,8 +377,10 @@ import { useChatStore } from '@/stores/chat'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { setLocale, getLocale } from '@/i18n'
+import { useAccessibility } from '@/composables/useAccessibility'
 
 const { t } = useI18n()
+const { skipLinkEnabled, landmarkLabelsEnabled } = useAccessibility()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -843,6 +866,20 @@ function expandPageAncestors(nodes: PageTreeNode[], targetSlug: string): boolean
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+.header-avatar-btn {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.header-avatar-btn:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
 }
 
 .header-avatar {

@@ -98,7 +98,10 @@
 
       />
 
+      <label :for="textareaId" class="sr-only">{{ $t('ai.typeMessage') }}</label>
       <textarea
+
+        :id="textareaId"
 
         ref="textareaRef"
 
@@ -148,7 +151,7 @@
 
 <script setup lang="ts">
 
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, useId } from 'vue'
 
 import Button from 'primevue/button'
 
@@ -175,6 +178,7 @@ const emit = defineEmits<{
 
 
 const chatStore = useChatStore()
+const textareaId = useId()
 
 const text = ref('')
 
@@ -498,14 +502,17 @@ onMounted(autoResize)
 
   color: var(--p-text-color);
 
-  outline: none;
-
   transition: border-color 0.15s;
 
   min-height: 2.25rem;
 
   max-height: 120px;
 
+}
+
+.chat-input-textarea:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 1px;
 }
 
 

@@ -261,6 +261,11 @@ const router = createRouter({
           name: 'admin-embed',
           component: () => import('@/views/admin/AdminEmbedView.vue'),
         },
+        {
+          path: 'admin/accessibility',
+          name: 'admin-accessibility',
+          component: () => import('@/views/admin/AdminAccessibilityView.vue'),
+        },
       ],
     },
   ],

@@ -180,6 +180,10 @@ onBeforeUnmount(() => {
 
       tabindex="0"
 
+      :aria-expanded="panelVisible && editing"
+
+      aria-haspopup="listbox"
+
       @click.stop="onTriggerClick"
 
       @keydown.enter.prevent.stop="onTriggerClick"
@@ -215,6 +219,8 @@ onBeforeUnmount(() => {
             role="option"
 
             class="ticket-inline-picker__option"
+
+            :aria-selected="editValue == null"
 
             :class="{ 'ticket-inline-picker__option--selected': editValue == null }"
 

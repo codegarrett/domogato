@@ -53,20 +53,26 @@
           v-for="conv in visibleConversations"
           :key="conv.id"
           class="chat-conv-item"
-          @click="chatStore.openConversation(conv.id)"
         >
+          <button
+            type="button"
+            class="chat-conv-item-btn"
+            @click="chatStore.openConversation(conv.id)"
+          >
           <div class="chat-conv-item-body">
             <span class="chat-conv-title">{{ conv.title || 'Untitled' }}</span>
             <span class="chat-conv-meta">
               <span class="chat-conv-time">{{ formatRelative(conv.updated_at) }}</span>
             </span>
           </div>
+          </button>
           <Button
             icon="pi pi-trash"
             text
             severity="danger"
             size="small"
             class="chat-conv-delete"
+            :aria-label="$t('common.delete')"
             @click.stop="chatStore.deleteConversation(conv.id)"
           />
         </div>
@@ -83,7 +89,13 @@
 
     <!-- Active chat -->
     <div v-else class="chat-flyout-chat">
-      <div ref="messagesContainer" class="chat-messages">
+      <div
+        ref="messagesContainer"
+        class="chat-messages"
+        role="log"
+        :aria-live="liveRegionActive ? 'polite' : 'off'"
+        aria-relevant="additions"
+      >
         <ChatWelcome
           v-if="showWelcome"
           :disabled="chatStore.isStreaming"
@@ -209,6 +221,7 @@ import ChatPendingActionBar from '@/components/chat/ChatPendingActionBar.vue'
 import ChatDebugLogModal from '@/components/chat/ChatDebugLogModal.vue'
 import ChatWelcome from '@/components/chat/ChatWelcome.vue'
 import { parseApprovalInteraction, parseChoiceInteraction, type ApprovalInteraction, type ChoiceInteraction, type Message } from '@/api/ai'
+import { useAccessibility } from '@/composables/useAccessibility'
 
 defineProps<{
   embedded?: boolean
@@ -217,6 +230,8 @@ defineProps<{
 const { t } = useI18n()
 const chatStore = useChatStore()
 const authStore = useAuthStore()
+const { liveRegionVerbosity } = useAccessibility()
+const liveRegionActive = computed(() => liveRegionVerbosity.value !== 'off')
 const messagesContainer = ref<HTMLElement>()
 const reasoningExpanded = ref(true)
 const showAllConversations = ref(false)
@@ -513,14 +528,30 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.12s;
 }
 
-.chat-conv-item:hover {
+.chat-conv-item-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.25rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+  transition: background 0.12s;
+  min-width: 0;
+}
+
+.chat-conv-item-btn:hover,
+.chat-conv-item-btn:focus-visible {
   background: var(--p-content-hover-background, var(--p-surface-100));
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: -2px;
 }
 
 .chat-conv-item-body {

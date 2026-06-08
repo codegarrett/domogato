@@ -63,7 +63,12 @@ const selectionEnabled = computed(() => props.selectedIds != null)
 </script>
 
 <template>
-  <div class="ticket-table-wrap">
+  <div
+    class="ticket-table-wrap"
+    role="grid"
+    :aria-rowcount="tickets.length + (showHeader ? 1 : 0)"
+    :aria-label="$t('nav.ticketsList')"
+  >
     <TicketTableHeader
       v-if="showHeader"
       :columns="columns"

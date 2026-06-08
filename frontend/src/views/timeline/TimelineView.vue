@@ -5,8 +5,10 @@ import Button from 'primevue/button'
 import Select from 'primevue/select'
 import { getTimeline, type TimelineData } from '@/api/timeline'
 import { ticketDetailPathFromRef } from '@/utils/ticketUrls'
+import { useAccessibility } from '@/composables/useAccessibility'
 
 const route = useRoute()
+const { timelineKeyboardNav } = useAccessibility()
 const router = useRouter()
 const projectId = route.params.projectId as string
 
@@ -215,7 +217,11 @@ onMounted(loadTimeline)
             :key="item.id"
             class="gantt-row"
             :class="{ epic: item.type === 'epic' }"
+            role="button"
+            :tabindex="timelineKeyboardNav ? 0 : undefined"
+            :aria-label="item.label"
             @click="onClickItem(item)"
+            @keydown.enter.prevent="onClickItem(item)"
           >
             <div class="gantt-label-col">
               <span class="gantt-item-label" :class="{ 'font-bold': item.type === 'epic' }">
@@ -233,7 +239,9 @@ onMounted(loadTimeline)
                 class="gantt-bar"
                 :class="{ 'gantt-bar-epic': item.type === 'epic' }"
                 :style="getBarStyle(item)!"
+                :aria-hidden="true"
               />
+              <span v-if="getBarStyle(item)" class="sr-only">{{ item.label }}</span>
             </div>
           </div>
 

@@ -1,6 +1,9 @@
 <template>
-  <Toast />
-  <router-view />
+  <div class="a11y-focus-visible">
+    <div id="a11y-live-region" aria-live="polite" aria-atomic="true" />
+    <Toast />
+    <router-view />
+  </div>
 </template>
 
 <script setup lang="ts">

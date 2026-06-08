@@ -65,7 +65,32 @@
                 />
               </div>
             </div>
-            <Button icon="pi pi-trash" text severity="danger" size="small" @click.stop="handleRemoveStatus(status.id)" />
+            <div class="flex flex-column gap-1">
+              <template v-if="keyboardDragAlternatives">
+                <Button
+                  icon="pi pi-arrow-up"
+                  text
+                  size="small"
+                  :aria-label="$t('a11y.moveUp')"
+                  @click.stop="moveStatus(status.id, -1)"
+                />
+                <Button
+                  icon="pi pi-arrow-down"
+                  text
+                  size="small"
+                  :aria-label="$t('a11y.moveDown')"
+                  @click.stop="moveStatus(status.id, 1)"
+                />
+              </template>
+              <Button
+                icon="pi pi-trash"
+                text
+                severity="danger"
+                size="small"
+                :aria-label="$t('common.delete')"
+                @click.stop="handleRemoveStatus(status.id)"
+              />
+            </div>
           </div>
           <div class="flex gap-1 mt-2 flex-wrap">
             <Tag v-if="status.is_initial" value="Initial" severity="info" class="text-xs" />
@@ -245,8 +270,10 @@ import {
   normalizeHexColor,
   WORKFLOW_COLOR_INITIAL,
 } from '@/utils/workflowColors'
+import { useAccessibility } from '@/composables/useAccessibility'
 
 const props = defineProps<{ workflowId: string }>()
+const { keyboardDragAlternatives } = useAccessibility()
 const { t } = useI18n()
 const toast = useToastService()
 
@@ -379,7 +406,7 @@ function toggleTransitionMode() {
   transitionSource.value = null
 }
 
-async function onStatusReorder() {
+async function persistStatusOrder() {
   if (!workflow.value) return
   reordering.value = true
   try {
@@ -394,6 +421,21 @@ async function onStatusReorder() {
   } finally {
     reordering.value = false
   }
+}
+
+async function onStatusReorder() {
+  await persistStatusOrder()
+}
+
+async function moveStatus(statusId: string, direction: -1 | 1) {
+  const idx = orderedStatuses.value.findIndex((s) => s.id === statusId)
+  const target = idx + direction
+  if (idx < 0 || target < 0 || target >= orderedStatuses.value.length) return
+  const next = [...orderedStatuses.value]
+  const [item] = next.splice(idx, 1)
+  next.splice(target, 0, item!)
+  orderedStatuses.value = next
+  await persistStatusOrder()
 }
 
 async function handleStatusClick(status: WorkflowStatus) {
