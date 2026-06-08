@@ -24,6 +24,7 @@ router = APIRouter(tags=["knowledge-base"])
 @router.get(
     "/projects/{project_id}/kb/story-workflow",
     response_model=StoryWorkflowRead,
+    deprecated=True,
 )
 async def get_story_workflow(
     project_id: UUID,
@@ -38,6 +39,7 @@ async def get_story_workflow(
     "/projects/{project_id}/kb/story-workflow/statuses",
     response_model=StoryWorkflowStatusRead,
     status_code=status.HTTP_201_CREATED,
+    deprecated=True,
 )
 async def create_workflow_status(
     project_id: UUID,
@@ -62,6 +64,7 @@ async def create_workflow_status(
 @router.patch(
     "/projects/{project_id}/kb/story-workflow/statuses/{status_id}",
     response_model=StoryWorkflowStatusRead,
+    deprecated=True,
 )
 async def update_workflow_status(
     project_id: UUID,
@@ -85,6 +88,7 @@ async def update_workflow_status(
 @router.delete(
     "/projects/{project_id}/kb/story-workflow/statuses/{status_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    deprecated=True,
 )
 async def delete_workflow_status(
     project_id: UUID,

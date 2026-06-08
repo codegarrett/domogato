@@ -229,18 +229,6 @@ export interface PageTicketLink {
   created_at: string
 }
 
-export interface UserStoryForTicket {
-  page_id: string
-  page_title: string
-  page_slug: string
-  space_id: string
-  space_name: string
-  space_slug: string
-  story_status_name: string | null
-  story_status_color: string | null
-  story_status_category: string | null
-}
-
 // ---------------------------------------------------------------------------
 // Types – Search
 // ---------------------------------------------------------------------------
@@ -603,10 +591,8 @@ export async function deleteTicketLink(pageId: string, linkId: string): Promise<
 }
 
 // ===========================================================================
-// Reverse Lookup: Ticket -> User Stories
+// Reverse Lookup: Ticket -> User Stories (deprecated — use @/api/user-stories)
 // ===========================================================================
 
-export async function getUserStoriesForTicket(ticketId: string): Promise<UserStoryForTicket[]> {
-  const { data } = await apiClient.get<UserStoryForTicket[]>(`/tickets/${ticketId}/user-stories`)
-  return data
-}
+export { getUserStoriesForTicket } from './user-stories'
+export type { UserStoryForTicket } from './user-stories'

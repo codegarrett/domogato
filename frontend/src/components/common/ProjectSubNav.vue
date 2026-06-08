@@ -33,6 +33,8 @@ const sections = computed(() => {
   if (!pid) return []
   return [
     { key: 'overview',      label: t('nav.overview'),      to: `/projects/${pid}`,               icon: 'pi pi-home' },
+    { key: 'issue-reports', label: t('nav.issueReports'),  to: `/projects/${pid}/issue-reports`, icon: 'pi pi-exclamation-triangle' },
+    { key: 'user-stories',  label: t('nav.userStories'),   to: `/projects/${pid}/user-stories`,  icon: 'pi pi-bookmark' },
     { key: 'tickets',       label: t('nav.ticketsList'),    to: `/projects/${pid}/tickets`,       icon: 'pi pi-list' },
     { key: 'board',         label: t('nav.board'),          to: `/projects/${pid}/board`,         icon: 'pi pi-th-large' },
     { key: 'backlog',       label: t('nav.backlog'),        to: `/projects/${pid}/backlog`,       icon: 'pi pi-inbox' },

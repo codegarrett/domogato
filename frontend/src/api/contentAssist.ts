@@ -7,6 +7,8 @@ export type ContentAssistContext =
   | 'issue_edit'
   | 'issue_me_too'
   | 'ticket_from_reports'
+  | 'user_story_create'
+  | 'user_story_refine'
 
 export type ContentFormat = 'markdown' | 'plain'
 
@@ -25,6 +27,9 @@ export interface ContentAssistGenerateResponse {
   priority?: string | null
   story_points?: number | null
   source_url?: string | null
+  story_title?: string | null
+  story_body?: string | null
+  story_acceptance_criteria?: string | null
 }
 
 export interface ContentAssistTranslateRequest {

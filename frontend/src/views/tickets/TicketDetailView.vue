@@ -66,24 +66,6 @@
 
         <div class="surface-card p-4 border-round shadow-1 mb-4">
           <template v-if="descEditing">
-            <div class="flex align-items-center justify-content-between mb-2">
-              <div class="flex align-items-center gap-1">
-                <span class="text-sm font-semibold text-color-secondary">{{ $t('common.description') }}</span>
-                <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog('description')" />
-              </div>
-              <div class="flex gap-2">
-                <Button :label="$t('common.save')" size="small" icon="pi pi-check" :loading="savingDescription" @click="saveDescriptionExplicit" />
-                <Button
-                  :label="$t('common.cancel')"
-                  size="small"
-                  severity="secondary"
-                  outlined
-                  icon="pi pi-times"
-                  @mousedown.prevent
-                  @click="cancelDescriptionEdit"
-                />
-              </div>
-            </div>
             <div
               ref="descSectionRef"
               class="description-section"
@@ -92,8 +74,25 @@
             >
               <MarkdownEditor
                 v-model="descDraft"
+                :label="$t('common.description')"
                 :placeholder="$t('tickets.descriptionPlaceholder')"
-              />
+              >
+                <template #label-append>
+                  <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog('description')" />
+                </template>
+                <template #header-actions>
+                  <Button :label="$t('common.save')" size="small" icon="pi pi-check" :loading="savingDescription" @click="saveDescriptionExplicit" />
+                  <Button
+                    :label="$t('common.cancel')"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    icon="pi pi-times"
+                    @mousedown.prevent
+                    @click="cancelDescriptionEdit"
+                  />
+                </template>
+              </MarkdownEditor>
             </div>
           </template>
           <template v-else>
@@ -195,11 +194,16 @@
                 </div>
 
                 <div class="border-top-1 surface-border pt-4 mt-2">
-                  <div class="flex align-items-center gap-1 mb-2">
-                    <label class="text-sm font-semibold text-color-secondary">{{ $t('tickets.addComment') }}</label>
-                    <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog('comment')" />
-                  </div>
-                  <MarkdownEditor v-model="newCommentBody" :placeholder="$t('tickets.commentPlaceholder')" class="mb-3" />
+                  <MarkdownEditor
+                    v-model="newCommentBody"
+                    :label="$t('tickets.addComment')"
+                    :placeholder="$t('tickets.commentPlaceholder')"
+                    class="mb-3"
+                  >
+                    <template #label-append>
+                      <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog('comment')" />
+                    </template>
+                  </MarkdownEditor>
                   <Button :label="$t('common.comment')" icon="pi pi-send" :loading="commentPosting" :disabled="isCommentEmpty(newCommentBody)" @click="submitComment" />
                 </div>
               </div>
@@ -526,22 +530,17 @@
           </div>
 
           <div v-if="userStories.length" class="surface-card p-4 border-round shadow-1">
-            <div class="text-sm font-semibold text-color-secondary mb-2">{{ $t('kb.relatedStories') }}</div>
+            <div class="text-sm font-semibold text-color-secondary mb-2">{{ $t('userStories.relatedStories') }}</div>
             <div class="flex flex-column gap-2">
               <router-link
                 v-for="story in userStories"
-                :key="story.page_id"
-                :to="`/projects/${ticket.project_id}/kb/${story.space_slug}/${story.page_slug}`"
+                :key="story.id"
+                :to="`/projects/${ticket.project_id}/user-stories/${story.id}`"
                 class="surface-50 p-2 border-round flex align-items-center gap-2 no-underline text-color hover:surface-100"
               >
-                <i class="pi pi-clipboard text-primary text-sm" />
-                <span class="text-sm flex-1">{{ story.page_title }}</span>
-                <Tag
-                  v-if="story.story_status_name"
-                  :value="story.story_status_name"
-                  :style="story.story_status_color ? { background: story.story_status_color, color: '#fff', fontSize: '0.7rem' } : {}"
-                  class="text-xs"
-                />
+                <i class="pi pi-bookmark text-primary text-sm" />
+                <span class="text-sm flex-1">{{ story.story_title || story.title }}</span>
+                <Tag :value="story.status" severity="info" class="text-xs" />
               </router-link>
             </div>
           </div>
@@ -845,7 +844,7 @@ import {
   type Dependency,
 } from '@/api/dependencies'
 import { listTickets } from '@/api/tickets'
-import { getUserStoriesForTicket, type UserStoryForTicket } from '@/api/kb'
+import { getUserStoriesForTicket, type UserStoryForTicket } from '@/api/user-stories'
 import { listWatchers, addWatcher, removeWatcher, type Watcher } from '@/api/watchers'
 import { getTicketIssueReports } from '@/api/issue-reports'
 import { useWebSocket } from '@/composables/useWebSocket'

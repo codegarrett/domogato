@@ -117,6 +117,16 @@ const router = createRouter({
           component: () => import('@/views/issue-reports/IssueReportDetailView.vue'),
         },
         {
+          path: 'projects/:projectId/user-stories',
+          name: 'user-story-queue',
+          component: () => import('@/views/user-stories/UserStoriesQueueView.vue'),
+        },
+        {
+          path: 'projects/:projectId/user-stories/:storyId',
+          name: 'user-story-detail',
+          component: () => import('@/views/user-stories/UserStoryDetailView.vue'),
+        },
+        {
           path: 'projects/:projectId/tickets',
           name: 'ticket-list',
           component: () => import('@/views/tickets/TicketListView.vue'),

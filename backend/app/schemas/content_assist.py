@@ -15,6 +15,8 @@ class ContentAssistContext(str, Enum):
     ISSUE_EDIT = "issue_edit"
     ISSUE_ME_TOO = "issue_me_too"
     TICKET_FROM_REPORTS = "ticket_from_reports"
+    USER_STORY_CREATE = "user_story_create"
+    USER_STORY_REFINE = "user_story_refine"
 
 
 class ContentAssistGenerateRequest(BaseModel):
@@ -32,6 +34,9 @@ class ContentAssistGenerateResponse(BaseModel):
     priority: str | None = None
     story_points: int | None = None
     source_url: str | None = None
+    story_title: str | None = None
+    story_body: str | None = None
+    story_acceptance_criteria: str | None = None
 
 
 class ContentAssistTranslateRequest(BaseModel):

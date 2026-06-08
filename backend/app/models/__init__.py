@@ -42,6 +42,14 @@ from app.models.issue_report import (
     IssueReportTicketLink,
     issue_report_labels,
 )
+from app.models.user_story import (
+    UserStory,
+    UserStoryDependency,
+    UserStoryDiscussion,
+    UserStoryQuestion,
+    UserStoryTicketLink,
+    user_story_discussion_questions,
+)
 
 __all__ = [
     "Base",
@@ -96,4 +104,10 @@ __all__ = [
     "IssueReportReporter",
     "IssueReportTicketLink",
     "issue_report_labels",
+    "UserStory",
+    "UserStoryQuestion",
+    "UserStoryDiscussion",
+    "UserStoryDependency",
+    "UserStoryTicketLink",
+    "user_story_discussion_questions",
 ]

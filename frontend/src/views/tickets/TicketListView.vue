@@ -203,10 +203,10 @@
           <InputText id="create-title" v-model="createForm.title" class="w-full" :invalid="createAttempted && !createForm.title.trim()" />
         </div>
         <div>
-          <label for="create-desc" class="block text-sm mb-2">{{ $t('common.description') }}</label>
           <MarkdownEditor
             id="create-desc"
             v-model="createForm.description"
+            :label="$t('common.description')"
             :rows="8"
             :placeholder="$t('tickets.descriptionPlaceholder')"
           />

@@ -29,9 +29,6 @@ import RichContent from '@/components/common/RichContent.vue'
 import KBVersionHistory from '@/components/kb/KBVersionHistory.vue'
 import KBComments from '@/components/kb/KBComments.vue'
 import KBTemplatePicker from '@/components/kb/KBTemplatePicker.vue'
-import StoryStatusBar from '@/components/kb/StoryStatusBar.vue'
-import StoryTicketLinks from '@/components/kb/StoryTicketLinks.vue'
-import type { PageMetaBrief } from '@/api/kb'
 
 const route = useRoute()
 const router = useRouter()
@@ -280,12 +277,6 @@ async function saveContent() {
   }
 }
 
-function onStoryMetaUpdated(updated: PageMetaBrief) {
-  if (activePage.value) {
-    activePage.value = { ...activePage.value, meta: updated }
-  }
-}
-
 function navigateToPage(slug: string) {
   router.push({
     name: 'kb-page',
@@ -391,23 +382,18 @@ onMounted(loadSpace)
         </div>
       </div>
 
-      <StoryStatusBar
-        v-if="activePage.meta?.page_type === 'user_story'"
-        :page-id="activePage.id"
-        :project-id="projectId"
-        :meta="activePage.meta"
-        @updated="onStoryMetaUpdated"
-      />
-
       <div v-if="isEditing" class="editor-area">
-        <div class="editor-toolbar-row flex align-items-center gap-2 mb-2">
-          <span class="text-sm text-color-secondary">{{ $t('kb.markdownEditor') }}</span>
-          <div class="flex-1" />
-          <Button :label="$t('kb.cancel')" severity="secondary" size="small" text @click="cancelEditing" />
-          <Button :label="$t('kb.save')" icon="pi pi-check" size="small" :loading="savingContent" @click="saveContent" />
-        </div>
-
-        <MarkdownEditor v-model="markdownDraft" :rows="20" placeholder="Start writing..." />
+        <MarkdownEditor
+          v-model="markdownDraft"
+          :label="$t('kb.markdownEditor')"
+          :rows="20"
+          placeholder="Start writing..."
+        >
+          <template #header-actions>
+            <Button :label="$t('kb.cancel')" severity="secondary" size="small" text @click="cancelEditing" />
+            <Button :label="$t('kb.save')" icon="pi pi-check" size="small" :loading="savingContent" @click="saveContent" />
+          </template>
+        </MarkdownEditor>
       </div>
 
       <div
@@ -426,13 +412,10 @@ onMounted(loadSpace)
       </div>
 
       <TabView class="page-tabs">
-        <TabPanel v-if="activePage.meta?.page_type === 'user_story'" value="0" :header="$t('kb.linkedTickets')">
-          <StoryTicketLinks :page-id="activePage.id" :project-id="projectId" />
-        </TabPanel>
-        <TabPanel value="1" :header="$t('kb.versions')">
+        <TabPanel value="0" :header="$t('kb.versions')">
           <KBVersionHistory :page-id="activePage.id" @restored="onVersionRestored" />
         </TabPanel>
-        <TabPanel value="2" :header="$t('kb.comments')">
+        <TabPanel value="1" :header="$t('kb.comments')">
           <KBComments :page-id="activePage.id" />
         </TabPanel>
       </TabView>

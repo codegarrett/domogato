@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     health,
     import_tickets,
     issue_reports,
+    user_stories,
     kb_attachments,
     kb_comments,
     kb_pages,
@@ -87,6 +88,7 @@ api_v1_router.include_router(saved_views.router)
 api_v1_router.include_router(search.router)
 api_v1_router.include_router(dashboard.router)
 api_v1_router.include_router(issue_reports.router)
+api_v1_router.include_router(user_stories.router)
 api_v1_router.include_router(public_issue_reports.router)
 api_v1_router.include_router(ai.router)
 api_v1_router.include_router(admin_embeddings.router)

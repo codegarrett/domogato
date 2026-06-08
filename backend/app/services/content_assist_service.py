@@ -122,6 +122,35 @@ Output ONLY a single JSON object with no markdown fences and no commentary.
 Fields:
 - description: string (plain text, 1-3 sentences, first person, no markdown)
 """
+    if context == ContentAssistContext.USER_STORY_CREATE:
+        return """You help draft a working title for a new user story / feature request in ProjectHub.
+
+Output ONLY a single JSON object with no markdown fences and no commentary.
+Fields:
+- title: string (concise feature request title, max 500 chars)
+"""
+    if context == ContentAssistContext.USER_STORY_REFINE:
+        return """You help transform discovery notes, open questions, and team discussion into a ticket-ready user story for ProjectHub.
+
+You receive structured JSON context with:
+- working_title: the initial feature request title
+- quick_notes: scratch-pad notes from the team
+- open_questions: discovery questions that were raised
+- discussions: answers and notes (may reference specific questions or all questions)
+- existing_refined_story: the current draft (story_title, story_body, story_acceptance_criteria) — may be partial or empty
+
+Rules:
+1. Base the story on the provided context. Do not invent requirements unsupported by the notes, questions, or discussion.
+2. If existing_refined_story has content, UPDATE and improve it using any new discovery context. Preserve good existing wording; revise or extend where discussion adds clarity. Only replace content when contradicted.
+3. story_body must be well-formatted markdown. Use headings such as ## Context, ## Description, and ## Notes as appropriate. Use bullet lists where helpful.
+4. story_acceptance_criteria must be a markdown bullet list of testable criteria (plain bullets or Given/When/Then).
+
+Output ONLY a single JSON object with no markdown fences and no commentary.
+Fields:
+- story_title: string ("As a [role], I want [goal] so that [benefit]" or equivalent concise title)
+- story_body: string (markdown)
+- story_acceptance_criteria: string (markdown bullet list)
+"""
     if context in (ContentAssistContext.ISSUE_CREATE, ContentAssistContext.ISSUE_EDIT):
         return """You help draft or update issue reports for ProjectHub.
 
@@ -145,6 +174,21 @@ def _build_user_message(
     current_fields: dict[str, Any] | None,
     reference_items: list[dict[str, Any]] | None,
 ) -> str:
+    if context == ContentAssistContext.USER_STORY_REFINE:
+        parts: list[str] = []
+        if prompt.strip():
+            parts.append(f"Additional instructions from the user:\n{prompt.strip()}")
+        else:
+            parts.append(
+                "Generate a ticket-ready user story from all discovery context below. "
+                "If a draft already exists, update it to reflect the latest discussion."
+            )
+        parts.append(
+            "Discovery context (JSON):\n"
+            + json.dumps(current_fields or {}, ensure_ascii=False, indent=2)
+        )
+        return "\n\n".join(parts)
+
     parts = [f"User request:\n{prompt.strip()}"]
     if current_fields:
         parts.append(f"Current fields (JSON):\n{json.dumps(current_fields, ensure_ascii=False)}")
@@ -159,6 +203,8 @@ def _build_user_message(
         parts.append("Create a new issue report from scratch.")
     elif context == ContentAssistContext.TICKET_FROM_REPORTS:
         parts.append("Create one consolidated ticket from the reference reports.")
+    elif context == ContentAssistContext.USER_STORY_CREATE:
+        parts.append("Create a working title for a new user story.")
     return "\n\n".join(parts)
 
 
@@ -206,6 +252,20 @@ def _normalize_generate_response(
         url = _sanitize_str(raw.get("source_url"), max_len=2000)
         if url:
             result["source_url"] = url
+    if context == ContentAssistContext.USER_STORY_CREATE:
+        title = _sanitize_str(raw.get("title"), max_len=500)
+        if title:
+            result["title"] = title
+    if context == ContentAssistContext.USER_STORY_REFINE:
+        st = _sanitize_str(raw.get("story_title"), max_len=500)
+        if st:
+            result["story_title"] = st
+        sb = _sanitize_str(raw.get("story_body"))
+        if sb:
+            result["story_body"] = sb
+        ac = _sanitize_str(raw.get("story_acceptance_criteria"))
+        if ac:
+            result["story_acceptance_criteria"] = ac
     return result
 
 

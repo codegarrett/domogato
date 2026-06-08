@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from app.schemas.content_assist import ContentAssistContext
 from app.services.content_assist_service import (
+    _build_user_message,
     _extract_json,
     _normalize_generate_response,
     generate_content,
@@ -26,6 +27,36 @@ def test_normalize_drops_invalid_ticket_type():
     assert result["title"] == "T"
     assert result["priority"] == "high"
     assert "ticket_type" not in result
+
+
+def test_normalize_user_story_refine_fields():
+    raw = {
+        "story_title": "As a user I want SSO",
+        "story_body": "## Context\n\nUsers need OIDC.",
+        "story_acceptance_criteria": "- SSO button visible",
+    }
+    result = _normalize_generate_response(raw, ContentAssistContext.USER_STORY_REFINE)
+    assert result["story_title"] == "As a user I want SSO"
+    assert "## Context" in result["story_body"]
+    assert result["story_acceptance_criteria"].startswith("- SSO")
+
+
+def test_build_user_story_refine_message_includes_discovery_context():
+    ctx = {
+        "working_title": "Login with SSO",
+        "open_questions": [{"id": "q1", "text": "Who logs in?"}],
+        "discussions": [{"body": "All employees", "linked_questions": ["Who logs in?"]}],
+        "existing_refined_story": {"story_title": "Old title", "story_body": None, "story_acceptance_criteria": None},
+    }
+    msg = _build_user_message(
+        context=ContentAssistContext.USER_STORY_REFINE,
+        prompt="",
+        current_fields=ctx,
+        reference_items=None,
+    )
+    assert "Discovery context" in msg
+    assert "Login with SSO" in msg
+    assert "existing_refined_story" in msg
 
 
 def test_normalize_issue_me_too_description_only():
