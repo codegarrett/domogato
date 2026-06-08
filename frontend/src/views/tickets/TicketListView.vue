@@ -46,7 +46,12 @@
               size="small"
               @click="exportDialogVisible = true"
             />
-            <Button :label="$t('tickets.createTicket')" icon="pi pi-plus" @click="openCreateDialog" />
+            <Button
+              :label="$t('tickets.createTicket')"
+              icon="pi pi-plus"
+              data-testid="create-ticket"
+              @click="openCreateDialog"
+            />
           </div>
         </div>
       </div>
@@ -181,12 +186,17 @@
 
     <Dialog
       v-model:visible="createVisible"
-      :header="$t('tickets.createTicket')"
       modal
       :style="{ width: '36rem', maxWidth: '95vw' }"
       :dismissable-mask="true"
       @hide="resetCreateForm"
     >
+      <template #header>
+        <div class="flex align-items-center justify-content-between w-full gap-2 pr-2">
+          <span class="font-semibold">{{ $t('tickets.createTicket') }}</span>
+          <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog" />
+        </div>
+      </template>
       <div class="flex flex-column gap-3 pt-2">
         <div>
           <label for="create-title" class="block text-sm mb-2">{{ $t('tickets.title') }} <span class="text-red-500">*</span></label>
@@ -262,6 +272,16 @@
         <Button :label="$t('common.create')" icon="pi pi-check" :loading="creating" :disabled="!createForm.title.trim()" @click="submitCreate" />
       </template>
     </Dialog>
+
+    <AiGeneratePromptDialog
+      v-model:visible="aiDialogOpen"
+      v-model:prompt="aiPrompt"
+      :loading="aiGenerating"
+      :error="aiGenerateError"
+      :hint="$t('contentAssist.ticketCreateHint')"
+      @generate="runAiGenerate"
+    />
+
     <Dialog
       v-model:visible="bulkDialogVisible"
       :header="$t('tickets.bulkUpdate')"
@@ -354,6 +374,9 @@ import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
 import ProgressSpinner from 'primevue/progressspinner'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import AiSparklesButton from '@/components/ai/AiSparklesButton.vue'
+import AiGeneratePromptDialog from '@/components/ai/AiGeneratePromptDialog.vue'
+import { useContentAssist } from '@/composables/useContentAssist'
 import { sanitizeMarkdownInput } from '@/utils/richContent'
 import Checkbox from 'primevue/checkbox'
 import {
@@ -444,6 +467,15 @@ const exportStatusOptions = computed(() => {
     .map(([key, { name, ids }]) => ({ key, name, ids }))
     .sort((a, b) => a.name.localeCompare(b.name))
 })
+
+const {
+  generating: aiGenerating,
+  generateError: aiGenerateError,
+  generateContent: runContentGenerate,
+} = useContentAssist()
+
+const aiDialogOpen = ref(false)
+const aiPrompt = ref('')
 
 const createVisible = ref(false)
 const creating = ref(false)
@@ -714,6 +746,33 @@ function openCreateDialog() {
   createAttempted.value = false
   resetCreateForm()
   createVisible.value = true
+}
+
+function openAiGenerateDialog() {
+  aiPrompt.value = ''
+  aiGenerateError.value = null
+  aiDialogOpen.value = true
+}
+
+async function runAiGenerate() {
+  const prompt = aiPrompt.value.trim()
+  if (!prompt) return
+  try {
+    const result = await runContentGenerate({
+      context: 'ticket_create',
+      prompt,
+      project_id: projectId.value,
+    })
+    if (result.title) createForm.value.title = result.title
+    if (result.description) createForm.value.description = result.description
+    if (result.ticket_type) createForm.value.ticket_type = result.ticket_type
+    if (result.priority) createForm.value.priority = result.priority
+    if (result.story_points != null) createForm.value.story_points = result.story_points
+    aiDialogOpen.value = false
+    toast.showSuccess(t('common.success'), t('contentAssist.reviewBeforeSave'))
+  } catch {
+    // error shown in dialog
+  }
 }
 
 function resetCreateForm() {

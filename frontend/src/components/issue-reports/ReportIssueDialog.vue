@@ -1,11 +1,20 @@
 <template>
   <Dialog
     :visible="visible"
-    :header="$t('issueReports.newReport')"
     modal
     :style="{ width: '44rem', maxWidth: '95vw' }"
     @update:visible="$emit('update:visible', $event)"
   >
+    <template #header>
+      <div class="flex align-items-center justify-content-between w-full gap-2 pr-2">
+        <span class="font-semibold">{{ $t('issueReports.newReport') }}</span>
+        <AiSparklesButton
+          v-if="!addingToExisting"
+          :loading="aiGenerating"
+          @click="openAiGenerateDialog"
+        />
+      </div>
+    </template>
     <div class="flex flex-column gap-3">
       <div>
         <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.reportTitle') }} *</label>
@@ -27,7 +36,10 @@
       />
 
       <div v-if="addingToExisting">
-        <p class="text-sm font-semibold mb-1">{{ $t('issueReports.yourDescription') }}</p>
+        <div class="flex align-items-center gap-1 mb-1">
+          <p class="text-sm font-semibold m-0">{{ $t('issueReports.yourDescription') }}</p>
+          <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog" />
+        </div>
         <Textarea
           v-model="meeTooDescription"
           class="w-full"
@@ -211,10 +223,20 @@
       />
     </template>
   </Dialog>
+
+  <AiGeneratePromptDialog
+    v-model:visible="aiDialogOpen"
+    v-model:prompt="aiPrompt"
+    :loading="aiGenerating"
+    :error="aiGenerateError"
+    :hint="aiGenerateHint"
+    @generate="runAiGenerate"
+  />
+
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -232,6 +254,9 @@ import {
   type SimilarReport,
 } from '@/api/issue-reports'
 import { listLabels, createLabel, type Label } from '@/api/labels'
+import AiSparklesButton from '@/components/ai/AiSparklesButton.vue'
+import AiGeneratePromptDialog from '@/components/ai/AiGeneratePromptDialog.vue'
+import { useContentAssist } from '@/composables/useContentAssist'
 import { useToastService } from '@/composables/useToast'
 import SimilarReportsPanel from './SimilarReportsPanel.vue'
 
@@ -247,6 +272,19 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const toast = useToastService()
+
+const {
+  generating: aiGenerating,
+  generateError: aiGenerateError,
+  generateContent: runContentGenerate,
+} = useContentAssist()
+
+const aiDialogOpen = ref(false)
+const aiPrompt = ref('')
+
+const aiGenerateHint = computed(() =>
+  addingToExisting.value ? t('contentAssist.issueMeTooHint') : t('contentAssist.issueCreateHint'),
+)
 
 const form = ref({
   title: '',
@@ -364,6 +402,48 @@ function onSelectSimilar(report: SimilarReport) {
 function cancelMeToo() {
   addingToExisting.value = false
   selectedReport.value = null
+}
+
+function openAiGenerateDialog() {
+  aiPrompt.value = ''
+  aiGenerateError.value = null
+  aiDialogOpen.value = true
+}
+
+async function runAiGenerate() {
+  const prompt = aiPrompt.value.trim()
+  if (!prompt) return
+  try {
+    if (addingToExisting.value) {
+      const result = await runContentGenerate({
+        context: 'issue_me_too',
+        prompt,
+        project_id: props.projectId,
+        current_fields: { description: meeTooDescription.value },
+      })
+      if (result.description) meeTooDescription.value = result.description
+    } else {
+      const result = await runContentGenerate({
+        context: 'issue_create',
+        prompt,
+        project_id: props.projectId,
+        current_fields: {
+          title: form.value.title,
+          description: form.value.description,
+          priority: form.value.priority,
+          source_url: form.value.source_url,
+        },
+      })
+      if (result.title) form.value.title = result.title
+      if (result.description) form.value.description = result.description
+      if (result.priority) form.value.priority = result.priority
+      if (result.source_url) form.value.source_url = result.source_url
+    }
+    aiDialogOpen.value = false
+    toast.showSuccess(t('common.success'), t('contentAssist.reviewBeforeSave'))
+  } catch {
+    // error shown in dialog
+  }
 }
 
 async function submitMeToo() {

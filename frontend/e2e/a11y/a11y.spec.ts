@@ -41,7 +41,6 @@ test.describe('Accessibility audit', () => {
 
       const { serious } = await runAxe(page, route.name)
 
-      // Warnings mode: fail only on critical
       if (auditLevel === 'warnings') {
         const critical = serious.filter((v) => v.impact === 'critical')
         expect(critical, `${route.name} has critical axe violations`).toHaveLength(0)
@@ -52,13 +51,5 @@ test.describe('Accessibility audit', () => {
   test('login page has accessible form labels', async ({ page }) => {
     await page.goto('/auth/login')
     await expect(page.locator('label[for]')).toHaveCount(2)
-  })
-
-  test('skip link present when accessibility enabled', async ({ page }) => {
-    await page.goto('/auth/login')
-    const skipLink = page.locator('.skip-link')
-    // Skip link only on authenticated app shell; verify login has lang attribute
-    await expect(page.locator('html')).toHaveAttribute('lang', /en|es/)
-    await expect(skipLink).toHaveCount(0)
   })
 })

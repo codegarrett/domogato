@@ -160,8 +160,14 @@ The Vue dev server runs with HMR. Hot reload is automatic.
 # Backend
 docker compose exec api pytest
 
-# Frontend
+# Frontend unit tests
 docker compose exec frontend npm test
+
+# E2E (isolated stack — see docs/E2E_TESTING.md)
+cp .env.e2e.example .env.e2e
+make e2e-up
+cd frontend && npm run test:e2e:desktop
+make e2e-down
 ```
 
 ## License

@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/e2e/weather"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "city": "{{request.query.city}}",
+      "temperature_c": 22,
+      "condition": "sunny",
+      "source": "wiremock-e2e"
+    },
+    "transformers": ["response-template"]
+  }
+}

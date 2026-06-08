@@ -5,19 +5,37 @@
   <div v-else-if="report">
     <div class="flex align-items-center gap-3 mb-4">
       <Button icon="pi pi-arrow-left" text @click="router.back()" />
-      <h1 class="text-2xl font-bold m-0 flex-1">{{ report.title }}</h1>
+      <h1 class="text-2xl font-bold m-0 flex-1 min-w-0">{{ recordDisplayTitle }}</h1>
+      <TranslateActionButtons
+        v-if="!editing"
+        :showing-translation="recordShowingTranslation"
+        :translating="recordTranslating"
+        :has-content="recordHasContent"
+        :has-translation="recordHasTranslation"
+        @translate="onRecordTranslate"
+        @update:showing-translation="setRecordShowingTranslation"
+      />
       <Tag :severity="statusSeverity(report.status)" :value="statusLabel(report.status)" />
     </div>
 
     <div class="grid">
       <div class="col-12 lg:col-8">
         <div class="surface-card p-4 border-round shadow-1 mb-4">
-          <h2 class="text-lg font-semibold mb-3">{{ $t('issueReports.reportDescription') }}</h2>
-          <div v-if="!editing" class="text-color-secondary whitespace-pre-wrap">
-            {{ report.description || '—' }}
-          </div>
-          <div v-else class="flex flex-column gap-2">
+          <template v-if="!editing">
+            <h2 class="text-lg font-semibold mb-3">{{ $t('issueReports.reportDescription') }}</h2>
+            <div class="text-color-secondary whitespace-pre-wrap">
+              {{ recordDisplayDescription || '—' }}
+            </div>
+          </template>
+          <template v-else>
+            <h2 class="text-lg font-semibold mb-3">{{ $t('issueReports.reportDescription') }}</h2>
+          </template>
+          <div v-if="editing" class="flex flex-column gap-2">
+            <div class="flex align-items-center justify-content-end gap-1">
+              <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog" />
+            </div>
             <InputText v-model="editForm.title" class="w-full font-semibold" />
+            <label class="text-sm font-semibold">{{ $t('issueReports.reportDescription') }}</label>
             <Textarea v-model="editForm.description" class="w-full" :rows="6" />
             <div>
               <label class="block text-sm font-semibold mb-1">{{ $t('issueReports.sourceUrl') }}</label>
@@ -137,9 +155,13 @@
             <div class="flex-1">
               <div class="font-semibold text-sm">{{ reporter.display_name || 'Unknown' }}</div>
               <div class="text-xs text-color-secondary">{{ formatDateTime(reporter.created_at) }}</div>
-              <p v-if="reporter.original_description" class="text-sm mt-1 text-color-secondary">
-                {{ reporter.original_description }}
-              </p>
+              <TranslatableBlock
+                v-if="reporter.original_description"
+                :content="reporter.original_description"
+                format="plain"
+                actions-class="mt-1 mb-1"
+                class="mt-1"
+              />
             </div>
           </div>
         </div>
@@ -237,6 +259,16 @@
       :selected-reports="[report]"
       @created="onTicketCreated"
     />
+
+    <AiGeneratePromptDialog
+      v-model:visible="aiDialogOpen"
+      v-model:prompt="aiPrompt"
+      :loading="aiGenerating"
+      :error="aiGenerateError"
+      :hint="$t('contentAssist.issueEditHint')"
+      @generate="runAiGenerate"
+    />
+
   </div>
 </template>
 
@@ -267,11 +299,26 @@ import { ticketDetailPathFromRef } from '@/utils/ticketUrls'
 import { downloadFromApi } from '@/utils/download'
 import ImageAttachmentGallery, { type ImageAttachmentItem } from '@/components/common/ImageAttachmentGallery.vue'
 import CreateTicketFromReportsDialog from '@/components/issue-reports/CreateTicketFromReportsDialog.vue'
+import AiSparklesButton from '@/components/ai/AiSparklesButton.vue'
+import AiGeneratePromptDialog from '@/components/ai/AiGeneratePromptDialog.vue'
+import TranslatableBlock from '@/components/ai/TranslatableBlock.vue'
+import TranslateActionButtons from '@/components/ai/TranslateActionButtons.vue'
+import { useContentAssist } from '@/composables/useContentAssist'
+import { useRecordTranslation } from '@/composables/useRecordTranslation'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const toast = useToastService()
+
+const {
+  generating: aiGenerating,
+  generateError: aiGenerateError,
+  generateContent: runContentGenerate,
+} = useContentAssist()
+
+const aiDialogOpen = ref(false)
+const aiPrompt = ref('')
 
 const projectId = computed(() => route.params.projectId as string)
 const reportId = computed(() => route.params.reportId as string)
@@ -285,6 +332,20 @@ function linkedTicketPath(link: IssueReportTicketLink): string {
 
 const report = ref<IssueReport | null>(null)
 const loading = ref(true)
+
+const reportTitleSource = computed(() => report.value?.title ?? '')
+const reportDescriptionSource = computed(() => report.value?.description ?? '')
+
+const {
+  showingTranslation: recordShowingTranslation,
+  translating: recordTranslating,
+  hasContent: recordHasContent,
+  hasTranslation: recordHasTranslation,
+  displayTitle: recordDisplayTitle,
+  displayDescription: recordDisplayDescription,
+  onTranslateClick: onRecordTranslate,
+  setShowingTranslation: setRecordShowingTranslation,
+} = useRecordTranslation(reportTitleSource, reportDescriptionSource, 'plain')
 const editing = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
@@ -361,6 +422,39 @@ async function loadReport() {
     toast.showError(t('common.error'), '')
   } finally {
     loading.value = false
+  }
+}
+
+function openAiGenerateDialog() {
+  aiPrompt.value = ''
+  aiGenerateError.value = null
+  aiDialogOpen.value = true
+}
+
+async function runAiGenerate() {
+  const prompt = aiPrompt.value.trim()
+  if (!prompt) return
+  try {
+    const result = await runContentGenerate({
+      context: 'issue_edit',
+      prompt,
+      project_id: projectId.value,
+      current_fields: {
+        title: editForm.value.title,
+        description: editForm.value.description,
+        priority: editForm.value.priority,
+        status: editForm.value.status,
+        source_url: editForm.value.source_url,
+      },
+    })
+    if (result.title) editForm.value.title = result.title
+    if (result.description) editForm.value.description = result.description
+    if (result.priority) editForm.value.priority = result.priority
+    if (result.source_url) editForm.value.source_url = result.source_url
+    aiDialogOpen.value = false
+    toast.showSuccess(t('common.success'), t('contentAssist.reviewBeforeSave'))
+  } catch {
+    // error shown in dialog
   }
 }
 

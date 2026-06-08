@@ -1,29 +1,17 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
+import { AppShellPage } from './pages/AppShellPage'
 
-test.describe('Smoke Tests', () => {
-  test('login page loads', async ({ page }) => {
-    await page.goto('/auth/login')
-    await expect(page).toHaveTitle(/ProjectHub/)
-    await expect(page.getByText(/Sign in/i)).toBeVisible()
+test.describe('Smoke Tests @smoke', () => {
+  test('dashboard loads for authenticated admin', async ({ page }) => {
+    const shell = new AppShellPage(page)
+    await shell.gotoDashboard()
+    await expect(page).not.toHaveURL(/auth\/login/)
+    await expect(page.locator('body')).toBeVisible()
   })
 
-  test('redirects unauthenticated users to login', async ({ page }) => {
-    await page.goto('/')
-    await page.waitForURL(/auth\/login/, { timeout: 10000 })
-    await expect(page.url()).toContain('/auth/login')
-  })
-
-  test('dashboard loads after dev auth bypass', async ({ page }) => {
-    await page.goto('/')
-    await page.waitForLoadState('networkidle')
-    const url = page.url()
-    expect(url.includes('/auth/login') || url === page.url()).toBeTruthy()
-  })
-})
-
-test.describe('Navigation', () => {
-  test('organizations page loads', async ({ page }) => {
+  test('organizations page loads', async ({ page, seed }) => {
     await page.goto('/organizations')
     await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('link', { name: 'E2E Org' })).toBeVisible()
   })
 })

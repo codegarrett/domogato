@@ -1,0 +1,74 @@
+# E2E overlay — use with: docker compose -f docker-compose.yml -f docker-compose.e2e.yml
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: projecthub_e2e
+    volumes:
+      - pgdata_e2e:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U projecthub -d projecthub_e2e"]
+
+  api:
+    volumes:
+      - ./backend:/app
+      - ./frontend/e2e:/e2e-out
+    environment:
+      DATABASE_URL: postgresql+asyncpg://projecthub:secret@postgres:5432/projecthub_e2e
+      AUTH_MODE: local
+      LOCAL_REGISTRATION_ENABLED: "true"
+      SECRET_KEY: e2e-fixed-secret-key-for-testing-only-32chars
+      LLM_PROVIDER: ollama
+      LLM_MODEL: ${E2E_OLLAMA_MODEL:-llama3.2}
+      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_API_KEY: ollama
+      EMBEDDING_PROVIDER: ollama
+      EMBEDDING_MODEL: ${E2E_EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_BASE_URL: http://ollama:11434/v1
+      EMBEDDING_DIMENSIONS: "768"
+      E2E_SEED_STATE_PATH: /e2e-out/.seed-state.json
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  celery-worker:
+    environment:
+      DATABASE_URL: postgresql+asyncpg://projecthub:secret@postgres:5432/projecthub_e2e
+      LLM_PROVIDER: ollama
+      LLM_MODEL: ${E2E_OLLAMA_MODEL:-llama3.2}
+      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_API_KEY: ollama
+      EMBEDDING_PROVIDER: ollama
+      EMBEDDING_MODEL: ${E2E_EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_BASE_URL: http://ollama:11434/v1
+      EMBEDDING_DIMENSIONS: "768"
+
+  celery-beat:
+    environment:
+      DATABASE_URL: postgresql+asyncpg://projecthub:secret@postgres:5432/projecthub_e2e
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  wiremock:
+    image: wiremock/wiremock:3.9.1
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./e2e/wiremock:/home/wiremock
+    command: ["--global-response-templating", "--verbose"]
+    restart: unless-stopped
+
+volumes:
+  pgdata_e2e:
+  ollama_data:

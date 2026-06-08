@@ -474,7 +474,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div>
+  <div data-testid="board-view">
     <div class="flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
       <h2 class="m-0">{{ $t('boards.title') }}</h2>
       <div class="flex align-items-center gap-2 flex-wrap">

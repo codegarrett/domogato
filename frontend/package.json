@@ -12,7 +12,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:a11y": "playwright test e2e/a11y.spec.ts"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report e2e/playwright-report",
+    "test:e2e:desktop": "playwright test --project=desktop-chrome",
+    "test:e2e:mobile": "playwright test --project=mobile-chrome",
+    "test:e2e:ai": "playwright test --project=ai-desktop e2e/ai",
+    "test:e2e:layout": "playwright test --project=mobile-chrome e2e/layout",
+    "test:a11y": "playwright test --project=unauthenticated e2e/a11y"
   },
   "dependencies": {
     "@primevue/themes": "^4.2.5",
@@ -34,7 +42,6 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.49.1",
-    "@rollup/rollup-win32-x64-msvc": "^4.61.1",
     "@tsconfig/node22": "^22.0.0",
     "@types/dompurify": "^3.2.0",
     "@types/node": "^22.10.5",

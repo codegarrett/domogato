@@ -1,0 +1,5 @@
+.auth/
+.seed-state.json
+test-results/
+playwright-report/
+snapshots/.updated

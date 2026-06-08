@@ -26,10 +26,19 @@
           <Tag v-if="ticket.ticket_key" :value="ticket.ticket_key" severity="info" class="font-semibold" />
           <Tag v-else :value="`#${ticket.ticket_number}`" severity="secondary" />
 
-          <div v-if="!editingTitle" class="flex align-items-center gap-2 flex-1 min-w-0" @click="startTitleEdit">
-            <h1 class="m-0 text-2xl font-semibold cursor-pointer ticket-title-display">
-              {{ ticket.title }}
+          <div v-if="!editingTitle" class="flex align-items-center gap-2 flex-1 min-w-0">
+            <h1 class="m-0 text-2xl font-semibold cursor-pointer ticket-title-display flex-1 min-w-0" @click="startTitleEdit">
+              {{ recordDisplayTitle }}
             </h1>
+            <TranslateActionButtons
+              v-if="!descEditing"
+              :showing-translation="recordShowingTranslation"
+              :translating="recordTranslating"
+              :has-content="recordHasContent"
+              :has-translation="recordHasTranslation"
+              @translate="onRecordTranslate"
+              @update:showing-translation="setRecordShowingTranslation"
+            />
             <Button icon="pi pi-pencil" text rounded severity="secondary" :aria-label="$t('common.edit')" @click.stop="startTitleEdit" />
           </div>
           <div v-else class="flex flex-wrap align-items-center gap-2 flex-1 min-w-0">
@@ -56,50 +65,63 @@
         </div>
 
         <div class="surface-card p-4 border-round shadow-1 mb-4">
-          <div class="flex align-items-center justify-content-between mb-2">
-            <span class="text-sm font-semibold text-color-secondary">{{ $t('common.description') }}</span>
-            <div v-if="descEditing" class="flex gap-2">
-              <Button :label="$t('common.save')" size="small" icon="pi pi-check" :loading="savingDescription" @click="saveDescriptionExplicit" />
-              <Button
-                :label="$t('common.cancel')"
-                size="small"
-                severity="secondary"
-                outlined
-                icon="pi pi-times"
-                @mousedown.prevent
-                @click="cancelDescriptionEdit"
+          <template v-if="descEditing">
+            <div class="flex align-items-center justify-content-between mb-2">
+              <div class="flex align-items-center gap-1">
+                <span class="text-sm font-semibold text-color-secondary">{{ $t('common.description') }}</span>
+                <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog('description')" />
+              </div>
+              <div class="flex gap-2">
+                <Button :label="$t('common.save')" size="small" icon="pi pi-check" :loading="savingDescription" @click="saveDescriptionExplicit" />
+                <Button
+                  :label="$t('common.cancel')"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  icon="pi pi-times"
+                  @mousedown.prevent
+                  @click="cancelDescriptionEdit"
+                />
+              </div>
+            </div>
+            <div
+              ref="descSectionRef"
+              class="description-section"
+              tabindex="-1"
+              @focusout="onDescriptionFocusOut"
+            >
+              <MarkdownEditor
+                v-model="descDraft"
+                :placeholder="$t('tickets.descriptionPlaceholder')"
               />
             </div>
-            <Button
-              v-else
-              :label="$t('common.edit')"
-              size="small"
-              text
-              icon="pi pi-pencil"
-              @click="startDescriptionEdit"
-            />
-          </div>
-
-          <div
-            ref="descSectionRef"
-            class="description-section"
-            tabindex="-1"
-            :class="{ 'cursor-pointer': !descEditing }"
-            @focusout="onDescriptionFocusOut"
-            @click="onDescriptionSectionClick"
-          >
-            <MarkdownEditor
-              v-if="descEditing"
-              v-model="descDraft"
-              :placeholder="$t('tickets.descriptionPlaceholder')"
-            />
-            <RichContent
-              v-else
-              :content="ticket.description ?? ''"
-              :empty-text="$t('tickets.descriptionPlaceholder')"
-              compact
-            />
-          </div>
+          </template>
+          <template v-else>
+            <div class="flex align-items-center justify-content-between mb-2">
+              <span class="text-sm font-semibold text-color-secondary">{{ $t('common.description') }}</span>
+              <Button
+                :label="$t('common.edit')"
+                size="small"
+                text
+                icon="pi pi-pencil"
+                @click="startDescriptionEdit"
+              />
+            </div>
+            <div
+              ref="descSectionRef"
+              class="description-section"
+              tabindex="-1"
+              :class="{ 'cursor-pointer': true }"
+              @focusout="onDescriptionFocusOut"
+              @click="onDescriptionSectionClick"
+            >
+              <RichContent
+                :content="recordDisplayDescription"
+                :empty-text="$t('tickets.descriptionPlaceholder')"
+                compact
+              />
+            </div>
+          </template>
         </div>
 
         <TicketSubtasksPanel
@@ -127,31 +149,56 @@
                       style="width: 2.25rem; height: 2.25rem"
                     />
                     <div class="flex-1 min-w-0">
-                      <div class="flex flex-wrap align-items-center gap-2 mb-1">
-                        <span class="font-semibold">{{ c.author_name || 'Unknown' }}</span>
-                        <span class="text-color-secondary text-sm">{{ formatRelativeTime(c.created_at) }}</span>
-                        <Tag v-if="c.is_edited" :value="$t('tickets.edited')" severity="secondary" class="text-xs" />
-                      </div>
                       <template v-if="editingCommentId === c.id">
+                        <div class="flex flex-wrap align-items-center gap-2 mb-1">
+                          <span class="font-semibold">{{ c.author_name || 'Unknown' }}</span>
+                          <span class="text-color-secondary text-sm">{{ formatRelativeTime(c.created_at) }}</span>
+                          <Tag v-if="c.is_edited" :value="$t('tickets.edited')" severity="secondary" class="text-xs" />
+                        </div>
                         <MarkdownEditor v-model="commentEditDraft" class="mb-2" :placeholder="$t('tickets.commentPlaceholder')" />
                         <div class="flex gap-2">
                           <Button :label="$t('common.save')" size="small" :loading="commentSaving" @click="saveCommentEdit(c.id)" />
                           <Button :label="$t('common.cancel')" size="small" severity="secondary" outlined @click="cancelCommentEdit" />
                         </div>
                       </template>
-                      <template v-else>
-                        <RichContent :content="c.body" compact />
-                        <div v-if="canEditComment(c)" class="flex gap-2 mt-2">
-                          <Button :label="$t('common.edit')" size="small" text icon="pi pi-pencil" @click="startCommentEdit(c)" />
-                          <Button :label="$t('common.delete')" size="small" text severity="danger" icon="pi pi-trash" @click="removeComment(c.id)" />
-                        </div>
-                      </template>
+                      <TranslatableBlock
+                        v-else
+                        :content="c.body"
+                        format="markdown"
+                        compact
+                        :show-actions="false"
+                      >
+                        <template #default="{ displayContent, showingTranslation, translating, hasContent, hasTranslation, openTranslate, setShowingTranslation }">
+                          <div class="flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="font-semibold">{{ c.author_name || 'Unknown' }}</span>
+                            <span class="text-color-secondary text-sm">{{ formatRelativeTime(c.created_at) }}</span>
+                            <Tag v-if="c.is_edited" :value="$t('tickets.edited')" severity="secondary" class="text-xs" />
+                            <TranslateActionButtons
+                              v-if="hasContent"
+                              :showing-translation="showingTranslation"
+                              :translating="translating"
+                              :has-content="hasContent"
+                              :has-translation="hasTranslation"
+                              @translate="openTranslate"
+                              @update:showing-translation="setShowingTranslation"
+                            />
+                          </div>
+                          <RichContent :content="displayContent" compact />
+                          <div v-if="canEditComment(c)" class="flex gap-2 mt-2">
+                            <Button :label="$t('common.edit')" size="small" text icon="pi pi-pencil" @click="startCommentEdit(c)" />
+                            <Button :label="$t('common.delete')" size="small" text severity="danger" icon="pi pi-trash" @click="removeComment(c.id)" />
+                          </div>
+                        </template>
+                      </TranslatableBlock>
                     </div>
                   </div>
                 </div>
 
                 <div class="border-top-1 surface-border pt-4 mt-2">
-                  <label class="block text-sm font-semibold text-color-secondary mb-2">{{ $t('tickets.addComment') }}</label>
+                  <div class="flex align-items-center gap-1 mb-2">
+                    <label class="text-sm font-semibold text-color-secondary">{{ $t('tickets.addComment') }}</label>
+                    <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog('comment')" />
+                  </div>
                   <MarkdownEditor v-model="newCommentBody" :placeholder="$t('tickets.commentPlaceholder')" class="mb-3" />
                   <Button :label="$t('common.comment')" icon="pi pi-send" :loading="commentPosting" :disabled="isCommentEmpty(newCommentBody)" @click="submitComment" />
                 </div>
@@ -699,6 +746,15 @@
         <Button :label="$t('common.add')" icon="pi pi-plus" :disabled="!labelToAdd || creatingNewLabel" @click="confirmAddLabel" />
       </template>
     </Dialog>
+
+    <AiGeneratePromptDialog
+      v-model:visible="aiDialogOpen"
+      v-model:prompt="aiPrompt"
+      :loading="aiGenerating"
+      :error="aiGenerateError"
+      :hint="aiGenerateHint"
+      @generate="runAiGenerate"
+    />
   </div>
 </template>
 
@@ -722,6 +778,13 @@ import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import RichContent from '@/components/common/RichContent.vue'
 import ImageAttachmentGallery from '@/components/common/ImageAttachmentGallery.vue'
 import TicketSubtasksPanel from '@/components/tickets/TicketSubtasksPanel.vue'
+import AiSparklesButton from '@/components/ai/AiSparklesButton.vue'
+import AiGeneratePromptDialog from '@/components/ai/AiGeneratePromptDialog.vue'
+import TranslatableBlock from '@/components/ai/TranslatableBlock.vue'
+import TranslateActionButtons from '@/components/ai/TranslateActionButtons.vue'
+import { useContentAssist } from '@/composables/useContentAssist'
+import { useRecordTranslation } from '@/composables/useRecordTranslation'
+import { useToastService } from '@/composables/useToast'
 import { sanitizeMarkdownInput } from '@/utils/richContent'
 import {
   getTicket,
@@ -789,9 +852,26 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
+const toast = useToastService()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+
+const {
+  generating: aiGenerating,
+  generateError: aiGenerateError,
+  generateContent: runContentGenerate,
+} = useContentAssist()
+
+const aiDialogOpen = ref(false)
+const aiPrompt = ref('')
+const aiGenerateTarget = ref<'description' | 'comment'>('description')
+
+const aiGenerateHint = computed(() =>
+  aiGenerateTarget.value === 'comment'
+    ? t('contentAssist.commentCreateHint')
+    : t('contentAssist.ticketEditHint'),
+)
 const ws = useWebSocket()
 const { currentUser } = storeToRefs(authStore)
 
@@ -800,6 +880,20 @@ const routeTicketKey = computed(() => route.params.ticketKey as string)
 
 const ticket = ref<Ticket | null>(null)
 const parentTicket = ref<Ticket | null>(null)
+
+const ticketTitleSource = computed(() => ticket.value?.title ?? '')
+const ticketDescriptionSource = computed(() => ticket.value?.description ?? '')
+
+const {
+  showingTranslation: recordShowingTranslation,
+  translating: recordTranslating,
+  hasContent: recordHasContent,
+  hasTranslation: recordHasTranslation,
+  displayTitle: recordDisplayTitle,
+  displayDescription: recordDisplayDescription,
+  onTranslateClick: onRecordTranslate,
+  setShowingTranslation: setRecordShowingTranslation,
+} = useRecordTranslation(ticketTitleSource, ticketDescriptionSource, 'markdown')
 const loadError = ref<string | null>(null)
 const comments = ref<Comment[]>([])
 const allProjectLabels = ref<Label[]>([])
@@ -1379,6 +1473,55 @@ async function commitTitle() {
     console.error(e)
   } finally {
     editingTitle.value = false
+  }
+}
+
+function openAiGenerateDialog(target: 'description' | 'comment') {
+  aiGenerateTarget.value = target
+  aiPrompt.value = ''
+  aiGenerateError.value = null
+  aiDialogOpen.value = true
+}
+
+async function runAiGenerate() {
+  const prompt = aiPrompt.value.trim()
+  if (!prompt) return
+  try {
+    if (aiGenerateTarget.value === 'comment') {
+      const result = await runContentGenerate({
+        context: 'ticket_edit',
+        prompt: `Write a ticket comment: ${prompt}`,
+        project_id: routeProjectId.value,
+        current_fields: {
+          title: ticket.value?.title,
+          description: newCommentBody.value,
+        },
+      })
+      if (result.description) newCommentBody.value = result.description
+    } else {
+      const currentTitle = editingTitle.value ? titleDraft.value : (ticket.value?.title ?? '')
+      const currentDescription = descDraft.value
+      const result = await runContentGenerate({
+        context: 'ticket_edit',
+        prompt,
+        project_id: routeProjectId.value,
+        current_fields: {
+          title: currentTitle,
+          description: currentDescription,
+          ticket_type: ticket.value?.ticket_type,
+          priority: ticket.value?.priority,
+        },
+      })
+      if (result.title) {
+        titleDraft.value = result.title
+        if (!editingTitle.value) editingTitle.value = true
+      }
+      if (result.description) descDraft.value = result.description
+    }
+    aiDialogOpen.value = false
+    toast.showSuccess(t('common.success'), t('contentAssist.reviewBeforeSave'))
+  } catch {
+    // error shown in dialog
   }
 }
 

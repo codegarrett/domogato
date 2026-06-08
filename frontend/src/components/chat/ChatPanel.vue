@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-panel" :class="{ 'chat-panel--embedded': embedded }">
+  <div class="chat-panel" data-testid="chat-panel" :class="{ 'chat-panel--embedded': embedded }">
     <div class="chat-panel-shell">
     <div class="chat-panel-header">
       <Button

@@ -32,6 +32,7 @@
           v-if="chatStore.isConfigured"
           icon="pi pi-comment"
           text
+          data-testid="chat-toggle"
           :aria-label="$t('ai.assistant')"
           @click="chatStore.toggle()"
         />
@@ -41,6 +42,7 @@
         <button
           type="button"
           class="header-avatar-btn"
+          data-testid="user-menu"
           :aria-label="$t('a11y.userMenu')"
           @click="menuRef.toggle($event)"
         >

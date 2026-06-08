@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_current_user_bearer_or_query, get_db
 from app.models.user import User
+from app.core.permissions import resolve_effective_project_role
 from app.schemas.ai import (
     AIAttachmentRead,
     AIConfigOut,
@@ -20,6 +21,12 @@ from app.schemas.ai import (
     MessageOut,
     SkillInfo,
 )
+from app.schemas.content_assist import (
+    ContentAssistGenerateRequest,
+    ContentAssistGenerateResponse,
+    ContentAssistTranslateRequest,
+    ContentAssistTranslateResponse,
+)
 from app.services import ai_attachment_service, ai_service
 from app.services.ai_attachment_service import (
     AIAttachmentError,
@@ -27,6 +34,7 @@ from app.services.ai_attachment_service import (
     AIAttachmentPermissionError,
 )
 from app.services.agent import registry as skill_registry
+from app.services.content_assist_service import generate_content, translate_content
 from app.services.llm import is_llm_configured, is_embedding_configured, LLMConfigError
 from app.services.storage_service import (
     ALLOWED_CONTENT_TYPES,
@@ -42,6 +50,32 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 def _attachment_to_read(attachment) -> AIAttachmentRead:
     return AIAttachmentRead.model_validate(attachment)
+
+
+async def _assert_project_access(
+    db: AsyncSession,
+    user: User,
+    project_id: UUID,
+) -> None:
+    from sqlalchemy import select
+
+    from app.models.project import Project
+
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    effective_role = await resolve_effective_project_role(
+        user_id=user.id,
+        project_id=project_id,
+        organization_id=project.organization_id,
+        project_visibility=project.visibility,
+        is_system_admin=user.is_system_admin,
+        db=db,
+    )
+    if effective_role is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to this project")
 
 
 @router.get("/config", response_model=AIConfigOut)
@@ -68,6 +102,38 @@ async def get_ai_config():
         vision_enabled=vision_enabled,
         available_skills=skills,
     )
+
+
+@router.post("/assist/generate", response_model=ContentAssistGenerateResponse)
+async def assist_generate(
+    body: ContentAssistGenerateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Draft or revise ticket/issue fields from natural language. Does not persist."""
+    if body.project_id is not None:
+        await _assert_project_access(db, user, body.project_id)
+    result = await generate_content(
+        context=body.context,
+        prompt=body.prompt,
+        current_fields=body.current_fields,
+        reference_items=body.reference_items,
+    )
+    return ContentAssistGenerateResponse(**result)
+
+
+@router.post("/assist/translate", response_model=ContentAssistTranslateResponse)
+async def assist_translate(
+    body: ContentAssistTranslateRequest,
+    _user: User = Depends(get_current_user),
+):
+    """Translate text to the target locale. Does not persist."""
+    result = await translate_content(
+        text=body.text,
+        target_locale=body.target_locale,
+        content_format=body.content_format,
+    )
+    return ContentAssistTranslateResponse(**result)
 
 
 @router.post("/conversations", response_model=ConversationOut, status_code=status.HTTP_201_CREATED)

@@ -114,6 +114,7 @@
         rows="1"
 
         class="chat-input-textarea"
+        data-testid="chat-input"
 
         @keydown="handleKeydown"
 
@@ -134,6 +135,7 @@
         rounded
 
         class="chat-input-send"
+        data-testid="chat-send"
 
         :aria-label="$t('ai.send')"
 

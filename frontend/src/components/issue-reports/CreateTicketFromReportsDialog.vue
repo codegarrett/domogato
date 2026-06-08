@@ -1,11 +1,16 @@
 <template>
   <Dialog
     :visible="visible"
-    :header="$t('issueReports.createTicketFromSelected')"
     modal
     :style="{ width: '36rem', maxWidth: '95vw' }"
     @update:visible="$emit('update:visible', $event)"
   >
+    <template #header>
+      <div class="flex align-items-center justify-content-between w-full gap-2 pr-2">
+        <span class="font-semibold">{{ $t('issueReports.createTicketFromSelected') }}</span>
+        <AiSparklesButton :loading="aiGenerating" @click="openAiGenerateDialog" />
+      </div>
+    </template>
     <div class="flex flex-column gap-3">
       <div class="surface-ground p-3 border-round">
         <p class="text-sm font-semibold mb-2">
@@ -79,6 +84,16 @@
       />
     </template>
   </Dialog>
+
+  <AiGeneratePromptDialog
+    v-model:visible="aiDialogOpen"
+    v-model:prompt="aiPrompt"
+    :loading="aiGenerating"
+    :error="aiGenerateError"
+    :hint="$t('contentAssist.ticketFromReportsHint')"
+    @generate="runAiGenerate"
+  />
+
 </template>
 
 <script setup lang="ts">
@@ -92,6 +107,9 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { createTicketFromReports, type IssueReport } from '@/api/issue-reports'
+import AiSparklesButton from '@/components/ai/AiSparklesButton.vue'
+import AiGeneratePromptDialog from '@/components/ai/AiGeneratePromptDialog.vue'
+import { useContentAssist } from '@/composables/useContentAssist'
 import { useToastService } from '@/composables/useToast'
 import { ticketDetailPath } from '@/utils/ticketUrls'
 
@@ -109,6 +127,16 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const router = useRouter()
 const toast = useToastService()
+
+const {
+  generating: aiGenerating,
+  generateError: aiGenerateError,
+  generateContent: runContentGenerate,
+} = useContentAssist()
+
+const aiDialogOpen = ref(false)
+const aiPrompt = ref('')
+
 const submitting = ref(false)
 
 const form = ref({
@@ -135,6 +163,43 @@ const priorityOptions = [
   { label: 'High', value: 'high' },
   { label: 'Highest', value: 'highest' },
 ]
+
+function openAiGenerateDialog() {
+  aiPrompt.value = ''
+  aiGenerateError.value = null
+  aiDialogOpen.value = true
+}
+
+async function runAiGenerate() {
+  const prompt = aiPrompt.value.trim()
+  if (!prompt) return
+  try {
+    const result = await runContentGenerate({
+      context: 'ticket_from_reports',
+      prompt,
+      project_id: props.projectId,
+      current_fields: {
+        title: form.value.title,
+        description: form.value.description,
+        ticket_type: form.value.ticket_type,
+        priority: form.value.priority,
+      },
+      reference_items: props.selectedReports.map((r) => ({
+        title: r.title,
+        description: r.description,
+        priority: r.priority,
+      })),
+    })
+    if (result.title) form.value.title = result.title
+    if (result.description) form.value.description = result.description
+    if (result.ticket_type) form.value.ticket_type = result.ticket_type
+    if (result.priority) form.value.priority = result.priority
+    aiDialogOpen.value = false
+    toast.showSuccess(t('common.success'), t('contentAssist.reviewBeforeSave'))
+  } catch {
+    // error shown in dialog
+  }
+}
 
 async function submit() {
   submitting.value = true
