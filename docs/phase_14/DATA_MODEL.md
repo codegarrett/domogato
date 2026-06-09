@@ -12,7 +12,7 @@ Project-scoped planning entity (no assignee; assignment happens on tickets).
 | parent_id | UUID FK → user_stories | Nullable; hierarchy |
 | title | varchar(500) | Required working title |
 | quick_notes | text | Optional scratch pad |
-| story_title | varchar(500) | Refined title for ticket conversion |
+| story_title | varchar(500) | Refined user story statement (e.g. "As a … I want …"); included in ticket description |
 | story_body | text | Markdown body |
 | story_acceptance_criteria | text | Markdown AC |
 | status | varchar(30) | Fixed enum (see below) |

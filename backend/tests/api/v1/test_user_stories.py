@@ -174,7 +174,9 @@ async def test_create_tickets_from_refined_story(admin_client: AsyncClient, db_s
     assert resp.status_code == 201
     tickets = resp.json()
     assert len(tickets) == 1
-    assert tickets[0]["title"] == "As a user I can log in with SSO"
+    assert tickets[0]["title"] == "Working title"
+    assert "As a user I can log in with SSO" in (tickets[0]["description"] or "")
+    assert "Users should authenticate via OIDC." in (tickets[0]["description"] or "")
     assert tickets[0]["priority"] == "high"
     assert tickets[0]["ticket_type"] == "story"
 

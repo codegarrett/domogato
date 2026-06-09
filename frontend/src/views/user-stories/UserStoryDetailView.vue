@@ -624,16 +624,6 @@ async function applyGeneratedStory(result: {
     refinedForm.value.story_acceptance_criteria = result.story_acceptance_criteria
   }
   await saveRefined()
-  if (
-    refinedForm.value.story_title?.trim()
-    && refinedForm.value.story_body?.trim()
-    && refinedForm.value.story_acceptance_criteria?.trim()
-    && story.value
-    && !['ticket_created', 'canceled', 'story_ready'].includes(story.value.status)
-  ) {
-    metaForm.value.status = 'story_ready'
-    await saveMeta()
-  }
   toast.showSuccess(t('contentAssist.reviewBeforeSave'), '')
 }
 

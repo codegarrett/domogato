@@ -348,6 +348,8 @@ async def list_children(db: AsyncSession, story_id: UUID) -> list[UserStory]:
 
 def _build_ticket_description(story: UserStory) -> str:
     parts: list[str] = []
+    if story.story_title:
+        parts.append("## User Story\n\n" + story.story_title.strip())
     if story.story_body:
         parts.append(story.story_body.strip())
     if story.story_acceptance_criteria:
@@ -403,7 +405,7 @@ async def create_tickets_from_stories(
         ticket = await create_ticket(
             db,
             project_id=project_id,
-            title=story.story_title.strip(),
+            title=story.title.strip(),
             description=_build_ticket_description(story),
             ticket_type=ticket_type,
             priority=story.priority,

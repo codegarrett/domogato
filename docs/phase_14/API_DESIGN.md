@@ -34,7 +34,7 @@ All endpoints are project-scoped under `/api/v1/projects/{project_id}/user-stori
 | POST | `/user-stories/create-tickets` | DEVELOPER |
 | GET | `/tickets/{ticket_id}/user-stories` | GUEST |
 
-**Create tickets:** requires `story_title`, `story_body`, `story_acceptance_criteria` on each story (422 with field hints if missing).
+**Create tickets:** requires `story_title`, `story_body`, `story_acceptance_criteria` on each story (422 with field hints if missing). Ticket `title` ← working `title`; description combines `story_title` (## User Story), `story_body`, and acceptance criteria.
 
 **AI assist contexts:** `user_story_create`, `user_story_refine` via `/api/v1/ai/assist/generate`.
 
