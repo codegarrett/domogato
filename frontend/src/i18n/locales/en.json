@@ -538,6 +538,8 @@
     "replyingTo": "Replying to",
     "replyPlaceholder": "Write a reply...",
     "commentPlaceholder": "Leave a comment...",
+    "editComment": "Edit comment",
+    "confirmDeleteComment": "Delete this comment?",
     "storyStatus": "Story Status",
     "setStatus": "Set status",
     "linkedTickets": "Linked Tickets",

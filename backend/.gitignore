@@ -36,3 +36,6 @@ coverage.xml
 # Environment
 .env
 .env.local
+
+# Celery Beat local scheduler state
+celerybeat-schedule

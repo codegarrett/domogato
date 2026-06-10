@@ -10,7 +10,6 @@ const props = defineProps<{
   statusOptions: { label: string; value: string }[]
   resolveStatusName: (id: string) => string
   resolveStatusStyle: (id: string) => Record<string, string>
-  compact?: boolean
 }>()
 
 const editValue = defineModel<string | null>('editValue')
@@ -38,8 +37,7 @@ const displayStatusId = computed(() =>
     <Tag
       :value="resolveStatusName(displayStatusId)"
       :style="resolveStatusStyle(displayStatusId)"
-      class="inline-editable-tag"
-      :class="{ 'text-xs': compact }"
+      class="inline-editable-tag text-xs"
     />
   </TicketInlinePicker>
 </template>
@@ -50,7 +48,7 @@ const displayStatusId = computed(() =>
   cursor: pointer;
 }
 
-.inline-editable-tag :deep(.p-tag-value) {
+.inline-editable-tag :deep(.p-tag-label) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

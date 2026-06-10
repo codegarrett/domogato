@@ -97,7 +97,7 @@
   white-space: nowrap;
 }
 
-.ticket-table-grid .grid-cell--clip :deep(.p-tag-value) {
+.ticket-table-grid .grid-cell--clip :deep(.p-tag-label) {
   overflow: hidden;
   text-overflow: ellipsis;
 }

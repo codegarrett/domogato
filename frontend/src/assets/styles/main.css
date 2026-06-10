@@ -88,6 +88,21 @@ h3 { font-size: 1.125rem; }
 .p-tag {
   font-weight: 500;
   font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.p-tag-label {
+  line-height: 1.25;
+}
+
+.p-tag.text-lg {
+  font-size: 1.125rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.p-datatable .p-tag,
+.ticket-table-grid .p-tag {
+  white-space: nowrap;
 }
 
 .p-button {

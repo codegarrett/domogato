@@ -2,7 +2,9 @@
 import { ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import ProgressSpinner from 'primevue/progressspinner'
+import Textarea from 'primevue/textarea'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import { sanitizeMarkdownInput } from '@/utils/richContent'
 import KBCommentItem from './KBCommentItem.vue'
@@ -25,6 +27,11 @@ const loading = ref(false)
 const submitting = ref(false)
 const newCommentBody = ref('')
 const replyingTo = ref<string | null>(null)
+const editDialogVisible = ref(false)
+const editCommentBody = ref('')
+const editingComment = ref<KBComment | null>(null)
+const deleteDialogVisible = ref(false)
+const deletingCommentId = ref<string | null>(null)
 
 async function load() {
   loading.value = true
@@ -69,17 +76,33 @@ function findCommentById(id: string, tree: KBComment[]): KBComment | undefined {
   return undefined
 }
 
-async function onEdit(comment: KBComment) {
-  const newBody = prompt('Edit comment:', comment.body)
-  if (newBody !== null && newBody.trim()) {
-    await updateComment(comment.id, { body: newBody })
-    await load()
-  }
+function onEdit(comment: KBComment) {
+  editingComment.value = comment
+  editCommentBody.value = comment.body
+  editDialogVisible.value = true
 }
 
-async function onDelete(commentId: string) {
-  if (!confirm('Delete this comment?')) return
-  await deleteComment(commentId)
+async function confirmEdit() {
+  if (!editingComment.value || !editCommentBody.value.trim()) return
+  await updateComment(editingComment.value.id, {
+    body: sanitizeMarkdownInput(editCommentBody.value),
+  })
+  editDialogVisible.value = false
+  editingComment.value = null
+  editCommentBody.value = ''
+  await load()
+}
+
+function onDelete(commentId: string) {
+  deletingCommentId.value = commentId
+  deleteDialogVisible.value = true
+}
+
+async function confirmDelete() {
+  if (!deletingCommentId.value) return
+  await deleteComment(deletingCommentId.value)
+  deleteDialogVisible.value = false
+  deletingCommentId.value = null
   await load()
 }
 
@@ -97,7 +120,12 @@ onMounted(load)
         <span class="text-xs text-color-secondary">
           {{ t('kb.replyingTo', { name: findCommentById(replyingTo, comments)?.author.display_name ?? '…' }) }}
         </span>
-        <button class="p-link text-xs text-color-secondary" @click="cancelReply">
+        <button
+          type="button"
+          class="p-link text-xs text-color-secondary"
+          :aria-label="$t('common.cancel')"
+          @click="cancelReply"
+        >
           <i class="pi pi-times" />
         </button>
       </div>
@@ -139,6 +167,55 @@ onMounted(load)
         @delete="onDelete"
       />
     </div>
+
+    <Dialog
+      v-model:visible="editDialogVisible"
+      :header="$t('kb.editComment')"
+      modal
+      :style="{ width: 'min(32rem, 95vw)' }"
+    >
+      <Textarea
+        v-model="editCommentBody"
+        class="w-full"
+        rows="8"
+        :aria-label="$t('kb.editComment')"
+      />
+      <template #footer>
+        <Button
+          :label="$t('common.cancel')"
+          severity="secondary"
+          text
+          @click="editDialogVisible = false"
+        />
+        <Button
+          :label="$t('common.save')"
+          :disabled="!editCommentBody.trim()"
+          @click="confirmEdit"
+        />
+      </template>
+    </Dialog>
+
+    <Dialog
+      v-model:visible="deleteDialogVisible"
+      :header="$t('common.delete')"
+      modal
+      :style="{ width: 'min(28rem, 95vw)' }"
+    >
+      <p class="m-0">{{ $t('kb.confirmDeleteComment') }}</p>
+      <template #footer>
+        <Button
+          :label="$t('common.cancel')"
+          severity="secondary"
+          text
+          @click="deleteDialogVisible = false"
+        />
+        <Button
+          :label="$t('common.delete')"
+          severity="danger"
+          @click="confirmDelete"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 

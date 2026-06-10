@@ -75,6 +75,18 @@ const ProjectHubPreset = definePreset(Aura, {
       xl: '12px',
     },
   },
+  components: {
+    tag: {
+      root: {
+        fontSize: '0.75rem',
+        fontWeight: '500',
+        padding: '0.125rem 0.375rem',
+      },
+      icon: {
+        size: '0.625rem',
+      },
+    },
+  },
 })
 
 const app = createApp(App)

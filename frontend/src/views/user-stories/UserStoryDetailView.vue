@@ -662,7 +662,7 @@ async function createTicket() {
     await loadStory()
     const ticket = tickets[0]
     if (tickets.length === 1 && ticket?.ticket_key) {
-      router.push(`/projects/${projectId}/tickets/${ticket.ticket_key}`)
+      router.push(`/projects/${projectId.value}/tickets/${ticket.ticket_key}`)
     }
   } catch {
     toast.showError(t('userStories.refinedFieldsRequired'), '')

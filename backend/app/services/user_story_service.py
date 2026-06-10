@@ -21,6 +21,9 @@ from app.models.workflow import WorkflowStatus
 from app.services.ticket_service import create_ticket
 
 _TERMINAL_STATUSES = frozenset({"canceled", "ticket_created"})
+_ALLOWED_SORT_COLUMNS = frozenset({
+    "created_at", "updated_at", "title", "status", "priority",
+})
 
 
 async def create_user_story(
@@ -94,7 +97,8 @@ async def list_user_stories(
     count_query = select(func.count()).select_from(base.subquery())
     total = (await db.execute(count_query)).scalar_one()
 
-    sort_col = getattr(UserStory, sort_by, UserStory.created_at)
+    sort_key = sort_by if sort_by in _ALLOWED_SORT_COLUMNS else "created_at"
+    sort_col = getattr(UserStory, sort_key)
     order = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
     rows = (
         await db.execute(

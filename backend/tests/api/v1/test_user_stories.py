@@ -185,3 +185,35 @@ async def test_create_tickets_from_refined_story(admin_client: AsyncClient, db_s
     ).json()
     assert updated["status"] == "ticket_created"
     assert len(updated["linked_tickets"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_tickets_partial_batch_rolls_back(
+    admin_client: AsyncClient, db_session: AsyncSession,
+):
+    _, project = await _setup_project(admin_client, db_session, slug="us-partial-org")
+    pid = project["id"]
+
+    incomplete = (
+        await admin_client.post(f"{STORY_API}/{pid}/user-stories", json={"title": "Incomplete"})
+    ).json()
+    complete = (
+        await admin_client.post(f"{STORY_API}/{pid}/user-stories", json={"title": "Complete"})
+    ).json()
+    await admin_client.patch(
+        f"{STORY_API}/{pid}/user-stories/{complete['id']}",
+        json={
+            "story_title": "As a user I want X",
+            "story_body": "Body text",
+            "story_acceptance_criteria": "- AC1",
+        },
+    )
+
+    resp = await admin_client.post(
+        f"{STORY_API}/{pid}/user-stories/create-tickets",
+        json={"user_story_ids": [incomplete["id"], complete["id"]]},
+    )
+    assert resp.status_code == 422
+    message = resp.json()["error"]["message"]
+    assert "validation_errors" in message
+    assert "created_count" not in message

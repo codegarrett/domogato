@@ -213,7 +213,6 @@ watch(
           :status-options="statusOptions"
           :resolve-status-name="resolveStatusName"
           :resolve-status-style="resolveStatusStyle"
-          compact
           @start="emit('startEdit', 'workflow_status_id', ticket.workflow_status_id)"
           @commit="(statusId) => emit('commitStatus', statusId)"
           @cancel="emit('cancelEdit')"

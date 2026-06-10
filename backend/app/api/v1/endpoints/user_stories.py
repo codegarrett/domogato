@@ -177,8 +177,11 @@ async def list_user_stories(
     parent_id: UUID | None = Query(None),
     top_level_only: bool = Query(False),
     q: str | None = Query(None),
-    sort_by: str = Query("created_at"),
-    sort_dir: str = Query("desc"),
+    sort_by: str = Query(
+        "created_at",
+        pattern=r"^(created_at|updated_at|title|status|priority)$",
+    ),
+    sort_dir: str = Query("desc", pattern=r"^(asc|desc)$"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     user: User = Depends(get_current_user),
@@ -556,7 +559,7 @@ async def create_tickets_from_stories(
     if errors:
         raise HTTPException(
             status_code=422,
-            detail={"validation_errors": errors, "created_count": len(tickets)},
+            detail={"validation_errors": errors},
         )
 
     await events.publish(

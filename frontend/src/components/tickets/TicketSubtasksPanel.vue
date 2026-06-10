@@ -242,7 +242,6 @@ onMounted(async () => {
             :status-options="statusTransitionOptions(child)"
             :resolve-status-name="resolveStatusName"
             :resolve-status-style="resolveStatusStyle"
-            compact
             @start="startEdit(child, 'workflow_status_id', child.workflow_status_id)"
             @commit="(statusId) => commitStatus(child, statusId)"
             @cancel="cancelEdit"

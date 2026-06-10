@@ -538,6 +538,8 @@
     "replyingTo": "Respondiendo a",
     "replyPlaceholder": "Escribe una respuesta...",
     "commentPlaceholder": "Deja un comentario...",
+    "editComment": "Editar comentario",
+    "confirmDeleteComment": "¿Eliminar este comentario?",
     "storyStatus": "Estado de Historia",
     "setStatus": "Establecer estado",
     "linkedTickets": "Tickets Vinculados",

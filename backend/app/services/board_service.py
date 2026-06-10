@@ -147,7 +147,7 @@ async def create_default_board_for_workflow(
             select(WorkflowStatus)
             .where(
                 WorkflowStatus.workflow_id == workflow_id,
-                WorkflowStatus.show_on_board == True,  # noqa: E712
+                WorkflowStatus.show_on_board.is_(True),
             )
             .order_by(WorkflowStatus.position)
         )
@@ -180,6 +180,11 @@ async def sync_board_columns_from_workflow(
     board_id: UUID | None = None,
 ) -> BoardRead | None:
     """Replace board columns with statuses from the project's default workflow."""
+    if board_id is not None:
+        target_board = await get_board(db, board_id)
+        if target_board is None or target_board.project_id != project_id:
+            raise ValueError("Board not found")
+
     project = (
         await db.execute(select(Project).where(Project.id == project_id))
     ).scalar_one_or_none()
@@ -209,7 +214,7 @@ async def sync_board_columns_from_workflow(
             select(WorkflowStatus)
             .where(
                 WorkflowStatus.workflow_id == workflow_id,
-                WorkflowStatus.show_on_board == True,  # noqa: E712
+                WorkflowStatus.show_on_board.is_(True),
             )
             .order_by(WorkflowStatus.position)
         )
@@ -224,6 +229,7 @@ async def sync_board_columns_from_workflow(
             )
         )
     await db.flush()
+    await db.refresh(target, attribute_names=["columns"])
 
     reloaded = await get_board(db, target.id)
     if reloaded is None:

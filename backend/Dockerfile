@@ -11,7 +11,9 @@ FROM deps AS dev
 COPY requirements-dev.txt .
 RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements-dev.txt
 COPY . .
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 EXPOSE 8000
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 FROM deps AS production

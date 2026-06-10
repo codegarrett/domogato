@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
 
 
 
-.ticket-inline-picker__trigger :deep(.p-tag-value) {
+.ticket-inline-picker__trigger :deep(.p-tag-label) {
 
   overflow: hidden;
 

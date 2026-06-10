@@ -5,10 +5,19 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from app.api.deps import get_current_user, get_db
 from app.core import events
-from app.core.permissions import ProjectRole, require_project_role
+from app.core.permissions import (
+    PROJECT_ROLE_HIERARCHY,
+    ProjectRole,
+    require_project_role,
+    resolve_effective_project_role,
+)
+from app.models.board import Board, BoardColumn
 from app.models.user import User
+from app.services import project_service
 from app.schemas.board import (
     BoardColumnCreate,
     BoardColumnRead,
@@ -21,6 +30,57 @@ from app.schemas.board import (
 from app.services import board_service
 
 router = APIRouter(tags=["boards"])
+
+
+async def _require_project_role_for_project(
+    db: AsyncSession, project_id: UUID, user: User, minimum: ProjectRole,
+) -> None:
+    if user.is_system_admin:
+        return
+    project = await project_service.get_project(db, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    effective = await resolve_effective_project_role(
+        user_id=user.id,
+        project_id=project_id,
+        organization_id=project.organization_id,
+        project_visibility=project.visibility,
+        is_system_admin=user.is_system_admin,
+        db=db,
+    )
+    if (
+        effective is None
+        or PROJECT_ROLE_HIERARCHY[effective] < PROJECT_ROLE_HIERARCHY[minimum]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+
+
+async def _get_board_for_user(
+    db: AsyncSession, board_id: UUID, user: User, minimum: ProjectRole,
+) -> Board:
+    board = await board_service.get_board(db, board_id)
+    if board is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+    await _require_project_role_for_project(
+        db, board.project_id, user, minimum,
+    )
+    return board
+
+
+async def _get_column_for_user(
+    db: AsyncSession, column_id: UUID, user: User, minimum: ProjectRole,
+) -> BoardColumn:
+    result = await db.execute(
+        select(BoardColumn).where(BoardColumn.id == column_id)
+    )
+    col = result.scalar_one_or_none()
+    if col is None:
+        raise HTTPException(status_code=404, detail="Column not found")
+    await _get_board_for_user(db, col.board_id, user, minimum)
+    return col
 
 
 @router.get(
@@ -84,9 +144,12 @@ async def sync_board_columns(
     _role: ProjectRole = require_project_role(ProjectRole.MAINTAINER),
     db: AsyncSession = Depends(get_db),
 ):
-    synced = await board_service.sync_board_columns_from_workflow(
-        db, project_id, board_id=board_id,
-    )
+    try:
+        synced = await board_service.sync_board_columns_from_workflow(
+            db, project_id, board_id=board_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     if synced is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -104,9 +167,7 @@ async def get_board(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    board = await board_service.get_board(db, board_id)
-    if board is None:
-        raise HTTPException(status_code=404, detail="Board not found")
+    board = await _get_board_for_user(db, board_id, user, ProjectRole.GUEST)
     status_map = await board_service._status_map_for_ids(
         db, [c.workflow_status_id for c in board.columns]
     )
@@ -123,9 +184,7 @@ async def update_board(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    board = await board_service.get_board(db, board_id)
-    if board is None:
-        raise HTTPException(status_code=404, detail="Board not found")
+    await _get_board_for_user(db, board_id, user, ProjectRole.MAINTAINER)
     update_data = body.model_dump(exclude_unset=True)
     updated = await board_service.update_board(db, board_id, **update_data)
     if updated is None:
@@ -145,9 +204,7 @@ async def delete_board(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    board = await board_service.get_board(db, board_id)
-    if board is None:
-        raise HTTPException(status_code=404, detail="Board not found")
+    await _get_board_for_user(db, board_id, user, ProjectRole.MAINTAINER)
     await board_service.delete_board(db, board_id)
 
 
@@ -162,9 +219,7 @@ async def add_column(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    board = await board_service.get_board(db, board_id)
-    if board is None:
-        raise HTTPException(status_code=404, detail="Board not found")
+    await _get_board_for_user(db, board_id, user, ProjectRole.MAINTAINER)
     col = await board_service.add_column(
         db, board_id, body.workflow_status_id, wip_limit=body.wip_limit,
     )
@@ -181,6 +236,7 @@ async def update_column(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _get_column_for_user(db, column_id, user, ProjectRole.MAINTAINER)
     update_data = body.model_dump(exclude_unset=True)
     col = await board_service.update_column(db, column_id, **update_data)
     if col is None:
@@ -197,6 +253,7 @@ async def remove_column(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _get_column_for_user(db, column_id, user, ProjectRole.MAINTAINER)
     removed = await board_service.remove_column(db, column_id)
     if not removed:
         raise HTTPException(status_code=404, detail="Column not found")
@@ -211,9 +268,7 @@ async def get_board_tickets(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    board = await board_service.get_board(db, board_id)
-    if board is None:
-        raise HTTPException(status_code=404, detail="Board not found")
+    await _get_board_for_user(db, board_id, user, ProjectRole.GUEST)
     grouped = await board_service.get_board_tickets(db, board_id, sprint_id=sprint_id)
     return grouped
 
@@ -229,7 +284,12 @@ async def move_ticket(
 ):
     from app.services import ticket_service as ts
     old_ticket = await ts.get_ticket(db, ticket_id)
-    old_status_id = str(old_ticket.workflow_status_id) if old_ticket else None
+    if old_ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    await _require_project_role_for_project(
+        db, old_ticket.project_id, user, ProjectRole.DEVELOPER,
+    )
+    old_status_id = str(old_ticket.workflow_status_id)
 
     ticket = await board_service.move_ticket(
         db, ticket_id, body.to_status_id, body.board_rank,

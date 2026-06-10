@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Organization, Project, Ticket
@@ -20,20 +21,25 @@ async def _setup_workflow(db: AsyncSession, org_id, project: Project):
     await db.flush()
     s1 = WorkflowStatus(
         workflow_id=wf.id, name="Todo", category="todo",
-        is_initial=True, is_terminal=False, position=0,
+        is_initial=True, is_terminal=False, position=0, show_on_board=True,
     )
     s2 = WorkflowStatus(
         workflow_id=wf.id, name="In Progress", category="in_progress",
-        is_initial=False, is_terminal=False, position=1,
+        is_initial=False, is_terminal=False, position=1, show_on_board=True,
     )
     s3 = WorkflowStatus(
         workflow_id=wf.id, name="Done", category="done",
-        is_initial=False, is_terminal=True, position=2,
+        is_initial=False, is_terminal=True, position=2, show_on_board=True,
     )
     db.add_all([s1, s2, s3])
     await db.flush()
-    project.default_workflow_id = wf.id
+    await db.execute(
+        update(Project)
+        .where(Project.id == project.id)
+        .values(default_workflow_id=wf.id)
+    )
     await db.flush()
+    await db.refresh(project)
     return wf, s1, s2, s3
 
 
@@ -303,3 +309,73 @@ class TestBoardShowOnBoard:
         )
         assert resp.status_code == 200
         assert [s["name"] for s in resp.json()] == ["In Progress", "Todo", "Done"]
+
+    async def test_sync_rejects_cross_project_board_id(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+    ):
+        wf, _, _, _ = await _setup_workflow(db_session, test_org.id, test_project)
+        board_resp = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/default",
+            params={"workflow_id": str(wf.id)},
+        )
+        board_id = board_resp.json()["id"]
+
+        other = Project(
+            organization_id=test_org.id,
+            name="Other Project",
+            key="OTH",
+            visibility="internal",
+        )
+        db_session.add(other)
+        await db_session.flush()
+
+        resp = await admin_client.post(
+            f"/api/v1/projects/{other.id}/boards/sync",
+            params={"board_id": board_id},
+        )
+        assert resp.status_code == 404
+
+    async def test_sync_returns_400_when_no_default_workflow(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+    ):
+        resp = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/sync",
+        )
+        assert resp.status_code == 400
+
+    async def test_hide_status_removes_board_column(
+        self,
+        admin_client: AsyncClient,
+        test_project: Project,
+        db_session: AsyncSession,
+        test_org: Organization,
+    ):
+        wf, s1, s2, s3 = await _setup_workflow(db_session, test_org.id, test_project)
+        board_resp = await admin_client.post(
+            f"/api/v1/projects/{test_project.id}/boards/default",
+            params={"workflow_id": str(wf.id)},
+        )
+        assert board_resp.status_code == 201
+        assert any(
+            c["workflow_status_id"] == str(s2.id)
+            for c in board_resp.json()["columns"]
+        )
+
+        patch = await admin_client.patch(
+            f"/api/v1/workflows/statuses/{s2.id}",
+            json={"show_on_board": False},
+        )
+        assert patch.status_code == 200
+
+        board = await admin_client.get(f"/api/v1/boards/{board_resp.json()['id']}")
+        assert board.status_code == 200
+        col_status_ids = {c["workflow_status_id"] for c in board.json()["columns"]}
+        assert str(s2.id) not in col_status_ids
+        assert str(s1.id) in col_status_ids
+        assert str(s3.id) in col_status_ids
