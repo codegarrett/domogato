@@ -76,7 +76,7 @@ A single test file `tests/api/v1/test_rbac.py` with parametrized tests covering 
 | Project Owner | Project | Full project access |
 | Project Maintainer | Project | Can manage workflows, labels, custom fields, members |
 | Project Developer | Project | Can create/edit tickets, comments, time logs |
-| Project Reporter | Project | Can create own tickets, cannot edit others |
+| Project Reporter | Project | Can edit any user story; transition any ticket status; cannot create tickets |
 | Project Guest | Project | Read-only access |
 | Non-Member | None | No project access (unless project is internal visibility) |
 
@@ -97,12 +97,22 @@ Each row is tested for allow/deny across all roles:
 - Add/remove project members (project maintainer+)
 - View project (project guest+ for private, org member+ for internal)
 
+**User story endpoints:**
+- Create user story (reporter+)
+- Update any user story (reporter+)
+- Create tickets from user stories (developer+)
+
+**Issue report endpoints:**
+- Create issue report (guest+)
+- Update own issue report (reporter+)
+- Update any issue report (developer+)
+- Create ticket from issue reports (developer+)
+
 **Ticket endpoints:**
-- Create ticket (reporter+)
-- Update own ticket (reporter+)
-- Update any ticket (developer+)
+- Create ticket (developer+)
+- Update ticket fields (developer+)
 - Delete ticket (maintainer+)
-- Transition status (reporter+ own, developer+ any)
+- Transition status (reporter+ any ticket)
 - Bulk update (developer+)
 
 **Comment endpoints:**

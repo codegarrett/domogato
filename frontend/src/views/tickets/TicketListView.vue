@@ -47,6 +47,7 @@
               @click="exportDialogVisible = true"
             />
             <Button
+              v-if="canCreateTicket"
               :label="$t('tickets.createTicket')"
               icon="pi pi-plus"
               data-testid="create-ticket"
@@ -143,7 +144,7 @@
           :sort-column="sortColumn"
           :sort-direction="sortDirection"
           :selected-ids="selectedTicketIds"
-          editable-title
+          :editable-title="canUpdateTicket"
           :editing-id="editingCell?.id ?? null"
           :editing-field="editingCell?.field ?? null"
           :edit-value="editingCell?.value ?? null"
@@ -162,7 +163,7 @@
           @sort="onSortColumn"
           @toggle-select="toggleSelect"
           @toggle-select-all="toggleSelectAllOnPage"
-          @start-edit="(tk, field, value) => startEdit(tk, field, value)"
+          @start-edit="(tk, field, value) => handleStartEdit(tk, field, value)"
           @commit-edit="(tk) => commitEdit(tk)"
           @commit-status="(tk, statusId) => commitStatusEdit(tk, statusId)"
           @cancel-edit="cancelEdit"
@@ -391,6 +392,7 @@ import {
 import TicketBulkDeleteDialog from '@/components/tickets/TicketBulkDeleteDialog.vue'
 import TicketExportDialog from '@/components/tickets/TicketExportDialog.vue'
 import { useProjectAdmin } from '@/composables/useProjectAdmin'
+import { useProjectPermissions } from '@/composables/usePermissions'
 import { useToastService } from '@/composables/useToast'
 import { orderedDeleteIds } from '@/utils/collectTicketsForDelete'
 import { listEpics, type Epic } from '@/api/epics'
@@ -418,6 +420,11 @@ const toast = useToastService()
 const projectId = computed(() => route.params.projectId as string)
 const organizationId = computed(() => project.value?.organization_id)
 const { canAdministerProject } = useProjectAdmin(projectId, organizationId)
+const {
+  canCreateTicket,
+  canUpdateTicket,
+  canEditTicketField,
+} = useProjectPermissions(projectId)
 
 const project = ref<Project | null>(null)
 const loadingProject = ref(true)
@@ -509,6 +516,11 @@ const {
     tickets.value = tickets.value.map((t) => (t.id === updated.id ? updated : t))
   },
 })
+
+function handleStartEdit(ticket: Ticket, field: string, value: string | number | null) {
+  if (!canEditTicketField(field)) return
+  startEdit(ticket, field, value)
+}
 
 function toggleSelect(ticket: Ticket) {
   const idx = selectedTickets.value.findIndex((t) => t.id === ticket.id)

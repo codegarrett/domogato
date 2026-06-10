@@ -9,9 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.core import events
 from app.core.permissions import (
-    PROJECT_ROLE_HIERARCHY,
     ProjectRole,
-    resolve_effective_project_role,
+    assert_story_update,
+    get_effective_project_role_for_user,
+    require_minimum_project_role,
 )
 from app.models.user import User
 from app.models.user_story import UserStory, UserStoryQuestion
@@ -41,21 +42,7 @@ router = APIRouter(tags=["user-stories"])
 async def _require_project_role(
     db: AsyncSession, project_id: UUID, user: User, minimum: ProjectRole,
 ) -> None:
-    if user.is_system_admin:
-        return
-    project = await project_service.get_project(db, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    effective = await resolve_effective_project_role(
-        user_id=user.id,
-        project_id=project_id,
-        organization_id=project.organization_id,
-        project_visibility=project.visibility,
-        is_system_admin=user.is_system_admin,
-        db=db,
-    )
-    if effective is None or PROJECT_ROLE_HIERARCHY[effective] < PROJECT_ROLE_HIERARCHY[minimum]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    await require_minimum_project_role(db, user, project_id, minimum)
 
 
 async def _enrich_story(db: AsyncSession, story: UserStory) -> UserStoryRead:
@@ -293,20 +280,8 @@ async def update_user_story(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    restricted_fields = {"status", "priority", "parent_id", "story_title", "story_body", "story_acceptance_criteria"}
-    needs_developer = bool(restricted_fields & set(updates.keys()))
-    is_owner = existing.created_by == user.id
-    reporter_fields = {"title", "quick_notes"}
-    only_reporter_fields = set(updates.keys()).issubset(reporter_fields)
-
-    if needs_developer:
-        await _require_project_role(db, project_id, user, ProjectRole.DEVELOPER)
-    elif only_reporter_fields and is_owner:
-        await _require_project_role(db, project_id, user, ProjectRole.REPORTER)
-    elif only_reporter_fields and not is_owner:
-        await _require_project_role(db, project_id, user, ProjectRole.DEVELOPER)
-    else:
-        await _require_project_role(db, project_id, user, ProjectRole.DEVELOPER)
+    effective_role = await get_effective_project_role_for_user(db, user, project_id)
+    assert_story_update(effective_role)
 
     try:
         story = await user_story_service.update_user_story(db, story_id, **updates)

@@ -1,4 +1,6 @@
 # E2E overlay — use with: docker compose -f docker-compose.yml -f docker-compose.e2e.yml
+# LLM/embedding settings are passed through from the host environment (same vars as the main app).
+# Optional local Ollama: docker compose -f docker-compose.yml -f docker-compose.e2e.yml --profile local-ollama up -d
 services:
   postgres:
     environment:
@@ -17,36 +19,53 @@ services:
       AUTH_MODE: local
       LOCAL_REGISTRATION_ENABLED: "true"
       SECRET_KEY: e2e-fixed-secret-key-for-testing-only-32chars
-      LLM_PROVIDER: ollama
-      LLM_MODEL: ${E2E_OLLAMA_MODEL:-llama3.2}
-      LLM_BASE_URL: http://ollama:11434/v1
-      LLM_API_KEY: ollama
-      EMBEDDING_PROVIDER: ollama
-      EMBEDDING_MODEL: ${E2E_EMBEDDING_MODEL:-nomic-embed-text}
-      EMBEDDING_BASE_URL: http://ollama:11434/v1
-      EMBEDDING_DIMENSIONS: "768"
       E2E_SEED_STATE_PATH: /e2e-out/.seed-state.json
-    depends_on:
-      ollama:
-        condition: service_healthy
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-16384}
+      LLM_CONTEXT_WINDOW: ${LLM_CONTEXT_WINDOW:-131072}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-06-01}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+      LLM_VISION_ENABLED: ${LLM_VISION_ENABLED:-true}
+      LLM_VISION_MAX_IMAGE_BYTES: ${LLM_VISION_MAX_IMAGE_BYTES:-5242880}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
 
   celery-worker:
     environment:
       DATABASE_URL: postgresql+asyncpg://projecthub:secret@postgres:5432/projecthub_e2e
-      LLM_PROVIDER: ollama
-      LLM_MODEL: ${E2E_OLLAMA_MODEL:-llama3.2}
-      LLM_BASE_URL: http://ollama:11434/v1
-      LLM_API_KEY: ollama
-      EMBEDDING_PROVIDER: ollama
-      EMBEDDING_MODEL: ${E2E_EMBEDDING_MODEL:-nomic-embed-text}
-      EMBEDDING_BASE_URL: http://ollama:11434/v1
-      EMBEDDING_DIMENSIONS: "768"
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-16384}
+      LLM_CONTEXT_WINDOW: ${LLM_CONTEXT_WINDOW:-131072}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-06-01}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+      LLM_VISION_ENABLED: ${LLM_VISION_ENABLED:-true}
+      LLM_VISION_MAX_IMAGE_BYTES: ${LLM_VISION_MAX_IMAGE_BYTES:-5242880}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
 
   celery-beat:
     environment:
       DATABASE_URL: postgresql+asyncpg://projecthub:secret@postgres:5432/projecthub_e2e
 
+  # Optional — only when using a self-hosted Ollama container (not Ollama Cloud).
   ollama:
+    profiles: ["local-ollama"]
     image: ollama/ollama:latest
     volumes:
       - ollama_data:/root/.ollama

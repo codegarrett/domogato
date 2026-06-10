@@ -8,10 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.core import events
 from app.core.permissions import (
-    PROJECT_ROLE_HIERARCHY,
     ProjectRole,
+    assert_ticket_create,
+    assert_ticket_transition,
+    assert_ticket_update,
     assert_user_can_administer_project,
-    resolve_effective_project_role,
+    get_effective_project_role_for_user,
+    require_minimum_project_role,
 )
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
@@ -37,21 +40,7 @@ def _enrich_ticket_read(ticket, project_key: str | None) -> TicketRead:
 async def _require_project_role(
     db: AsyncSession, project_id: UUID, user: User, minimum: ProjectRole,
 ) -> None:
-    if user.is_system_admin:
-        return
-    project = await project_service.get_project(db, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    effective = await resolve_effective_project_role(
-        user_id=user.id,
-        project_id=project_id,
-        organization_id=project.organization_id,
-        project_visibility=project.visibility,
-        is_system_admin=user.is_system_admin,
-        db=db,
-    )
-    if effective is None or PROJECT_ROLE_HIERARCHY[effective] < PROJECT_ROLE_HIERARCHY[minimum]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    await require_minimum_project_role(db, user, project_id, minimum)
 
 
 @router.post(
@@ -65,7 +54,8 @@ async def create_ticket(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _require_project_role(db, project_id, user, ProjectRole.DEVELOPER)
+    effective_role = await get_effective_project_role_for_user(db, user, project_id)
+    assert_ticket_create(effective_role)
     project = await project_service.get_project(db, project_id)
     try:
         ticket = await ticket_service.create_ticket(
@@ -299,7 +289,8 @@ async def update_ticket(
     ticket = await ticket_service.get_ticket(db, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    await _require_project_role(db, ticket.project_id, user, ProjectRole.DEVELOPER)
+    effective_role = await get_effective_project_role_for_user(db, user, ticket.project_id)
+    assert_ticket_update(effective_role)
     update_data = body.model_dump(exclude_unset=True)
 
     old_data = {k: getattr(ticket, k, None) for k in update_data}
@@ -344,7 +335,8 @@ async def transition_ticket_status(
     ticket = await ticket_service.get_ticket(db, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    await _require_project_role(db, ticket.project_id, user, ProjectRole.DEVELOPER)
+    effective_role = await get_effective_project_role_for_user(db, user, ticket.project_id)
+    assert_ticket_transition(effective_role)
 
     old_status_id = str(ticket.workflow_status_id)
 

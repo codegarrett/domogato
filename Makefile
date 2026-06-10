@@ -1,9 +1,13 @@
-.PHONY: e2e-up e2e-down e2e-reset e2e-test e2e-pull-models
+.PHONY: e2e-up e2e-up-local-ollama e2e-down e2e-reset e2e-test e2e-pull-models
 
 COMPOSE_E2E = docker compose -f docker-compose.yml -f docker-compose.e2e.yml
+COMPOSE_E2E_LOCAL_OLLAMA = $(COMPOSE_E2E) --profile local-ollama
 
 e2e-up:
 	$(COMPOSE_E2E) up -d --build
+
+e2e-up-local-ollama:
+	$(COMPOSE_E2E_LOCAL_OLLAMA) up -d --build
 
 e2e-down:
 	$(COMPOSE_E2E) down
@@ -12,8 +16,8 @@ e2e-reset:
 	$(COMPOSE_E2E) exec -T api python scripts/e2e_reset.py
 
 e2e-pull-models:
-	$(COMPOSE_E2E) exec -T ollama ollama pull $(or $(E2E_OLLAMA_MODEL),llama3.2)
-	$(COMPOSE_E2E) exec -T ollama ollama pull $(or $(E2E_EMBEDDING_MODEL),nomic-embed-text)
+	$(COMPOSE_E2E_LOCAL_OLLAMA) exec -T ollama ollama pull $(or $(LLM_MODEL),llama3.2)
+	$(COMPOSE_E2E_LOCAL_OLLAMA) exec -T ollama ollama pull $(or $(EMBEDDING_MODEL),nomic-embed-text)
 
 e2e-test: e2e-up
 	@echo "Waiting for API health..."

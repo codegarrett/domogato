@@ -1,6 +1,6 @@
 # E2E Testing with Playwright
 
-End-to-end tests run against an isolated Docker stack with a dedicated `projecthub_e2e` database, Ollama for AI features, and Wiremock for custom agent skill HTTP stubs.
+End-to-end tests run against an isolated Docker stack with a dedicated `projecthub_e2e` database, Wiremock for custom agent skill HTTP stubs, and the **same LLM provider configuration as the main app** (OpenAI, Ollama Cloud, Azure, Anthropic, or optional local Ollama).
 
 ## Prerequisites
 
@@ -12,10 +12,11 @@ End-to-end tests run against an isolated Docker stack with a dedicated `projecth
 
 ```bash
 cp .env.e2e.example .env.e2e
-# Optional: edit models, URLs, credentials
+# Set LLM_PROVIDER, LLM_MODEL, LLM_API_KEY, LLM_BASE_URL (and EMBEDDING_*) in root .env
+# — same bring-your-own-provider setup as normal development (e.g. Ollama Cloud).
 
 make e2e-up
-# First run pulls Ollama models — can take several minutes
+# Optional self-hosted Ollama instead: make e2e-up-local-ollama && make e2e-pull-models
 ```
 
 ## Running tests
@@ -30,7 +31,7 @@ npm run test:e2e:desktop
 # Mobile layout checks
 npm run test:e2e:mobile
 
-# AI tests (Ollama required, 120s timeout)
+# AI tests (LLM configured in .env, 120s timeout; auto-skipped if not configured)
 npm run test:e2e:ai
 
 # Debug single spec
@@ -48,9 +49,10 @@ npm run test:e2e:report
 | Command | Description |
 |---------|-------------|
 | `make e2e-up` | Start dev stack with E2E overlay |
+| `make e2e-up-local-ollama` | Same, plus optional local Ollama container |
 | `make e2e-down` | Tear down stack |
 | `make e2e-reset` | Reset DB + re-seed only |
-| `make e2e-pull-models` | Pre-pull Ollama models |
+| `make e2e-pull-models` | Pre-pull models into local Ollama (requires `e2e-up-local-ollama`) |
 | `make e2e-test` | Up + wait healthy + run full suite |
 
 ## Seed data reference
@@ -74,7 +76,8 @@ Written to `frontend/e2e/.seed-state.json` on each global setup:
 See [`.env.e2e.example`](../.env.e2e.example). Key vars:
 
 - `E2E_BASE_URL` — default `http://localhost` (nginx)
-- `E2E_SKIP_AI=true` — skip AI-tagged tests
+- `LLM_*` / `EMBEDDING_*` — same as main app; E2E compose passes them through to the API
+- `E2E_SKIP_AI=true` — force-skip all `@ai` tests regardless of provider config
 - `E2E_SKIP_RESET=true` — reuse existing DB seed
 - `E2E_SCREENSHOTS=on` — capture all screenshots (layout project)
 
@@ -91,7 +94,7 @@ See [`.env.e2e.example`](../.env.e2e.example). Key vars:
 ```
 frontend/e2e/
 ├── e2e.config.ts       # Typed config + seed loader
-├── global-setup.ts     # DB reset, Ollama, auth storageState
+├── global-setup.ts     # DB reset, AI config probe, auth storageState
 ├── fixtures/           # test.extend helpers
 ├── pages/              # Page objects
 ├── helpers/            # Scroll/screenshot/API utilities
@@ -121,7 +124,8 @@ frontend/e2e/
 |---------|-----|
 | Auth failures | Delete `frontend/e2e/.auth/` and re-run (global-setup recreates) |
 | 502 from nginx after reset | `docker compose restart nginx` (API container was recreated) |
-| Ollama timeout | `make e2e-pull-models`, increase `E2E_OLLAMA_MODEL` to smaller model |
+| AI tests skipped unexpectedly | Ensure `LLM_*` is set in `.env` and API `/ai/config` shows `is_configured: true` |
+| Local Ollama slow first run | `make e2e-up-local-ollama && make e2e-pull-models` |
 | Stale seed | `make e2e-reset` or unset `E2E_SKIP_RESET` |
 | API not ready | Wait for `curl http://localhost/api/v1/health` |
 | MinIO attachments | Ensure `createbuckets` service completed |

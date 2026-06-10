@@ -1,10 +1,13 @@
 import { test, expect } from '../fixtures'
 import { AdminEmbeddingsPage } from '../pages/AdminEmbeddingsPage'
-import { e2eConfig } from '../e2e.config'
+import { shouldSkipEmbeddingTests } from '../e2e.config'
 
 test.describe('Embeddings @ai', () => {
   test.beforeEach(() => {
-    test.skip(e2eConfig.skipAI, 'AI disabled (E2E_SKIP_AI=true)')
+    test.skip(
+      shouldSkipEmbeddingTests(),
+      'Embeddings not configured (set EMBEDDING_* in .env or E2E_SKIP_AI=true)',
+    )
   })
 
   test('admin embeddings page loads', async ({ page }) => {

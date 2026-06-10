@@ -1,5 +1,6 @@
 .auth/
 .seed-state.json
+.ai-config.json
 test-results/
 playwright-report/
 snapshots/.updated

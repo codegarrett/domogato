@@ -1,9 +1,12 @@
 import { test, expect } from '../fixtures'
-import { e2eConfig } from '../e2e.config'
+import { shouldSkipEmbeddingTests } from '../e2e.config'
 
 test.describe('KB Search @ai', () => {
   test.beforeEach(() => {
-    test.skip(e2eConfig.skipAI, 'AI/embeddings disabled (E2E_SKIP_AI=true)')
+    test.skip(
+      shouldSkipEmbeddingTests(),
+      'Embeddings not configured (set EMBEDDING_* in .env or E2E_SKIP_AI=true)',
+    )
   })
 
   test('semantic search finds seeded needle phrase', async ({ page, projectId }) => {

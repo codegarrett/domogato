@@ -3,6 +3,7 @@
     <div class="flex align-items-center justify-content-between mb-4">
       <h1 class="text-2xl font-bold m-0">{{ $t('userStories.queue') }}</h1>
       <Button
+        v-if="canCreateUserStory"
         :label="$t('userStories.newStory')"
         icon="pi pi-plus"
         @click="showCreateDialog = true"
@@ -55,6 +56,8 @@
       <div v-if="selectedStories.length > 0" class="flex align-items-center gap-2 mb-3">
         <Tag severity="info">{{ $t('userStories.selectedCount', { count: selectedStories.length }) }}</Tag>
         <Button
+          v-if="canCreateTicketFromStory"
+          data-testid="create-ticket-from-stories"
           :label="$t('userStories.createTicketFromSelected')"
           icon="pi pi-ticket"
           size="small"
@@ -138,6 +141,7 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import { listUserStories, type UserStoryListItem } from '@/api/user-stories'
+import { useProjectPermissions } from '@/composables/usePermissions'
 import { useToastService } from '@/composables/useToast'
 import CreateUserStoryDialog from '@/components/user-stories/CreateUserStoryDialog.vue'
 import CreateTicketFromUserStoriesDialog from '@/components/user-stories/CreateTicketFromUserStoriesDialog.vue'
@@ -147,6 +151,8 @@ const route = useRoute()
 const toast = useToastService()
 
 const projectId = computed(() => route.params.projectId as string)
+
+const { canCreateUserStory, canCreateTicketFromStory } = useProjectPermissions(projectId)
 
 const stories = ref<UserStoryListItem[]>([])
 const selectedStories = ref<UserStoryListItem[]>([])

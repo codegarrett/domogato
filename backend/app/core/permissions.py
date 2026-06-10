@@ -105,6 +105,118 @@ async def resolve_effective_project_role(
     return max(roles, key=lambda r: PROJECT_ROLE_HIERARCHY[r])
 
 
+def role_meets_minimum(role: ProjectRole | None, minimum: ProjectRole) -> bool:
+    if role is None:
+        return False
+    return PROJECT_ROLE_HIERARCHY[role] >= PROJECT_ROLE_HIERARCHY[minimum]
+
+
+def raise_project_forbidden(detail: str) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=detail,
+    )
+
+
+async def get_effective_project_role_for_user(
+    db: AsyncSession,
+    user: User,
+    project_id: UUID,
+) -> ProjectRole | None:
+    from app.models.project import Project
+
+    if user.is_system_admin:
+        return ProjectRole.OWNER
+
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        return None
+
+    return await resolve_effective_project_role(
+        user_id=user.id,
+        project_id=project_id,
+        organization_id=project.organization_id,
+        project_visibility=project.visibility,
+        is_system_admin=user.is_system_admin,
+        db=db,
+    )
+
+
+async def require_minimum_project_role(
+    db: AsyncSession,
+    user: User,
+    project_id: UUID,
+    minimum: ProjectRole,
+    *,
+    detail: str | None = None,
+) -> ProjectRole:
+    """Enforce minimum project role; returns effective role on success."""
+    from app.models.project import Project
+
+    if user.is_system_admin:
+        return ProjectRole.OWNER
+
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    effective = await resolve_effective_project_role(
+        user_id=user.id,
+        project_id=project_id,
+        organization_id=project.organization_id,
+        project_visibility=project.visibility,
+        is_system_admin=user.is_system_admin,
+        db=db,
+    )
+    if effective is None:
+        raise_project_forbidden("No access to this project")
+    if not role_meets_minimum(effective, minimum):
+        raise_project_forbidden(
+            detail or f"Requires {minimum.value} role or higher",
+        )
+    return effective
+
+
+def assert_story_update(role: ProjectRole | None) -> None:
+    if not role_meets_minimum(role, ProjectRole.REPORTER):
+        raise_project_forbidden("Requires reporter role or higher to edit user stories")
+
+
+def assert_ticket_create(role: ProjectRole | None) -> None:
+    if not role_meets_minimum(role, ProjectRole.DEVELOPER):
+        raise_project_forbidden("Requires developer role or higher to create tickets")
+
+
+def assert_ticket_transition(role: ProjectRole | None) -> None:
+    if not role_meets_minimum(role, ProjectRole.REPORTER):
+        raise_project_forbidden("Requires reporter role or higher to transition ticket status")
+
+
+def assert_ticket_update(role: ProjectRole | None) -> None:
+    if not role_meets_minimum(role, ProjectRole.DEVELOPER):
+        raise_project_forbidden("Requires developer role or higher to update tickets")
+
+
+def assert_issue_report_update(
+    role: ProjectRole | None,
+    *,
+    user_id: UUID,
+    report_created_by: UUID | None,
+) -> None:
+    if role_meets_minimum(role, ProjectRole.DEVELOPER):
+        return
+    if report_created_by == user_id and role_meets_minimum(role, ProjectRole.REPORTER):
+        return
+    if report_created_by != user_id and role_meets_minimum(role, ProjectRole.REPORTER):
+        raise_project_forbidden("You can only edit issue reports you created")
+    raise_project_forbidden("Requires reporter role or higher to edit issue reports")
+
+
 async def assert_user_can_administer_project(
     db: AsyncSession,
     user: User,

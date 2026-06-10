@@ -206,7 +206,7 @@
 
           <div class="flex flex-column gap-2 mt-4">
             <Button
-              v-if="!editing"
+              v-if="!editing && canEditReport"
               :label="$t('common.edit')"
               icon="pi pi-pencil"
               severity="secondary"
@@ -215,7 +215,8 @@
               @click="startEdit"
             />
             <Button
-              v-if="report.status !== 'ticket_created'"
+              v-if="report.status !== 'ticket_created' && canCreateTicketFromIssueReport"
+              data-testid="create-ticket-from-issue-report"
               :label="$t('issueReports.createTicket')"
               icon="pi pi-ticket"
               size="small"
@@ -304,6 +305,7 @@ import AiGeneratePromptDialog from '@/components/ai/AiGeneratePromptDialog.vue'
 import TranslatableBlock from '@/components/ai/TranslatableBlock.vue'
 import TranslateActionButtons from '@/components/ai/TranslateActionButtons.vue'
 import { useContentAssist } from '@/composables/useContentAssist'
+import { useProjectPermissions } from '@/composables/usePermissions'
 import { useRecordTranslation } from '@/composables/useRecordTranslation'
 
 const { t } = useI18n()
@@ -323,6 +325,11 @@ const aiPrompt = ref('')
 const projectId = computed(() => route.params.projectId as string)
 const reportId = computed(() => route.params.reportId as string)
 
+const {
+  canCreateTicketFromIssueReport,
+  canEditIssueReportFor,
+} = useProjectPermissions(projectId)
+
 function linkedTicketPath(link: IssueReportTicketLink): string {
   if (link.ticket_key) {
     return ticketDetailPathFromRef(projectId.value, link.ticket_key)
@@ -332,6 +339,10 @@ function linkedTicketPath(link: IssueReportTicketLink): string {
 
 const report = ref<IssueReport | null>(null)
 const loading = ref(true)
+
+const canEditReport = computed(() =>
+  report.value ? canEditIssueReportFor(report.value.created_by) : false,
+)
 
 const reportTitleSource = computed(() => report.value?.title ?? '')
 const reportDescriptionSource = computed(() => report.value?.description ?? '')

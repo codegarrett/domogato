@@ -8,6 +8,15 @@ import { e2eConfig, loadSeedState } from './e2e.config'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '../..')
 
+interface AiConfigProbe {
+  is_configured: boolean
+  provider?: string | null
+  model?: string | null
+  embedding_configured?: boolean
+  embedding_provider?: string | null
+  embedding_model?: string | null
+}
+
 async function waitForHealth(url: string, label: string, maxAttempts = 60): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -24,43 +33,51 @@ async function waitForHealth(url: string, label: string, maxAttempts = 60): Prom
   throw new Error(`[global-setup] Timed out waiting for ${label} at ${url}`)
 }
 
-async function waitForOllama(): Promise<void> {
-  for (let i = 0; i < 60; i++) {
-    try {
-      const res = await fetch(`${e2eConfig.ollamaURL}/api/tags`)
-      if (res.ok) {
-        console.log('[global-setup] Ollama ready')
-        return
-      }
-    } catch {
-      // retry
-    }
-    await new Promise((r) => setTimeout(r, 2000))
+async function probeAiConfig(): Promise<AiConfigProbe | null> {
+  try {
+    const res = await fetch(`${e2eConfig.apiURL}/ai/config`)
+    if (!res.ok) return null
+    return (await res.json()) as AiConfigProbe
+  } catch {
+    return null
   }
-  throw new Error('[global-setup] Timed out waiting for Ollama')
 }
 
-async function ensureOllamaModels(): Promise<void> {
+async function configureAiForTests(): Promise<void> {
   if (e2eConfig.skipAI) {
-    console.log('[global-setup] Skipping Ollama model pull (E2E_SKIP_AI=true)')
+    process.env.E2E_AI_CONFIGURED = 'false'
+    process.env.E2E_EMBEDDINGS_CONFIGURED = 'false'
+    console.log('[global-setup] AI tests disabled (E2E_SKIP_AI=true)')
     return
   }
-  for (const model of [e2eConfig.ollamaModel, e2eConfig.embeddingModel]) {
-    try {
-      const tags = await fetch(`${e2eConfig.ollamaURL}/api/tags`).then((r) => r.json())
-      const names: string[] = (tags.models || []).map((m: { name: string }) => m.name.split(':')[0])
-      if (names.some((n) => n === model || n.startsWith(`${model}:`))) {
-        console.log(`[global-setup] Ollama model ${model} already present`)
-        continue
-      }
-      console.log(`[global-setup] Pulling Ollama model ${model}...`)
-      execSync(
-        `docker compose -f docker-compose.yml -f docker-compose.e2e.yml exec -T ollama ollama pull ${model}`,
-        { cwd: repoRoot, stdio: 'inherit' },
-      )
-    } catch (err) {
-      console.warn(`[global-setup] Could not verify/pull model ${model}:`, err)
+
+  const cfg = await probeAiConfig()
+  if (!cfg) {
+    process.env.E2E_AI_CONFIGURED = 'false'
+    process.env.E2E_EMBEDDINGS_CONFIGURED = 'false'
+    console.warn('[global-setup] Could not read /ai/config — @ai tests will be skipped')
+    return
+  }
+
+  process.env.E2E_AI_CONFIGURED = cfg.is_configured ? 'true' : 'false'
+  process.env.E2E_EMBEDDINGS_CONFIGURED = cfg.embedding_configured ? 'true' : 'false'
+
+  writeFileSync(
+    resolve(__dirname, '.ai-config.json'),
+    JSON.stringify(cfg, null, 2),
+  )
+
+  if (cfg.is_configured) {
+    console.log(
+      `[global-setup] AI provider: ${cfg.provider ?? 'unknown'}/${cfg.model ?? 'unknown'}`,
+    )
+    if (!cfg.embedding_configured) {
+      console.warn('[global-setup] Embeddings not configured — semantic search tests may be skipped')
     }
+  } else {
+    console.warn(
+      '[global-setup] LLM not configured in API — set LLM_PROVIDER/LLM_MODEL/LLM_API_KEY in .env, or E2E_SKIP_AI=true',
+    )
   }
 }
 
@@ -119,8 +136,6 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   mkdirSync(e2eConfig.authDir, { recursive: true })
 
   await waitForHealth(`${e2eConfig.apiURL}/health`, 'API')
-  await waitForOllama()
-  await ensureOllamaModels()
   await resetDatabase()
 
   const seed = loadSeedState()
@@ -128,12 +143,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     throw new Error('[global-setup] Seed state missing — e2e_reset may have failed')
   }
 
-  if (!e2eConfig.skipAI) {
-    const aiConfig = await fetch(`${e2eConfig.apiURL}/ai/config`).then((r) => r.json())
-    if (!aiConfig.is_configured) {
-      console.warn('[global-setup] AI not configured — AI tests may fail')
-    }
-  }
+  await configureAiForTests()
 
   await saveAuthState(
     e2eConfig.baseURL,
@@ -146,6 +156,24 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     e2eConfig.userEmail,
     e2eConfig.userPassword,
     resolve(e2eConfig.authDir, 'user.json'),
+  )
+  await saveAuthState(
+    e2eConfig.baseURL,
+    e2eConfig.guestEmail,
+    e2eConfig.guestPassword,
+    resolve(e2eConfig.authDir, 'guest.json'),
+  )
+  await saveAuthState(
+    e2eConfig.baseURL,
+    e2eConfig.reporterEmail,
+    e2eConfig.reporterPassword,
+    resolve(e2eConfig.authDir, 'reporter.json'),
+  )
+  await saveAuthState(
+    e2eConfig.baseURL,
+    e2eConfig.maintainerEmail,
+    e2eConfig.maintainerPassword,
+    resolve(e2eConfig.authDir, 'maintainer.json'),
   )
 
   process.env.E2E_SEED_PROJECT_ID = seed.projectId

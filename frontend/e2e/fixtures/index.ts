@@ -48,10 +48,15 @@ export const test = base.extend<E2EFixtures>({
     await use(page)
   },
   page: async ({ page }, use, testInfo) => {
-    const authFile =
-      testInfo.project.name === 'desktop-user'
-        ? resolve(e2eConfig.authDir, 'user.json')
-        : resolve(e2eConfig.authDir, 'admin.json')
+    const authByProject: Record<string, string> = {
+      'desktop-user': 'user.json',
+      'rbac-guest': 'guest.json',
+      'rbac-reporter': 'reporter.json',
+      'rbac-developer': 'user.json',
+      'rbac-maintainer': 'maintainer.json',
+    }
+    const authFileName = authByProject[testInfo.project.name] ?? 'admin.json'
+    const authFile = resolve(e2eConfig.authDir, authFileName)
     const token = loadAuthToken(authFile)
     if (token) {
       await page.addInitScript((t) => {

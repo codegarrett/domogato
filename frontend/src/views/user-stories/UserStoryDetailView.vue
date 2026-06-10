@@ -9,7 +9,8 @@
       <Tag :severity="statusSeverity(story.status)" :value="statusLabel(story.status)" />
       <Tag :severity="prioritySeverity(story.priority)" :value="priorityLabel(story.priority)" />
       <Button
-        v-if="canCreateTicket"
+        v-if="canShowCreateTicket"
+        data-testid="create-ticket-from-story"
         :label="$t('userStories.createTicket')"
         icon="pi pi-ticket"
         size="small"
@@ -25,6 +26,7 @@
           <MarkdownEditor
             v-model="quickNotes"
             :rows="4"
+            :disabled="!canEditUserStory"
             :placeholder="$t('userStories.quickNotesPlaceholder')"
             @blur="saveQuickNotes"
           />
@@ -143,13 +145,14 @@
           <div class="flex flex-column gap-3">
             <div>
               <label class="block text-sm font-semibold mb-1">{{ $t('userStories.storyTitle') }}</label>
-              <InputText v-model="refinedForm.story_title" class="w-full" @blur="saveRefined" />
+              <InputText v-model="refinedForm.story_title" class="w-full" :disabled="!canEditUserStory" @blur="saveRefined" />
             </div>
             <div>
               <MarkdownEditor
                 v-model="refinedForm.story_body"
                 :label="$t('userStories.storyBody')"
                 :rows="8"
+                :disabled="!canEditUserStory"
                 @blur="saveRefined"
               />
             </div>
@@ -158,6 +161,7 @@
                 v-model="refinedForm.story_acceptance_criteria"
                 :label="$t('userStories.acceptanceCriteria')"
                 :rows="5"
+                :disabled="!canEditUserStory"
                 @blur="saveRefined"
               />
             </div>
@@ -209,12 +213,15 @@
               option-label="label"
               option-value="value"
               class="w-full mb-2"
+              data-testid="user-story-status"
+              :disabled="!canEditUserStory"
               @change="saveMeta"
             />
             <label class="block text-sm font-semibold mb-1">{{ $t('userStories.priority') }}</label>
             <Select
               v-model="metaForm.priority"
               :options="priorityOptions"
+              :disabled="!canEditUserStory"
               option-label="label"
               option-value="value"
               class="w-full"
@@ -336,6 +343,7 @@ import {
   type UserStoryListItem,
 } from '@/api/user-stories'
 import { useContentAssist } from '@/composables/useContentAssist'
+import { useProjectPermissions } from '@/composables/usePermissions'
 import { useToastService } from '@/composables/useToast'
 import AiSparklesButton from '@/components/ai/AiSparklesButton.vue'
 import AiGeneratePromptDialog from '@/components/ai/AiGeneratePromptDialog.vue'
@@ -348,6 +356,11 @@ const { generateContent: runContentGenerate, generating: aiGenerating } = useCon
 
 const projectId = computed(() => route.params.projectId as string)
 const storyId = computed(() => route.params.storyId as string)
+
+const {
+  canEditUserStory,
+  canCreateTicket: canCreateTicketRole,
+} = useProjectPermissions(projectId)
 
 const story = ref<UserStory | null>(null)
 const loading = ref(true)
@@ -391,8 +404,8 @@ const priorityOptions = computed(() => [
   { label: t('userStories.highest'), value: 'highest' },
 ])
 
-const canCreateTicket = computed(() => {
-  if (!story.value) return false
+const canShowCreateTicket = computed(() => {
+  if (!story.value || !canCreateTicketRole.value) return false
   return story.value.status !== 'ticket_created' && story.value.status !== 'canceled'
 })
 

@@ -1,10 +1,10 @@
 import { test, expect } from '../fixtures'
 import { ChatPanelPage } from '../pages/ChatPanelPage'
-import { e2eConfig } from '../e2e.config'
+import { shouldSkipAiTests } from '../e2e.config'
 
 test.describe('AI Chat Tools @ai', () => {
   test.beforeEach(() => {
-    test.skip(e2eConfig.skipAI, 'AI disabled (E2E_SKIP_AI=true)')
+    test.skip(shouldSkipAiTests(), 'LLM not configured (set LLM_* in .env or E2E_SKIP_AI=true)')
   })
 
   test('agent can search tickets', async ({ page, projectKey }) => {

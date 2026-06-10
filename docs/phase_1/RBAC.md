@@ -59,7 +59,7 @@ graph TD
 | **Owner** | `owner` | Full project control. Manage settings, members, workflows, delete project. |
 | **Maintainer** | `maintainer` | Manage sprints, boards, workflows, custom fields. Cannot change project settings or delete project. |
 | **Developer** | `developer` | Full ticket CRUD (any ticket), manage own work. |
-| **Reporter** | `reporter` | Create tickets, edit own tickets, add comments. Read-only access to others' tickets. |
+| **Reporter** | `reporter` | Create and edit any user story; create and edit own issue reports; transition any ticket status (QA). Cannot create tickets or create tickets from user stories/issue reports. |
 | **Guest** | `guest` | Read-only access to all project content. |
 
 ## Effective Permission Calculation

@@ -3,6 +3,7 @@
     <div class="flex align-items-center justify-content-between mb-4">
       <h1 class="text-2xl font-bold m-0">{{ $t('issueReports.queue') }}</h1>
       <Button
+        v-if="canCreateIssueReport"
         :label="$t('issueReports.reportIssue')"
         icon="pi pi-plus"
         @click="showReportDialog = true"
@@ -55,6 +56,8 @@
       <div v-if="selectedReports.length > 0" class="flex align-items-center gap-2 mb-3">
         <Tag severity="info">{{ $t('issueReports.selectedCount', { count: selectedReports.length }) }}</Tag>
         <Button
+          v-if="canCreateTicketFromIssueReport"
+          data-testid="create-ticket-from-reports"
           :label="$t('issueReports.createTicketFromSelected')"
           icon="pi pi-ticket"
           size="small"
@@ -151,6 +154,7 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import { listIssueReports, type IssueReport } from '@/api/issue-reports'
+import { useProjectPermissions } from '@/composables/usePermissions'
 import { useToastService } from '@/composables/useToast'
 import ReportIssueDialog from '@/components/issue-reports/ReportIssueDialog.vue'
 import CreateTicketFromReportsDialog from '@/components/issue-reports/CreateTicketFromReportsDialog.vue'
@@ -160,6 +164,8 @@ const route = useRoute()
 const toast = useToastService()
 
 const projectId = computed(() => route.params.projectId as string)
+
+const { canCreateIssueReport, canCreateTicketFromIssueReport } = useProjectPermissions(projectId)
 
 const reports = ref<IssueReport[]>([])
 const selectedReports = ref<IssueReport[]>([])

@@ -24,7 +24,7 @@ from app.models import (
     WorkflowStatus,
 )
 from app.schemas.kb import PageCreate, SpaceCreate
-from app.services import custom_field_service, issue_report_service, kb_service, ticket_service
+from app.services import custom_field_service, issue_report_service, kb_service, ticket_service, user_story_service
 from app.services.agent_skill_service import upsert_skill
 from app.services.board_service import create_default_board_for_workflow
 from app.services.sprint_service import create_sprint, start_sprint
@@ -34,6 +34,12 @@ ADMIN_EMAIL = "e2e-admin@domogato.test"
 ADMIN_PASSWORD = "E2eAdmin!Pass123"
 USER_EMAIL = "e2e-user@domogato.test"
 USER_PASSWORD = "E2eUser!Pass123"
+GUEST_EMAIL = "e2e-guest@domogato.test"
+GUEST_PASSWORD = "E2eGuest!Pass123"
+REPORTER_EMAIL = "e2e-reporter@domogato.test"
+REPORTER_PASSWORD = "E2eReporter!Pass123"
+MAINTAINER_EMAIL = "e2e-maintainer@domogato.test"
+MAINTAINER_PASSWORD = "E2eMaintainer!Pass123"
 
 ORG_NAME = "E2E Org"
 ORG_SLUG = "e2e-org"
@@ -76,6 +82,12 @@ async def run_seed() -> dict:
         "adminPassword": ADMIN_PASSWORD,
         "userEmail": USER_EMAIL,
         "userPassword": USER_PASSWORD,
+        "guestEmail": GUEST_EMAIL,
+        "guestPassword": GUEST_PASSWORD,
+        "reporterEmail": REPORTER_EMAIL,
+        "reporterPassword": REPORTER_PASSWORD,
+        "maintainerEmail": MAINTAINER_EMAIL,
+        "maintainerPassword": MAINTAINER_PASSWORD,
         "orgSlug": ORG_SLUG,
         "projectKey": PROJECT_KEY,
     }
@@ -99,7 +111,34 @@ async def run_seed() -> dict:
             is_active=True,
             preferences={},
         )
-        db.add_all([admin, member])
+        guest = User(
+            oidc_subject="e2e-guest-oidc",
+            email=GUEST_EMAIL,
+            display_name="E2E Guest",
+            password_hash=hash_password(GUEST_PASSWORD),
+            is_system_admin=False,
+            is_active=True,
+            preferences={},
+        )
+        reporter = User(
+            oidc_subject="e2e-reporter-oidc",
+            email=REPORTER_EMAIL,
+            display_name="E2E Reporter",
+            password_hash=hash_password(REPORTER_PASSWORD),
+            is_system_admin=False,
+            is_active=True,
+            preferences={},
+        )
+        maintainer_user = User(
+            oidc_subject="e2e-maintainer-oidc",
+            email=MAINTAINER_EMAIL,
+            display_name="E2E Maintainer",
+            password_hash=hash_password(MAINTAINER_PASSWORD),
+            is_system_admin=False,
+            is_active=True,
+            preferences={},
+        )
+        db.add_all([admin, member, guest, reporter, maintainer_user])
         await db.flush()
 
         org = Organization(name=ORG_NAME, slug=ORG_SLUG)
@@ -109,6 +148,9 @@ async def run_seed() -> dict:
         db.add_all([
             OrgMembership(user_id=admin.id, organization_id=org.id, role="owner"),
             OrgMembership(user_id=member.id, organization_id=org.id, role="member"),
+            OrgMembership(user_id=guest.id, organization_id=org.id, role="member"),
+            OrgMembership(user_id=reporter.id, organization_id=org.id, role="member"),
+            OrgMembership(user_id=maintainer_user.id, organization_id=org.id, role="member"),
         ])
         await db.flush()
 
@@ -128,6 +170,8 @@ async def run_seed() -> dict:
         db.add_all([
             ProjectMembership(user_id=admin.id, project_id=project.id, role="maintainer"),
             ProjectMembership(user_id=member.id, project_id=project.id, role="developer"),
+            ProjectMembership(user_id=reporter.id, project_id=project.id, role="reporter"),
+            ProjectMembership(user_id=maintainer_user.id, project_id=project.id, role="maintainer"),
         ])
         await db.flush()
 
@@ -239,11 +283,58 @@ async def run_seed() -> dict:
             reporter_email="reporter@domogato.test",
         )
 
+        reporter_issue_report = await issue_report_service.create_issue_report(
+            db,
+            project_id=project.id,
+            title="E2E Reporter Issue Report",
+            description="Owned by e2e-reporter for RBAC tests.",
+            priority="medium",
+            created_by=reporter.id,
+        )
+
+        reporter_story = await user_story_service.create_user_story(
+            db,
+            project_id=project.id,
+            title="E2E Reporter In Progress Story",
+            created_by=reporter.id,
+        )
+        await user_story_service.update_user_story(
+            db, reporter_story.id, status="in_progress",
+        )
+
+        dev_story = await user_story_service.create_user_story(
+            db,
+            project_id=project.id,
+            title="E2E Developer Discovery Story",
+            created_by=member.id,
+        )
+        await user_story_service.update_user_story(
+            db, dev_story.id, status="discovery",
+        )
+
+        ready_story = await user_story_service.create_user_story(
+            db,
+            project_id=project.id,
+            title="E2E Ready For Tickets Story",
+            created_by=reporter.id,
+        )
+        await user_story_service.update_user_story(
+            db,
+            ready_story.id,
+            status="story_ready",
+            story_title="As a user I want RBAC",
+            story_body="Story body for ticket creation tests.",
+            story_acceptance_criteria="- Ticket can be created by developer",
+        )
+
         await db.commit()
 
         state.update({
             "adminUserId": str(admin.id),
             "userUserId": str(member.id),
+            "guestUserId": str(guest.id),
+            "reporterUserId": str(reporter.id),
+            "maintainerUserId": str(maintainer_user.id),
             "orgId": str(org.id),
             "projectId": str(project.id),
             "workflowId": str(kanban.id),
@@ -254,6 +345,10 @@ async def run_seed() -> dict:
             "customFieldId": str(custom_field.id),
             "agentSkillSlug": "e2e-weather",
             "issueReportId": str(issue_report.id),
+            "reporterIssueReportId": str(reporter_issue_report.id),
+            "reporterStoryId": str(reporter_story.id),
+            "developerStoryId": str(dev_story.id),
+            "readyStoryId": str(ready_story.id),
         })
 
     out_path = _seed_state_path()

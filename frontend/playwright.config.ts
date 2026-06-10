@@ -41,7 +41,43 @@ export default defineConfig({
         viewport: e2eConfig.desktopViewport,
         storageState: `${authDir}/user.json`,
       },
-      testMatch: [/rbac/],
+      testMatch: [/rbac\/member-access/],
+    },
+    {
+      name: 'rbac-guest',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: e2eConfig.desktopViewport,
+        storageState: `${authDir}/guest.json`,
+      },
+      testMatch: [/rbac\/guest/],
+    },
+    {
+      name: 'rbac-reporter',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: e2eConfig.desktopViewport,
+        storageState: `${authDir}/reporter.json`,
+      },
+      testMatch: [/rbac\/reporter/],
+    },
+    {
+      name: 'rbac-developer',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: e2eConfig.desktopViewport,
+        storageState: `${authDir}/user.json`,
+      },
+      testMatch: [/rbac\/developer/],
+    },
+    {
+      name: 'rbac-maintainer',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: e2eConfig.desktopViewport,
+        storageState: `${authDir}/maintainer.json`,
+      },
+      testMatch: [/rbac\/maintainer/],
     },
     {
       name: 'mobile-chrome',
